@@ -444,7 +444,18 @@
           }
         }
       ],
-      "community": []
+      "community": [
+        {
+          "id": "stack:codebase-memory",
+          "name": "Codebase Memory MCP",
+          "version": "0.4.6",
+          "description": "Graph-based codebase indexer that builds a knowledge graph of your code for intelligent retrieval",
+          "path": "catalog/stacks/codebase-memory",
+          "runtime": "binary",
+          "category": "development",
+          "tags": ["codebase", "graph", "indexing", "code-search", "knowledge-graph"]
+        }
+      ]
     },
     "prompts": {
       "official": [
