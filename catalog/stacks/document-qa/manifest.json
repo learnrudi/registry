@@ -1,0 +1,41 @@
+{
+  "id": "document-qa",
+  "name": "Document QA",
+  "version": "1.0.0",
+  "description": "Visual QA inspection for HTML documents using screenshots and Claude Vision.",
+  "runtime": "node",
+  "command": [
+    "npx",
+    "tsx",
+    "src/index.ts"
+  ],
+  "provides": {
+    "tools": [
+      "document_qa_inspect"
+    ]
+  },
+  "requires": {
+    "binaries": [],
+    "secrets": [
+      {
+        "key": "ANTHROPIC_API_KEY",
+        "label": "Anthropic API Key",
+        "required": true,
+        "helpUrl": "https://console.anthropic.com/settings/keys"
+      }
+    ]
+  },
+  "meta": {
+    "author": "CO-LLAB",
+    "license": "MIT",
+    "category": "document-processing",
+    "tags": [
+      "qa",
+      "vision",
+      "html",
+      "pdf",
+      "validation"
+    ],
+    "icon": "🔍"
+  }
+}
