@@ -1,12 +1,14 @@
 {
   "name": "web-export-mcp",
-  "version": "1.0.0",
-  "description": "Web Export MCP - HTML to PNG/PDF with artboard support",
+  "version": "2.0.0",
+  "description": "Web Export MCP - HTML to PNG/PDF with artifact verification",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "npx tsx src/index.ts",
-    "build": "tsc",
+    "dev": "node ./node_modules/tsx/dist/cli.mjs src/index.ts",
+    "build": "node ./node_modules/typescript/bin/tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test test/**/*.test.mjs",
     "install-browser": "playwright install chromium"
   },
   "dependencies": {

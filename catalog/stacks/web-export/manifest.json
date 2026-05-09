@@ -1,17 +1,15 @@
 {
   "id": "web-export",
   "name": "Web Export",
-  "version": "1.0.0",
-  "description": "Export HTML to high-resolution PNG and PDF. Supports artboards (8.5x11, 16x9, 11x8.5), paginated documents, and newsletters.",
+  "version": "2.0.0",
+  "description": "Export HTML to PDF/PNG with mode detection, artifact verification, and structured diagnostics.",
   "runtime": "node",
   "command": [
-    "npx",
-    "tsx",
-    "src/index.ts"
+    "node",
+    "dist/index.js"
   ],
   "provides": {
     "tools": [
-      "url_to_png",
       "html_to_png",
       "html_to_pdf",
       "html_to_png_pdf"
@@ -33,7 +31,8 @@
       "artboard",
       "print",
       "screenshot",
-      "playwright"
+      "playwright",
+      "diagnostics"
     ],
     "icon": "📄"
   }
