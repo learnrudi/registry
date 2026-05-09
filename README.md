@@ -14,7 +14,7 @@ Official registry of MCP stacks, binaries, agents, runtimes, and skills for the 
 
 ## Usage
 
-Packages are consumed by the [RUDI CLI](https://github.com/learn-rudi/cli):
+Packages are consumed by the [RUDI CLI](https://github.com/learnrudi/cli):
 
 ```bash
 # Search for packages

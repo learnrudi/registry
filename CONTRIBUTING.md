@@ -7,7 +7,7 @@ Thank you for your interest in contributing to the RUDI Registry.
 ### Prerequisites
 
 - Node.js 18 or later
-- [RUDI CLI](https://github.com/learn-rudi/cli) installed
+- [RUDI CLI](https://github.com/learnrudi/cli) installed
 
 ### Setup
 
