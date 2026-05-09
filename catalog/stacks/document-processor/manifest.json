@@ -1,0 +1,37 @@
+{
+  "id": "document-processor",
+  "name": "Document Processor",
+  "version": "1.0.0",
+  "description": "Extract PDF slides as images, remove watermarks, process presentations",
+  "runtime": "python",
+  "command": [
+    "python3",
+    "src/index.py"
+  ],
+  "provides": {
+    "tools": [
+      "pdf_to_images",
+      "remove_watermark",
+      "pdf_extract_slides",
+      "batch_remove_watermark"
+    ]
+  },
+  "requires": {
+    "binaries": ["pdftoppm"],
+    "secrets": []
+  },
+  "meta": {
+    "author": "CO-LLAB",
+    "license": "MIT",
+    "category": "document-processing",
+    "tags": [
+      "pdf",
+      "slides",
+      "watermark",
+      "extraction",
+      "images",
+      "presentation"
+    ],
+    "icon": "📄"
+  }
+}
