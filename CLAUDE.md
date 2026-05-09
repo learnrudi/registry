@@ -44,8 +44,8 @@ GitHub Releases (v1.0.0):     # Binary downloads
 
 ## URLs
 
-- Index: `https://raw.githubusercontent.com/learn-rudi/registry/main/index.json`
-- Binaries: `https://github.com/learn-rudi/registry/releases/download/v1.0.0/{name}.tar.gz`
+- Index: `https://raw.githubusercontent.com/learnrudi/registry/main/index.json`
+- Binaries: `https://github.com/learnrudi/registry/releases/download/v1.0.0/{name}.tar.gz`
 
 ## Adding a Stack
 

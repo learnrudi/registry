@@ -347,7 +347,7 @@ Given this manifest:
     "source": "download",
     "platforms": {
       "darwin-arm64": {
-        "url": "https://github.com/learn-rudi/registry/releases/.../node-20.10.0-darwin-arm64.tar.gz",
+        "url": "https://github.com/learnrudi/registry/releases/.../node-20.10.0-darwin-arm64.tar.gz",
         "checksum": { "algo": "sha256", "value": "..." },
         "extract": { "type": "tar.gz", "strip": 1 }
       },

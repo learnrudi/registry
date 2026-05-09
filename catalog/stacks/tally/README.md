@@ -283,4 +283,4 @@ rudi install tally notion-workspace
 
 ## Support
 
-For issues or feature requests, visit the [RUDI Registry](https://github.com/learn-rudi/registry).
+For issues or feature requests, visit the [RUDI Registry](https://github.com/learnrudi/registry).

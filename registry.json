@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "name": "RUDI Community Registry",
   "description": "Official and community-contributed tools and prompts for RUDI",
-  "maintainer": "learn-rudi",
-  "repository": "https://github.com/learn-rudi/registry",
+  "maintainer": "learnrudi",
+  "repository": "https://github.com/learnrudi/registry",
   "lastUpdated": "2025-01-27T00:00:00Z",
 
   "tools": {

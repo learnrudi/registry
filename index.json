@@ -3,8 +3,8 @@
   "version": "2.0.0",
   "name": "RUDI Registry",
   "description": "Official and community-contributed stacks, skills, runtimes, binaries, and agents for RUDI",
-  "maintainer": "learn-rudi",
-  "repository": "https://github.com/learn-rudi/registry",
+  "maintainer": "learnrudi",
+  "repository": "https://github.com/learnrudi/registry",
   "lastUpdated": "2025-12-24T00:00:00Z",
   "packages": {
     "stacks": {

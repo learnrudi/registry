@@ -126,10 +126,10 @@ RUDI should intelligently:
   },
 
   "download": {
-    "darwin-arm64": "https://github.com/learn-rudi/registry/releases/download/v1.0.0/node-20.10.0-darwin-arm64.tar.gz",
-    "darwin-x64": "https://github.com/learn-rudi/registry/releases/download/v1.0.0/node-20.10.0-darwin-x64.tar.gz",
-    "linux-x64": "https://github.com/learn-rudi/registry/releases/download/v1.0.0/node-20.10.0-linux-x64.tar.gz",
-    "win32-x64": "https://github.com/learn-rudi/registry/releases/download/v1.0.0/node-20.10.0-win32-x64.zip"
+    "darwin-arm64": "https://github.com/learnrudi/registry/releases/download/v1.0.0/node-20.10.0-darwin-arm64.tar.gz",
+    "darwin-x64": "https://github.com/learnrudi/registry/releases/download/v1.0.0/node-20.10.0-darwin-x64.tar.gz",
+    "linux-x64": "https://github.com/learnrudi/registry/releases/download/v1.0.0/node-20.10.0-linux-x64.tar.gz",
+    "win32-x64": "https://github.com/learnrudi/registry/releases/download/v1.0.0/node-20.10.0-win32-x64.zip"
   }
 }
 ```

@@ -12,7 +12,7 @@ Thank you for your interest in contributing to the RUDI Registry.
 ### Setup
 
 ```bash
-git clone https://github.com/learn-rudi/registry.git
+git clone https://github.com/learnrudi/registry.git
 cd registry
 npm install
 ```

@@ -65,7 +65,7 @@ When creating stacks:
 ## Scope
 
 This security policy covers:
-- The RUDI Registry (`learn-rudi/registry`)
+- The RUDI Registry (`learnrudi/registry`)
 - Official stacks, binaries, and prompts
 - The index.json package manifest
 
