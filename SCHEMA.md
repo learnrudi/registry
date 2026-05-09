@@ -40,7 +40,8 @@ This maps to v2 `delivery: "remote"` with URLs pointing to RUDI GitHub releases.
 | `binary` | CLI tool | `catalog/binaries/{name}.json` |
 | `agent` | AI assistant | `catalog/agents/{name}.json` |
 | `stack` | MCP server | `catalog/stacks/{name}/manifest.json` |
-| `prompt` | Prompt template | `catalog/prompts/{name}.md` |
+| `skill` | Reusable skill template | `catalog/skills/{name}.md` |
+| `prompt` | Legacy prompt template | `catalog/prompts/{name}.md` |
 
 ---
 
@@ -53,11 +54,12 @@ binary:ffmpeg
 binary:vercel
 agent:claude
 stack:video-editor
+skill:code-review
 ```
 
 ### `kind` (required)
 ```json
-"kind": "runtime" | "binary" | "agent" | "stack" | "prompt"
+"kind": "runtime" | "binary" | "agent" | "stack" | "skill" | "prompt"
 ```
 
 ### `name` (required)
@@ -103,7 +105,7 @@ Human-readable display name.
 | `npm` | npm packages | `package`, optionally `version` |
 | `pip` | pip packages | `package`, optionally `version` |
 | `system` | Pre-installed or OS package manager | `detect.command`, `installHints` recommended |
-| `catalog` | In-repo packages (stacks, prompts) | `path` (optional, derived from `id`) |
+| `catalog` | In-repo packages (stacks, skills, prompts) | `path` (optional, derived from `id`) |
 
 ### Catalog Source
 
@@ -111,6 +113,7 @@ For `source: "catalog"`, the payload lives inside the registry itself:
 - Installing = sync from registry cache → local install directory
 - If `path` omitted, derived from `id`:
   - `stack:video-editor` → `catalog/stacks/video-editor`
+  - `skill:code-review` → `catalog/skills/code-review.md`
   - `prompt:code-review` → `catalog/prompts/code-review.md`
 - Integrity handled at registry-release artifact level (no per-file checksum)
 
@@ -641,6 +644,7 @@ Validation applies to the **effective resolved config** (after platform merge):
 | `binary` | `id`, `kind`, `name`, `version`, `delivery`, `install`, `bins` |
 | `agent` | `id`, `kind`, `name`, `version`, `delivery`, `install`, `bins` |
 | `stack` | `id`, `kind`, `name`, `version`, `delivery`, `install`, `runtime`, `mcp`, `provides` |
+| `skill` | `id`, `kind`, `name`, `version`, `delivery`, `install` |
 | `prompt` | `id`, `kind`, `name`, `version`, `delivery`, `install` |
 
 ### Conditional Rules

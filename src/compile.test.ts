@@ -142,7 +142,7 @@ describe("index structure", () => {
 
     for (const [id, pkg] of Object.entries(index.packages)) {
       expect(id).toBe(pkg.id);
-      expect(id).toMatch(/^(runtime|binary|agent|stack|prompt):/);
+      expect(id).toMatch(/^(runtime|binary|agent|stack|skill|prompt):/);
       expect(id.startsWith(`${pkg.kind}:`)).toBe(true);
     }
   });
@@ -171,7 +171,7 @@ describe("platform indexes", () => {
       expect(Array.isArray(pkg._resolved.keysTried)).toBe(true);
 
       // Only packages with platform-specific config will have platformKey
-      // Catalog source packages (stacks/prompts) won't have platform resolution
+      // Catalog source packages (stacks/skills/prompts) won't have platform resolution
       if (pkg.install.source !== "catalog") {
         // For downloads/system, there should be platform resolution attempted
         expect(pkg._resolved.keysTried.length).toBeGreaterThan(0);

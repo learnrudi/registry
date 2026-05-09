@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://learn-rudi.dev/schemas/registry/v2/package.schema.json",
   "title": "RUDI Registry Package Schema v2",
-  "description": "Unified schema for all RUDI package types: runtime, binary, agent, stack, prompt",
+  "description": "Unified schema for all RUDI package types: runtime, binary, agent, stack, skill, prompt",
   "type": "object",
   "additionalProperties": false,
 
@@ -11,19 +11,19 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^(runtime|binary|agent|stack|prompt):[a-z0-9][a-z0-9-_]*$",
+      "pattern": "^(runtime|binary|agent|stack|skill|prompt):[a-z0-9][a-z0-9-_]*$",
       "description": "Package identifier with kind prefix (e.g., binary:ffmpeg, stack:video-editor)"
     },
     "kind": {
       "type": "string",
-      "enum": ["runtime", "binary", "agent", "stack", "prompt"],
+      "enum": ["runtime", "binary", "agent", "stack", "skill", "prompt"],
       "description": "Package type"
     },
     "aliases": {
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^(runtime|binary|agent|stack|prompt):[a-z0-9][a-z0-9-_]*$"
+        "pattern": "^(runtime|binary|agent|stack|skill|prompt):[a-z0-9][a-z0-9-_]*$"
       },
       "description": "Alternative IDs that resolve to this package (e.g., agent:ollama -> runtime:ollama)"
     },
@@ -87,7 +87,7 @@
     },
 
     {
-      "if": { "properties": { "kind": { "const": "prompt" } } },
+      "if": { "properties": { "kind": { "enum": ["skill", "prompt"] } } },
       "then": {
         "properties": {
           "install": { "properties": { "source": { "const": "catalog" } } }

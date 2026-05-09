@@ -2,7 +2,7 @@
   "$schema": "https://learnrudi.com/schemas/registry-v2.json",
   "version": "2.0.0",
   "name": "RUDI Registry",
-  "description": "Official and community-contributed stacks, prompts, runtimes, binaries, and agents for RUDI",
+  "description": "Official and community-contributed stacks, skills, runtimes, binaries, and agents for RUDI",
   "maintainer": "learn-rudi",
   "repository": "https://github.com/learn-rudi/registry",
   "lastUpdated": "2025-12-24T00:00:00Z",
@@ -457,14 +457,14 @@
         }
       ]
     },
-    "prompts": {
+    "skills": {
       "official": [
         {
-          "id": "prompt:getting-started",
+          "id": "skill:getting-started",
           "name": "Getting Started",
           "version": "1.0.0",
           "description": "Welcome guide for new RUDI users",
-          "path": "catalog/prompts/getting-started.md",
+          "path": "catalog/skills/getting-started.md",
           "category": "general",
           "tags": [
             "welcome",
@@ -473,11 +473,11 @@
           ]
         },
         {
-          "id": "prompt:explain",
+          "id": "skill:explain",
           "name": "Explain",
           "version": "1.0.0",
           "description": "Break down complex code or concepts clearly",
-          "path": "catalog/prompts/explain.md",
+          "path": "catalog/skills/explain.md",
           "category": "coding",
           "tags": [
             "learning",
@@ -486,11 +486,11 @@
           ]
         },
         {
-          "id": "prompt:code-review",
+          "id": "skill:code-review",
           "name": "Code Review",
           "version": "1.0.0",
           "description": "Review code for bugs, style, and improvements",
-          "path": "catalog/prompts/code-review.md",
+          "path": "catalog/skills/code-review.md",
           "category": "coding",
           "tags": [
             "review",
@@ -499,11 +499,11 @@
           ]
         },
         {
-          "id": "prompt:fix-error",
+          "id": "skill:fix-error",
           "name": "Fix Error",
           "version": "1.0.0",
           "description": "Debug and resolve errors systematically",
-          "path": "catalog/prompts/fix-error.md",
+          "path": "catalog/skills/fix-error.md",
           "category": "coding",
           "tags": [
             "debug",
@@ -512,11 +512,11 @@
           ]
         },
         {
-          "id": "prompt:summarize",
+          "id": "skill:summarize",
           "name": "Summarize",
           "version": "1.0.0",
           "description": "Condense documents, code, or conversations",
-          "path": "catalog/prompts/summarize.md",
+          "path": "catalog/skills/summarize.md",
           "category": "writing",
           "tags": [
             "summary",
@@ -525,11 +525,11 @@
           ]
         },
         {
-          "id": "prompt:brainstorm",
+          "id": "skill:brainstorm",
           "name": "Brainstorm",
           "version": "1.0.0",
           "description": "Generate creative ideas and explore possibilities",
-          "path": "catalog/prompts/brainstorm.md",
+          "path": "catalog/skills/brainstorm.md",
           "category": "creative",
           "tags": [
             "ideas",
@@ -538,30 +538,213 @@
           ]
         },
         {
-          "id": "prompt:write-email",
+          "id": "skill:write-email",
           "name": "Write Email",
           "version": "1.0.0",
           "description": "Draft professional, clear emails",
-          "path": "catalog/prompts/write-email.md",
+          "path": "catalog/skills/write-email.md",
           "category": "writing",
           "tags": [
             "email",
             "communication",
             "professional"
-          ]
+          ],
+          "requires": {
+            "stacks": [
+              "google-workspace"
+            ]
+          }
         },
         {
-          "id": "prompt:organize-files",
+          "id": "skill:organize-files",
           "name": "Organize Files",
           "version": "1.0.0",
           "description": "Help organize and structure files and folders",
-          "path": "catalog/prompts/organize-files.md",
+          "path": "catalog/skills/organize-files.md",
           "category": "utilities",
           "tags": [
             "files",
             "organization",
             "structure"
           ]
+        },
+        {
+          "id": "skill:meeting-prep",
+          "name": "Meeting Prep",
+          "version": "1.0.0",
+          "description": "Prepare for meetings by reviewing emails, calendar events, and creating agendas",
+          "path": "catalog/skills/meeting-prep.md",
+          "category": "productivity",
+          "tags": [
+            "meetings",
+            "preparation",
+            "agenda"
+          ],
+          "requires": {
+            "stacks": [
+              "google-workspace",
+              "content-extractor"
+            ]
+          }
+        },
+        {
+          "id": "skill:create-report",
+          "name": "Create Report",
+          "version": "1.0.0",
+          "description": "Analyze data and generate professional reports with charts and visualizations",
+          "path": "catalog/skills/create-report.md",
+          "category": "analysis",
+          "tags": [
+            "reports",
+            "data",
+            "analysis",
+            "visualization"
+          ],
+          "requires": {
+            "stacks": [
+              "data-analysis",
+              "web-export"
+            ]
+          }
+        },
+        {
+          "id": "skill:transcribe-meeting",
+          "name": "Transcribe Meeting",
+          "version": "1.0.0",
+          "description": "Transcribe audio recordings and create structured meeting notes with action items",
+          "path": "catalog/skills/transcribe-meeting.md",
+          "category": "productivity",
+          "tags": [
+            "transcription",
+            "meetings",
+            "notes",
+            "audio"
+          ],
+          "requires": {
+            "stacks": [
+              "whisper",
+              "google-workspace"
+            ]
+          }
+        },
+        {
+          "id": "skill:deploy-app",
+          "name": "Deploy App",
+          "version": "1.0.0",
+          "description": "Deploy applications to Vercel with environment setup and domain configuration",
+          "path": "catalog/skills/deploy-app.md",
+          "category": "development",
+          "tags": [
+            "deployment",
+            "vercel",
+            "hosting",
+            "devops"
+          ],
+          "requires": {
+            "stacks": [
+              "vercel"
+            ]
+          }
+        },
+        {
+          "id": "skill:competitive-analysis",
+          "name": "Competitive Analysis",
+          "version": "1.0.0",
+          "description": "Research competitors by extracting content from their websites, analyzing data, and generating comparison reports",
+          "path": "catalog/skills/competitive-analysis.md",
+          "category": "business",
+          "tags": [
+            "research",
+            "competitors",
+            "analysis",
+            "market"
+          ],
+          "requires": {
+            "stacks": [
+              "content-extractor",
+              "data-analysis",
+              "web-export"
+            ]
+          }
+        },
+        {
+          "id": "skill:seo-audit",
+          "name": "SEO Audit",
+          "version": "1.0.0",
+          "description": "Audit website pages for SEO issues and generate optimization reports",
+          "path": "catalog/skills/seo-audit.md",
+          "category": "marketing",
+          "tags": [
+            "seo",
+            "audit",
+            "marketing",
+            "optimization"
+          ],
+          "requires": {
+            "stacks": [
+              "content-extractor",
+              "web-export"
+            ]
+          }
+        },
+        {
+          "id": "skill:weekly-digest",
+          "name": "Weekly Digest",
+          "version": "1.0.0",
+          "description": "Compile a weekly summary of emails, calendar events, and action items",
+          "path": "catalog/skills/weekly-digest.md",
+          "category": "productivity",
+          "tags": [
+            "email",
+            "calendar",
+            "summary",
+            "weekly"
+          ],
+          "requires": {
+            "stacks": [
+              "google-workspace"
+            ]
+          }
+        },
+        {
+          "id": "skill:invoice-clients",
+          "name": "Invoice Clients",
+          "version": "1.0.0",
+          "description": "Generate and send professional invoices to clients via email",
+          "path": "catalog/skills/invoice-clients.md",
+          "category": "business",
+          "tags": [
+            "invoicing",
+            "billing",
+            "finance",
+            "clients"
+          ],
+          "requires": {
+            "stacks": [
+              "google-workspace",
+              "web-export"
+            ]
+          }
+        },
+        {
+          "id": "skill:form-to-crm",
+          "name": "Form to CRM",
+          "version": "1.0.0",
+          "description": "Process Tally form submissions and sync data to Google Sheets or email",
+          "path": "catalog/skills/form-to-crm.md",
+          "category": "automation",
+          "tags": [
+            "forms",
+            "crm",
+            "automation",
+            "tally"
+          ],
+          "requires": {
+            "stacks": [
+              "tally",
+              "google-workspace"
+            ]
+          }
         }
       ],
       "community": []
@@ -1035,7 +1218,7 @@
         "icon": "tool"
       }
     ],
-    "prompts": [
+    "skills": [
       {
         "id": "general",
         "name": "General",
@@ -1060,6 +1243,36 @@
         "id": "utilities",
         "name": "Utilities",
         "icon": "tool"
+      },
+      {
+        "id": "productivity",
+        "name": "Productivity",
+        "icon": "briefcase"
+      },
+      {
+        "id": "analysis",
+        "name": "Analysis",
+        "icon": "bar-chart"
+      },
+      {
+        "id": "development",
+        "name": "Development",
+        "icon": "code"
+      },
+      {
+        "id": "business",
+        "name": "Business",
+        "icon": "briefcase"
+      },
+      {
+        "id": "marketing",
+        "name": "Marketing",
+        "icon": "megaphone"
+      },
+      {
+        "id": "automation",
+        "name": "Automation",
+        "icon": "refresh-cw"
       }
     ]
   }

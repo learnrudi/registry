@@ -231,6 +231,23 @@ describe("schema validation - valid manifests", () => {
     expect(valid).toBe(true);
   });
 
+  it("should accept minimal skill manifest", () => {
+    const manifest = {
+      id: "skill:code-review",
+      kind: "skill",
+      name: "Code Review",
+      version: "1.0.0",
+      delivery: "remote",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/code-review.md",
+      },
+    };
+
+    const valid = validate(manifest);
+    expect(valid).toBe(true);
+  });
+
   it("should accept agent manifest with npm source", () => {
     const manifest = {
       id: "agent:claude",

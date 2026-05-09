@@ -1,6 +1,6 @@
 # RUDI Registry
 
-Official registry of MCP stacks, binaries, agents, runtimes, and prompts for the RUDI CLI.
+Official registry of MCP stacks, binaries, agents, runtimes, and skills for the RUDI CLI.
 
 ## Package Types
 
@@ -10,7 +10,7 @@ Official registry of MCP stacks, binaries, agents, runtimes, and prompts for the
 | **Binary** | Standalone binaries/CLIs | `catalog/binaries/{id}.json` |
 | **Agent** | AI coding assistants | `catalog/agents/{id}.json` |
 | **Runtime** | Language interpreters | `catalog/runtimes/{id}.json` |
-| **Prompt** | System prompt templates | `catalog/prompts/{id}.md` |
+| **Skill** | Reusable skill templates | `catalog/skills/{id}.md` |
 
 ## Usage
 
@@ -40,8 +40,8 @@ catalog/
 │       ├── manifest.json     # Stack metadata
 │       └── node/src/ or python/src/
 │
-├── prompts/                  # Prompt templates
-│   └── {prompt-id}.md        # Markdown with YAML frontmatter
+├── skills/                   # Skill templates
+│   └── {skill-id}.md         # Markdown with YAML frontmatter
 │
 ├── binaries/                 # Binary manifests
 │   └── {binary-id}.json
@@ -102,28 +102,28 @@ When users install a stack with secrets:
 2. User runs `rudi secrets set MY_API_KEY` to add their key
 3. MCP registration reads secrets and injects into agent configs (Claude, Codex, Gemini)
 
-## Creating a Prompt
+## Creating a Skill
 
-1. Create file: `catalog/prompts/{prompt-id}.md`
+1. Create file: `catalog/skills/{skill-id}.md`
 
 2. Add YAML frontmatter + content:
 
 ```markdown
 ---
-name: My Prompt
-description: What this prompt does
+name: My Skill
+description: What this skill does
 category: coding
 tags:
   - example
 author: Your Name
 ---
 
-# Prompt Title
+# Skill Title
 
-Your system prompt content here...
+Your skill instructions here...
 ```
 
-3. Add entry to `index.json` under `packages.prompts.official`
+3. Add entry to `index.json` under `packages.skills.official`
 
 ## Adding a Binary
 

@@ -240,6 +240,21 @@ describe("resolve", () => {
       expect(resolved.install.path).toBe("catalog/prompts/code-review.md");
     });
 
+    it("should derive skill path from id when omitted", () => {
+      const pkg: Package = {
+        id: "skill:code-review",
+        kind: "skill",
+        name: "Code Review",
+        version: "1.0.0",
+        delivery: "remote",
+        install: { source: "catalog" },
+      };
+      const ctx: ResolveContext = { os: "darwin", arch: "arm64" };
+      const resolved = resolve(pkg, ctx);
+
+      expect(resolved.install.path).toBe("catalog/skills/code-review.md");
+    });
+
     it("should not override explicit path", () => {
       const pkg: Package = {
         ...minimalStack,

@@ -24,7 +24,7 @@ export type PlatformKey =
 
 export type InstallSource = "download" | "npm" | "pip" | "system" | "catalog";
 export type Delivery = "remote" | "system" | "bundled";
-export type Kind = "runtime" | "binary" | "agent" | "stack" | "prompt";
+export type Kind = "runtime" | "binary" | "agent" | "stack" | "skill" | "prompt";
 
 export interface Checksum {
   algo: "sha256";
@@ -212,6 +212,8 @@ export function resolve(pkg: Package, ctx: ResolveContext): ResolvedPackage {
     const [, name] = pkg.id.split(":");
     if (pkg.kind === "stack") {
       effectiveInstall.path = `catalog/stacks/${name}`;
+    } else if (pkg.kind === "skill") {
+      effectiveInstall.path = `catalog/skills/${name}.md`;
     } else if (pkg.kind === "prompt") {
       effectiveInstall.path = `catalog/prompts/${name}.md`;
     }
@@ -260,7 +262,7 @@ export function assertEffectivePolicy(resolved: ResolvedPackage): void {
     throw new PolicyError(id, `agent must use install.source=npm`);
   }
 
-  if ((kind === "stack" || kind === "prompt") && install.source !== "catalog") {
+  if ((kind === "stack" || kind === "skill" || kind === "prompt") && install.source !== "catalog") {
     throw new PolicyError(id, `${kind} must use install.source=catalog`);
   }
 

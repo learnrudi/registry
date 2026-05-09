@@ -223,11 +223,12 @@ function buildPlatformIndex(
 // =============================================================================
 
 async function buildCatalogHash(): Promise<CatalogHash> {
-  // Find all catalog payload files (stacks, prompts)
+  // Find all catalog payload files (stacks, skills, prompts)
   const patterns = [
     "catalog/stacks/**/!(node_modules)/**/*.{ts,js,json,md}",
     "catalog/stacks/*/manifest.json",
     "catalog/stacks/*/manifest.v2.json",
+    "catalog/skills/**/*.md",
     "catalog/prompts/**/*.md",
   ];
 

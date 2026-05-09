@@ -199,7 +199,7 @@ function inferKindFromManifest(v1: V1Manifest, hint?: Kind): Kind {
   // Infer from id prefix
   if (v1.id) {
     const prefix = v1.id.split(":")[0];
-    if (["runtime", "binary", "agent", "stack", "prompt"].includes(prefix)) {
+    if (["runtime", "binary", "agent", "stack", "skill", "prompt"].includes(prefix)) {
       return prefix as Kind;
     }
   }
@@ -217,8 +217,8 @@ function inferKindFromManifest(v1: V1Manifest, hint?: Kind): Kind {
  * Determine delivery policy
  */
 function determineDelivery(v1: V1Manifest, kind: Kind): Delivery {
-  // Stacks and prompts are always remote (catalog)
-  if (kind === "stack" || kind === "prompt") {
+  // Stacks, skills, and prompts are always remote (catalog)
+  if (kind === "stack" || kind === "skill" || kind === "prompt") {
     return "remote";
   }
 
@@ -244,7 +244,16 @@ function buildInstall(v1: V1Manifest, kind: Kind): Install {
     };
   }
 
-  // Prompts use catalog
+  // Skills use catalog
+  if (kind === "skill") {
+    const [, name] = (v1.id ?? "skill:unknown").split(":");
+    return {
+      source: "catalog",
+      path: `catalog/skills/${name}.md`,
+    };
+  }
+
+  // Prompts use catalog for backward compatibility
   if (kind === "prompt") {
     const [, name] = (v1.id ?? "prompt:unknown").split(":");
     return {
@@ -361,7 +370,7 @@ function buildBins(
   v1: V1Manifest,
   kind: Kind
 ): string[] | Record<string, { path: string }> | undefined {
-  if (kind === "stack" || kind === "prompt") return undefined;
+  if (kind === "stack" || kind === "skill" || kind === "prompt") return undefined;
 
   // v1 bins field
   if (v1.bins) return v1.bins;
