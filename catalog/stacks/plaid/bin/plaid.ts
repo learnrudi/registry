@@ -532,7 +532,7 @@ async function run(): Promise<void> {
         let outPath = flagString(flags, "out");
         if (!outPath) {
           const reportDir =
-            "/Users/hoff/dev/RUDI/business/finance/plaid/reports";
+            "/Users/hoff/dev/RUDI/business/finance/sources/plaid/reports";
           await mkdir(reportDir, { recursive: true });
 
           const basisSlug = basis;
