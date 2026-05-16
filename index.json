@@ -363,6 +363,29 @@
           }
         },
         {
+          "id": "stack:plaid",
+          "name": "Plaid",
+          "version": "0.1.0",
+          "description": "Connect personal bank accounts through Plaid, list accounts and balances, and sync transactions",
+          "path": "catalog/stacks/plaid",
+          "runtime": "runtime:node",
+          "category": "finance",
+          "tags": [
+            "plaid",
+            "banking",
+            "finance",
+            "transactions",
+            "accounts",
+            "balances"
+          ],
+          "requires": {
+            "secrets": [
+              "PLAID_CLIENT_ID",
+              "PLAID_SECRET"
+            ]
+          }
+        },
+        {
           "id": "stack:data-analysis",
           "name": "Data Analysis",
           "version": "1.0.0",
