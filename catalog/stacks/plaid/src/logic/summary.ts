@@ -32,6 +32,7 @@ export type CategoryTotal = {
 };
 
 export type CashflowSource = { itemId: string; label: string };
+type CashflowEntry = { tx: Transaction; account?: AccountBase };
 
 export type CashflowSummary = {
   schemaVersion: typeof CASHFLOW_SCHEMA_VERSION;
@@ -42,7 +43,11 @@ export type CashflowSummary = {
   totals: Totals;
   byAccount: AccountTotal[];
   byCategory: CategoryTotal[];
-  excludedCategories: { primary: string[]; detailed: string[] };
+  excludedCategories: {
+    primary: string[];
+    detailed: string[];
+    accountRules: string[];
+  };
 };
 
 export type ComputeCashflowInput = {
@@ -62,7 +67,37 @@ function yearStartDate(): string {
   return `${todayDate().slice(0, 4)}-01-01`;
 }
 
-function shouldExclude(tx: Transaction, basis: Basis): boolean {
+function isCreditCardAccount(account?: AccountBase): boolean {
+  return account?.type === "credit" || account?.subtype === "credit card";
+}
+
+function isCreditCardPaymentCredit(entry: CashflowEntry): boolean {
+  if (!isCreditCardAccount(entry.account) || entry.tx.amount >= 0) {
+    return false;
+  }
+
+  const primary = entry.tx.personal_finance_category?.primary ?? "";
+  const detailed = entry.tx.personal_finance_category?.detailed ?? "";
+  const description = [
+    entry.tx.name,
+    entry.tx.merchant_name,
+    entry.tx.original_description,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    primary === "LOAN_DISBURSEMENTS" ||
+    detailed === "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" ||
+    /\b(auto\s*pay|autopay|payment|pmt|pymt|thank you|thankyou)\b/.test(
+      description
+    )
+  );
+}
+
+function shouldExclude(entry: CashflowEntry, basis: Basis): boolean {
+  const tx = entry.tx;
   const primary = tx.personal_finance_category?.primary ?? null;
   const detailed = tx.personal_finance_category?.detailed ?? null;
 
@@ -77,24 +112,43 @@ function shouldExclude(tx: Transaction, basis: Basis): boolean {
     return true;
   }
 
+  if (basis === "normalized" && isCreditCardPaymentCredit(entry)) {
+    return true;
+  }
+
   return false;
 }
 
-function totalsFromTransactions(txns: Transaction[]): Totals {
+function contribution(
+  entry: CashflowEntry,
+  basis: Basis
+): { expenses: number; income: number } {
+  const { tx, account } = entry;
+
+  if (basis === "normalized" && isCreditCardAccount(account) && tx.amount < 0) {
+    return { expenses: tx.amount, income: 0 };
+  }
+
+  if (tx.amount > 0) {
+    return { expenses: tx.amount, income: 0 };
+  }
+
+  return { expenses: 0, income: Math.abs(tx.amount) };
+}
+
+function totalsFromEntries(entries: CashflowEntry[], basis: Basis): Totals {
   let expenses = 0;
   let income = 0;
-  for (const tx of txns) {
-    if (tx.amount > 0) {
-      expenses += tx.amount;
-    } else {
-      income += Math.abs(tx.amount);
-    }
+  for (const entry of entries) {
+    const value = contribution(entry, basis);
+    expenses += value.expenses;
+    income += value.income;
   }
   return {
     income: round2(income),
     expenses: round2(expenses),
     net: round2(income - expenses),
-    transactionCount: txns.length,
+    transactionCount: entries.length,
   };
 }
 
@@ -103,25 +157,21 @@ function round2(n: number): number {
 }
 
 function buildByAccount(
-  filtered: Transaction[],
-  accounts: AccountBase[],
+  filtered: CashflowEntry[],
   itemId: string,
-  itemLabel: string
+  itemLabel: string,
+  basis: Basis
 ): AccountTotal[] {
-  const accountMap = new Map<string, AccountBase>(
-    accounts.map((a) => [a.account_id, a])
-  );
-
-  const groups = new Map<string, Transaction[]>();
-  for (const tx of filtered) {
-    const existing = groups.get(tx.account_id) ?? [];
-    existing.push(tx);
-    groups.set(tx.account_id, existing);
+  const groups = new Map<string, CashflowEntry[]>();
+  for (const entry of filtered) {
+    const existing = groups.get(entry.tx.account_id) ?? [];
+    existing.push(entry);
+    groups.set(entry.tx.account_id, existing);
   }
 
   const result: AccountTotal[] = [];
-  for (const [accountId, txns] of groups) {
-    const acct = accountMap.get(accountId);
+  for (const [accountId, entries] of groups) {
+    const acct = entries[0].account;
     result.push({
       accountId,
       itemId,
@@ -129,7 +179,7 @@ function buildByAccount(
       name: acct?.name ?? accountId,
       mask: acct?.mask ?? null,
       subtype: acct?.subtype ?? null,
-      totals: totalsFromTransactions(txns),
+      totals: totalsFromEntries(entries, basis),
     });
   }
 
@@ -137,19 +187,18 @@ function buildByAccount(
 }
 
 function mergeByCategory(
-  filtered: Transaction[],
-  acc: Map<string, { count: number; expenses: number; income: number }>
+  filtered: CashflowEntry[],
+  acc: Map<string, { count: number; expenses: number; income: number }>,
+  basis: Basis
 ): void {
-  for (const tx of filtered) {
-    const cat = tx.personal_finance_category?.primary ?? "UNCATEGORIZED";
-    const entry = acc.get(cat) ?? { count: 0, expenses: 0, income: 0 };
-    entry.count += 1;
-    if (tx.amount > 0) {
-      entry.expenses += tx.amount;
-    } else {
-      entry.income += Math.abs(tx.amount);
-    }
-    acc.set(cat, entry);
+  for (const entry of filtered) {
+    const cat = entry.tx.personal_finance_category?.primary ?? "UNCATEGORIZED";
+    const total = acc.get(cat) ?? { count: 0, expenses: 0, income: 0 };
+    const value = contribution(entry, basis);
+    total.count += 1;
+    total.expenses += value.expenses;
+    total.income += value.income;
+    acc.set(cat, total);
   }
 }
 
@@ -162,10 +211,16 @@ export async function computeCashflow(
   const endDate = parsed.endDate ?? todayDate();
   const basis: Basis = (parsed.basis as Basis | undefined) ?? "cash";
 
-  const excludedCategories: { primary: string[]; detailed: string[] } = {
+  const excludedCategories: {
+    primary: string[];
+    detailed: string[];
+    accountRules: string[];
+  } = {
     primary: ["TRANSFER_IN", "TRANSFER_OUT"],
     detailed:
       basis === "normalized" ? ["LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"] : [],
+    accountRules:
+      basis === "normalized" ? ["credit_card_payment_credits"] : [],
   };
 
   let itemRefs: Array<{ itemId: string; label: string }>;
@@ -190,7 +245,7 @@ export async function computeCashflow(
     string,
     { count: number; expenses: number; income: number }
   >();
-  const allFiltered: Transaction[] = [];
+  const allFiltered: CashflowEntry[] = [];
 
   for (const { itemId, label } of itemRefs) {
     const result = await getTransactions({
@@ -201,12 +256,19 @@ export async function computeCashflow(
       accountIds: parsed.accountIds,
     });
 
-    const filtered = result.transactions.filter(
-      (tx) => !shouldExclude(tx, basis)
+    const accountById = new Map(
+      result.accounts.map((account) => [account.account_id, account])
+    );
+    const entries = result.transactions.map((tx) => ({
+      tx,
+      account: accountById.get(tx.account_id),
+    }));
+    const filtered = entries.filter(
+      (entry) => !shouldExclude(entry, basis)
     );
 
-    byAccount.push(...buildByAccount(filtered, result.accounts, itemId, label));
-    mergeByCategory(filtered, categoryAcc);
+    byAccount.push(...buildByAccount(filtered, itemId, label, basis));
+    mergeByCategory(filtered, categoryAcc, basis);
     allFiltered.push(...filtered);
   }
 
@@ -219,7 +281,7 @@ export async function computeCashflow(
     }))
     .sort((a, b) => b.expenses + b.income - (a.expenses + a.income));
 
-  const totals = totalsFromTransactions(allFiltered);
+  const totals = totalsFromEntries(allFiltered, basis);
 
   return {
     schemaVersion: CASHFLOW_SCHEMA_VERSION,

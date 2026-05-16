@@ -286,7 +286,9 @@ function formatCashflowTable(summary: CashflowSummary): string {
   lines.push("");
   const excludedPrimary = summary.excludedCategories.primary.join(", ");
   const excludedDetailed = summary.excludedCategories.detailed.join(", ");
-  const excludedAll = [excludedPrimary, excludedDetailed]
+  const excludedAccountRules =
+    summary.excludedCategories.accountRules?.join(", ");
+  const excludedAll = [excludedPrimary, excludedDetailed, excludedAccountRules]
     .filter(Boolean)
     .join(", ");
   lines.push(`Excluded: ${excludedAll || "(none)"}`);
