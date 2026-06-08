@@ -287,6 +287,32 @@
           }
         },
         {
+          "id": "stack:twilio-sms",
+          "name": "Twilio SMS",
+          "version": "0.1.0",
+          "description": "Send SMS messages and inspect recent Twilio messages through a guarded MCP interface",
+          "path": "catalog/stacks/twilio-sms",
+          "runtime": "runtime:node",
+          "category": "communication",
+          "tags": [
+            "twilio",
+            "sms",
+            "messaging",
+            "mcp",
+            "communication"
+          ],
+          "requires": {
+            "secrets": [
+              "TWILIO_ACCOUNT_SID",
+              "TWILIO_AUTH_TOKEN",
+              "TWILIO_API_KEY_SID",
+              "TWILIO_API_KEY_SECRET",
+              "TWILIO_FROM_NUMBER",
+              "TWILIO_MESSAGING_SERVICE_SID"
+            ]
+          }
+        },
+        {
           "id": "stack:social-media-publisher",
           "name": "Social Media Publisher",
           "version": "1.0.0",

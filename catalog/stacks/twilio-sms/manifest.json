@@ -1,0 +1,80 @@
+{
+  "id": "twilio-sms",
+  "name": "Twilio SMS",
+  "version": "0.1.0",
+  "description": "Send SMS messages and inspect recent Twilio messages through a guarded MCP interface.",
+  "runtime": "node",
+  "command": [
+    "npx",
+    "tsx",
+    "src/index.ts"
+  ],
+  "provides": {
+    "tools": [
+      "twilio_config_status",
+      "twilio_send_sms",
+      "twilio_list_messages",
+      "twilio_get_message"
+    ]
+  },
+  "requires": {
+    "binaries": [],
+    "secrets": [
+      {
+        "name": "TWILIO_ACCOUNT_SID",
+        "label": "Twilio Account SID",
+        "description": "Account SID from the Twilio Console.",
+        "required": true,
+        "link": "https://console.twilio.com/"
+      },
+      {
+        "name": "TWILIO_AUTH_TOKEN",
+        "label": "Twilio Auth Token",
+        "description": "Auth token from the Twilio Console. Optional if using API key SID/secret.",
+        "required": false,
+        "link": "https://console.twilio.com/"
+      },
+      {
+        "name": "TWILIO_API_KEY_SID",
+        "label": "Twilio API Key SID",
+        "description": "Optional API Key SID. Use with TWILIO_API_KEY_SECRET instead of Auth Token.",
+        "required": false,
+        "link": "https://console.twilio.com/us1/account/keys-credentials/api-keys"
+      },
+      {
+        "name": "TWILIO_API_KEY_SECRET",
+        "label": "Twilio API Key Secret",
+        "description": "Optional API Key secret. Use with TWILIO_API_KEY_SID instead of Auth Token.",
+        "required": false,
+        "link": "https://console.twilio.com/us1/account/keys-credentials/api-keys"
+      },
+      {
+        "name": "TWILIO_FROM_NUMBER",
+        "label": "Twilio From Number",
+        "description": "Default E.164 sender phone number for outbound SMS.",
+        "required": false,
+        "link": "https://console.twilio.com/us1/develop/phone-numbers/manage/incoming"
+      },
+      {
+        "name": "TWILIO_MESSAGING_SERVICE_SID",
+        "label": "Twilio Messaging Service SID",
+        "description": "Optional Messaging Service SID to use instead of a from number.",
+        "required": false,
+        "link": "https://console.twilio.com/us1/develop/sms/services"
+      }
+    ]
+  },
+  "meta": {
+    "author": "RUDI",
+    "license": "MIT",
+    "category": "communication",
+    "tags": [
+      "twilio",
+      "sms",
+      "messaging",
+      "mcp",
+      "communication"
+    ],
+    "icon": "message"
+  }
+}
