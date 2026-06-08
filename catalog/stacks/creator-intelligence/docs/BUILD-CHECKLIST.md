@@ -33,6 +33,12 @@ extractor logic.
 - [x] Behavior-level tests cover unified export normalization, document
   generation, and unified-export inventory naming.
 - [x] Installed local RUDI stack is rebuilt, indexed, and visible to the router.
+- [x] Unified export JSON is validated before document generation.
+- [x] Generated unified exports are validated before being written.
+- [x] Negative tests cover invalid audit roots, missing platform artifacts, and
+  malformed unified export JSON.
+- [x] Fixture MCP boundary test covers `creator_full_audit_inventory` without
+  live social network calls.
 
 ## Verification Log
 
@@ -47,6 +53,7 @@ extractor logic.
   `/Users/hoff/dev/RUDI/research/creator-intelligence/hoffdigital-full`
 - [x] Agent debt scan on `src/index.ts`, `src/full-audit.ts`, and
   `test/full-audit.test.ts` returned zero findings.
+- [x] Phase 6 test suite covers 8 behavior tests.
 
 ## Known Debt And Boundaries
 
@@ -67,12 +74,12 @@ extractor logic.
 
 ### Phase 6 - Hardening
 
-- [ ] Add schema validation for generated unified export JSON.
-- [ ] Add negative tests for invalid audit roots, missing platform files, and
+- [x] Add schema validation for generated unified export JSON.
+- [x] Add negative tests for invalid audit roots, missing platform files, and
   malformed JSON.
 - [ ] Add retry/timeout reporting around profile indexing and media download
   subprocesses.
-- [ ] Add fixture-based smoke tests for the MCP boundary without requiring live
+- [x] Add fixture-based smoke tests for the MCP boundary without requiring live
   social network calls.
 
 ### Phase 7 - Browser Capture
@@ -99,4 +106,3 @@ extractor logic.
   the content-engine product instead of this local stack.
 - [ ] Build rendered reports only after the normalized export and analysis schema
   are stable.
-

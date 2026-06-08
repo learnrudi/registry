@@ -47,6 +47,11 @@ export interface UnifiedExport {
   };
 }
 
+export interface UnifiedExportValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
 export interface BuildUnifiedExportOptions {
   root: string;
   creatorSlug?: string;
@@ -121,6 +126,133 @@ function extractHashtags(text: unknown): string[] {
 
 function readJson(path: string): any {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNullableString(value: unknown): boolean {
+  return typeof value === "string" || value === null;
+}
+
+function isNullableFiniteNumber(value: unknown): boolean {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+function validateStringField(value: Record<string, unknown>, field: string, errors: string[]) {
+  if (typeof value[field] !== "string" || !String(value[field]).trim()) {
+    errors.push(`${field} must be a non-empty string`);
+  }
+}
+
+function validateNumberField(value: Record<string, unknown>, field: string, errors: string[]) {
+  if (typeof value[field] !== "number" || !Number.isFinite(value[field])) {
+    errors.push(`${field} must be a finite number`);
+  }
+}
+
+function validateOptionalNullableString(value: Record<string, unknown>, field: string, path: string, errors: string[]) {
+  if (field in value && !isNullableString(value[field])) {
+    errors.push(`${path}.${field} must be a string or null`);
+  }
+}
+
+function validatePost(post: unknown, path: string, platform: string, errors: string[]) {
+  if (!isRecord(post)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+  if (post.platform !== platform) {
+    errors.push(`${path}.platform must equal ${platform}`);
+  }
+  for (const field of ["id", "url", "title"]) {
+    if (!isNullableString(post[field])) {
+      errors.push(`${path}.${field} must be a string or null`);
+    }
+  }
+  for (const field of ["description", "body", "created_at", "age_relative", "duration", "transcript"]) {
+    validateOptionalNullableString(post, field, path, errors);
+  }
+  if ("duration_seconds" in post && !isNullableFiniteNumber(post.duration_seconds)) {
+    errors.push(`${path}.duration_seconds must be a finite number or null`);
+  }
+  if ("word_count" in post && !isNullableFiniteNumber(post.word_count)) {
+    errors.push(`${path}.word_count must be a finite number or null`);
+  }
+  if (!Array.isArray(post.hashtags) || !post.hashtags.every((tag) => typeof tag === "string")) {
+    errors.push(`${path}.hashtags must be an array of strings`);
+  }
+  if (!isRecord(post.metrics)) {
+    errors.push(`${path}.metrics must be an object`);
+    return;
+  }
+  for (const [metric, value] of Object.entries(post.metrics)) {
+    if (!isNullableFiniteNumber(value)) {
+      errors.push(`${path}.metrics.${metric} must be a finite number or null`);
+    }
+  }
+}
+
+export function validateUnifiedExport(value: unknown): UnifiedExportValidationResult {
+  const errors: string[] = [];
+  if (!isRecord(value)) {
+    return { valid: false, errors: ["export must be an object"] };
+  }
+  validateStringField(value, "creator", errors);
+  validateStringField(value, "audited_at", errors);
+  validateStringField(value, "audit_source", errors);
+  if (!isRecord(value.profiles)) {
+    errors.push("profiles must be an object");
+  }
+  if (!isRecord(value.summary)) {
+    errors.push("summary must be an object");
+  } else {
+    validateNumberField(value.summary, "total_posts_captured", errors);
+    if (!isRecord(value.summary.by_platform)) {
+      errors.push("summary.by_platform must be an object");
+    } else {
+      for (const [platform, count] of Object.entries(value.summary.by_platform)) {
+        if (typeof count !== "number" || !Number.isFinite(count)) {
+          errors.push(`summary.by_platform.${platform} must be a finite number`);
+        }
+      }
+    }
+  }
+  if (!isRecord(value.platforms)) {
+    errors.push("platforms must be an object");
+  } else {
+    for (const [platform, platformExport] of Object.entries(value.platforms)) {
+      const path = `platforms.${platform}`;
+      if (!isRecord(platformExport)) {
+        errors.push(`${path} must be an object`);
+        continue;
+      }
+      if (platformExport.platform !== platform) {
+        errors.push(`${path}.platform must equal ${platform}`);
+      }
+      validateNumberField(platformExport, "post_count", errors);
+      if ("error" in platformExport && typeof platformExport.error !== "string") {
+        errors.push(`${path}.error must be a string when present`);
+      }
+      if (!Array.isArray(platformExport.posts)) {
+        errors.push(`${path}.posts must be an array`);
+        continue;
+      }
+      platformExport.posts.forEach((post, index) => validatePost(post, `${path}.posts.${index}`, platform, errors));
+      if (typeof platformExport.post_count === "number" && platformExport.post_count !== platformExport.posts.length) {
+        errors.push(`${path}.post_count must equal posts.length`);
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+function assertValidUnifiedExport(value: unknown): asserts value is UnifiedExport {
+  const validation = validateUnifiedExport(value);
+  if (!validation.valid) {
+    throw new Error(`invalid unified export: ${validation.errors.join("; ")}`);
+  }
 }
 
 function safeReadJson(path: string): any | null {
@@ -376,6 +508,7 @@ export function buildUnifiedExport(options: BuildUnifiedExportOptions): BuildUni
   };
   const jsonPath = join(root, `${outputPrefix}.json`);
   const csvPath = join(root, `${outputPrefix}.csv`);
+  assertValidUnifiedExport(exported);
   writeFileSync(jsonPath, `${JSON.stringify(exported, null, 2)}\n`);
   writeUnifiedCsv(csvPath, flattenPosts(platforms));
   return { root, jsonPath, csvPath, summary: exported.summary };
@@ -388,7 +521,9 @@ function readUnifiedExportForDocs(options: GenerateAuditDocumentsOptions): Unifi
   if (!existsSync(exportPath)) {
     buildUnifiedExport({ root, creatorSlug });
   }
-  return readJson(exportPath) as UnifiedExport;
+  const exported = readJson(exportPath);
+  assertValidUnifiedExport(exported);
+  return exported;
 }
 
 function formatCount(value: unknown): string {

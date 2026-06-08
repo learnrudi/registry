@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { buildUnifiedExport, generateAuditDocuments, inspectFullAudit } from "../src/full-audit.js";
+import { buildUnifiedExport, generateAuditDocuments, inspectFullAudit, validateUnifiedExport } from "../src/full-audit.js";
 
 test("buildUnifiedExport normalizes supported platform artifacts", () => {
   const root = mkdtempSync(join(tmpdir(), "creator-full-audit-"));
@@ -122,4 +122,78 @@ test("inspectFullAudit detects existing unified exports that do not match folder
 
   assert.equal(inventory.files.unified_export_json, true);
   assert.equal(inventory.files.unified_export_csv, true);
+});
+
+test("validateUnifiedExport rejects malformed export shape", () => {
+  const result = validateUnifiedExport({
+    creator: "fixture",
+    audited_at: "2026-01-01T00:00:00.000Z",
+    audit_source: "/tmp/fixture",
+    profiles: {},
+    platforms: {
+      tiktok: {
+        platform: "tiktok",
+        post_count: 1,
+        posts: "not-an-array",
+      },
+    },
+    summary: {
+      total_posts_captured: 1,
+      by_platform: { tiktok: 1 },
+    },
+  });
+
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join("\n"), /platforms\.tiktok\.posts must be an array/);
+});
+
+test("generateAuditDocuments rejects malformed existing unified export", () => {
+  const root = mkdtempSync(join(tmpdir(), "creator-full-malformed-"));
+  writeFileSync(join(root, "fixture-unified-export.json"), JSON.stringify({
+    creator: "fixture",
+    audited_at: "2026-01-01T00:00:00.000Z",
+    audit_source: root,
+    profiles: {},
+    platforms: {
+      tiktok: {
+        platform: "tiktok",
+        post_count: 1,
+        posts: "not-an-array",
+      },
+    },
+    summary: {
+      total_posts_captured: 1,
+      by_platform: { tiktok: 1 },
+    },
+  }));
+
+  assert.throws(
+    () => generateAuditDocuments({ root, creatorSlug: "fixture" }),
+    /invalid unified export: platforms\.tiktok\.posts must be an array/
+  );
+});
+
+test("buildUnifiedExport rejects a missing audit root", () => {
+  const root = join(tmpdir(), `creator-missing-${Date.now()}`);
+
+  assert.throws(
+    () => buildUnifiedExport({ root, creatorSlug: "missing" }),
+    /audit root not found/
+  );
+});
+
+test("buildUnifiedExport reports missing platform artifacts without omitting platforms", () => {
+  const root = mkdtempSync(join(tmpdir(), "creator-full-missing-platforms-"));
+
+  const result = buildUnifiedExport({ root, creatorSlug: "fixture" });
+  const exportJson = JSON.parse(readFileSync(result.jsonPath, "utf8"));
+  const validation = validateUnifiedExport(exportJson);
+
+  assert.equal(validation.valid, true);
+  assert.equal(result.summary.total_posts_captured, 0);
+  assert.deepEqual(Object.keys(exportJson.platforms).sort(), ["linkedin", "substack", "tiktok", "youtube"]);
+  assert.match(exportJson.platforms.tiktok.error, /extracted-videos directory not found/);
+  assert.match(exportJson.platforms.youtube.error, /catalog\.json not found/);
+  assert.match(exportJson.platforms.substack.error, /substack directory not found/);
+  assert.match(exportJson.platforms.linkedin.error, /posts-clean\.json not found/);
 });
