@@ -39,7 +39,7 @@ Build status and remaining phases are tracked in
 ## Default Output Root
 
 ```text
-/Users/hoff/dev/RUDI/research/creator-intelligence
+~/.rudi/research/creator-intelligence
 ```
 
 Style references are written to:
@@ -75,7 +75,7 @@ For TikTok, profile ordering and available metrics depend on what `yt-dlp` can
 retrieve at run time. Pinned videos, bio links, playlists, follower counts, and
 visual profile state still require a browser capture layer.
 
-Full audit folders follow the `hoffdigital-full` target shape:
+Full audit folders follow a generic `{creator_slug}-full` target shape:
 
 ```text
 {output_root}/{creator_slug}-full/

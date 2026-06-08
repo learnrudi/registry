@@ -37,33 +37,34 @@ config({ path: join(__dirname, "..", ".env") });
 
 const execFileAsync = promisify(execFile);
 
+const RUDI_HOME = resolve(expandHome(process.env.RUDI_HOME || join(homedir(), ".rudi")));
+const DEFAULT_RESEARCH_BASE = join(RUDI_HOME, "research");
 const DEFAULT_RESEARCH_ROOT =
-  process.env.CREATOR_INTELLIGENCE_ROOT || "/Users/hoff/dev/RUDI/research/creator-intelligence";
+  process.env.CREATOR_INTELLIGENCE_ROOT || join(DEFAULT_RESEARCH_BASE, "creator-intelligence");
 const YOUTUBE_CREATORS_ROOT =
-  process.env.YOUTUBE_CREATORS_ROOT || "/Users/hoff/dev/RUDI/research/youtube-creators";
+  process.env.YOUTUBE_CREATORS_ROOT || join(DEFAULT_RESEARCH_BASE, "youtube-creators");
 
 const YT_DLP = firstExisting([
   process.env.YT_DLP,
-  "/Users/hoff/.rudi/bins/yt-dlp",
+  join(RUDI_HOME, "bins", "yt-dlp"),
   "/opt/homebrew/bin/yt-dlp",
   "yt-dlp",
 ]);
 const FFMPEG = firstExisting([
   process.env.FFMPEG,
-  "/Users/hoff/.rudi/bins/ffmpeg",
+  join(RUDI_HOME, "bins", "ffmpeg"),
   "/opt/homebrew/bin/ffmpeg",
   "ffmpeg",
 ]);
 const FFPROBE = firstExisting([
   process.env.FFPROBE,
-  "/Users/hoff/.rudi/bins/ffprobe",
+  join(RUDI_HOME, "bins", "ffprobe"),
   "/opt/homebrew/bin/ffprobe",
   "ffprobe",
 ]);
 const WHISPER = firstExisting([
   process.env.WHISPER_CLI,
-  "/Users/hoff/.rudi/runtimes/python/bin/whisper",
-  "/Users/hoff/Library/Python/3.9/bin/whisper",
+  join(RUDI_HOME, "runtimes", "python", "bin", "whisper"),
   "whisper",
 ]);
 
@@ -139,13 +140,40 @@ function expandHome(pathValue: string): string {
   return pathValue;
 }
 
+function normalizeRoot(rawRoot: string | undefined): string | null {
+  if (!rawRoot || !rawRoot.trim()) return null;
+  return resolve(expandHome(rawRoot.trim()));
+}
+
+function allowedRoots(roots: Array<string | undefined>): string[] {
+  return roots
+    .map(normalizeRoot)
+    .filter((root): root is string => Boolean(root));
+}
+
+function isPathWithinRoot(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}${sep}`);
+}
+
+const WRITE_ROOTS = allowedRoots([
+  DEFAULT_RESEARCH_BASE,
+  RUDI_HOME,
+  process.env.CREATOR_INTELLIGENCE_ROOT,
+  process.env.YOUTUBE_CREATORS_ROOT,
+]);
+
+const READ_ROOTS = allowedRoots([
+  ...WRITE_ROOTS,
+  process.env.CREATOR_INTELLIGENCE_SOURCE_ROOT,
+]);
+
 function resolveRoot(rawRoot: unknown): string {
   const root = typeof rawRoot === "string" && rawRoot.trim()
     ? expandHome(rawRoot.trim())
     : DEFAULT_RESEARCH_ROOT;
   const absolute = resolve(root);
-  if (!absolute.startsWith("/Users/hoff/dev/RUDI/research") && !absolute.startsWith(join(homedir(), ".rudi"))) {
-    throw new Error("output_root must be under /Users/hoff/dev/RUDI/research or ~/.rudi");
+  if (!WRITE_ROOTS.some((allowedRoot) => isPathWithinRoot(absolute, allowedRoot))) {
+    throw new Error("output_root must be under RUDI_HOME/research or an explicitly configured creator-intelligence root");
   }
   return absolute;
 }
@@ -155,8 +183,8 @@ function resolveAllowedPath(rawPath: unknown, label: string): string {
     throw new Error(`${label} must be a non-empty string`);
   }
   const absolute = resolve(expandHome(rawPath.trim()));
-  if (!absolute.startsWith("/Users/hoff/dev/RUDI/research") && !absolute.startsWith(join(homedir(), ".rudi"))) {
-    throw new Error(`${label} must be under /Users/hoff/dev/RUDI/research or ~/.rudi`);
+  if (!WRITE_ROOTS.some((allowedRoot) => isPathWithinRoot(absolute, allowedRoot))) {
+    throw new Error(`${label} must be under RUDI_HOME/research or an explicitly configured creator-intelligence root`);
   }
   return absolute;
 }
@@ -166,13 +194,8 @@ function resolveReadablePath(rawPath: unknown, label: string): string {
     throw new Error(`${label} must be a non-empty string`);
   }
   const absolute = resolve(expandHome(rawPath.trim()));
-  const allowedRoots = [
-    "/Users/hoff/dev",
-    "/Users/hoff/projects",
-    join(homedir(), ".rudi"),
-  ];
-  if (!allowedRoots.some((root) => absolute === root || absolute.startsWith(`${root}${sep}`))) {
-    throw new Error(`${label} must be under /Users/hoff/dev, /Users/hoff/projects, or ~/.rudi`);
+  if (!READ_ROOTS.some((allowedRoot) => isPathWithinRoot(absolute, allowedRoot))) {
+    throw new Error(`${label} must be under RUDI_HOME/research or CREATOR_INTELLIGENCE_SOURCE_ROOT`);
   }
   return absolute;
 }
@@ -875,7 +898,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           platform: { type: "string", description: "Optional platform override. Defaults from URL hostname." },
           reference_slug: { type: "string", description: "Optional reference directory slug. Defaults to video ID." },
           title: { type: "string", description: "Optional README title." },
-          output_root: { type: "string", description: "Optional creator-intelligence output root. Defaults to /Users/hoff/dev/RUDI/research/creator-intelligence." },
+          output_root: { type: "string", description: "Optional creator-intelligence output root. Defaults to RUDI_HOME/research/creator-intelligence." },
           overwrite: { type: "boolean", description: "Replace files if the reference directory already exists. Default false." },
           keep_source: { type: "boolean", description: "Keep downloaded source media in the output directory. Default false." },
           contact_fps: { type: "number", description: "Contact sheet sampling rate. Default 1, max 2." },
@@ -950,7 +973,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          audit_root: { type: "string", description: "Absolute full-audit directory under /Users/hoff/dev/RUDI/research or ~/.rudi." },
+          audit_root: { type: "string", description: "Absolute full-audit directory under RUDI_HOME/research or an explicitly configured creator-intelligence root." },
         },
         required: ["audit_root"],
       },
@@ -962,7 +985,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {
           source_dir: { type: "string", description: "Directory containing legacy tiktok-*.json extracts and analysis CSVs." },
-          audit_root: { type: "string", description: "Target full-audit directory under /Users/hoff/dev/RUDI/research or ~/.rudi." },
+          audit_root: { type: "string", description: "Target full-audit directory under RUDI_HOME/research or an explicitly configured creator-intelligence root." },
           overwrite: { type: "boolean", description: "Overwrite existing imported files. Default false." },
         },
         required: ["source_dir", "audit_root"],
@@ -974,7 +997,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          audit_root: { type: "string", description: "Full-audit directory under /Users/hoff/dev/RUDI/research or ~/.rudi." },
+          audit_root: { type: "string", description: "Full-audit directory under RUDI_HOME/research or an explicitly configured creator-intelligence root." },
           creator_slug: { type: "string", description: "Optional export creator slug. Defaults to audit directory name." },
           output_prefix: { type: "string", description: "Optional output filename prefix. Defaults to {creator_slug}-unified-export." },
         },
@@ -987,7 +1010,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          audit_root: { type: "string", description: "Full-audit directory under /Users/hoff/dev/RUDI/research or ~/.rudi." },
+          audit_root: { type: "string", description: "Full-audit directory under RUDI_HOME/research or an explicitly configured creator-intelligence root." },
           creator_slug: { type: "string", description: "Optional export creator slug. Defaults to audit directory name." },
           export_path: { type: "string", description: "Optional explicit unified export JSON path." },
         },

@@ -9,7 +9,8 @@ extractor logic.
 - The stack owns creator-audit orchestration and local research artifacts.
 - Low-level extraction remains delegated to existing tools such as `yt-dlp`,
   Whisper, browser capture, and future content-extractor APIs.
-- Audit output lives under `/Users/hoff/dev/RUDI/research/creator-intelligence`.
+- Audit output lives under `~/.rudi/research/creator-intelligence` by default,
+  with explicit environment-variable overrides for custom research roots.
 - Full-audit folders should use copied artifacts, not symlinked legacy folders.
 
 ## Completed
@@ -44,21 +45,21 @@ extractor logic.
 
 - [x] `npm test` in `catalog/stacks/creator-intelligence`
 - [x] `npm run build` in `catalog/stacks/creator-intelligence`
-- [x] `npm run validate` in `/Users/hoff/dev/RUDI/apps/registry`
-- [x] `npm run compile` in `/Users/hoff/dev/RUDI/apps/registry`
+- [x] `npm run validate` in the registry workspace.
+- [x] `npm run compile` in the registry workspace.
 - [x] `rudi index --json`
 - [x] `rudi daemon restart --json`
 - [x] MCP smoke:
-  `creator-intelligence.creator_full_audit_inventory` against
-  `/Users/hoff/dev/RUDI/research/creator-intelligence/hoffdigital-full`
+  `creator-intelligence.creator_full_audit_inventory` against a local
+  `{creator_slug}-full` audit fixture.
 - [x] Agent debt scan on `src/index.ts`, `src/full-audit.ts`, and
   `test/full-audit.test.ts` returned zero findings.
 - [x] Phase 6 test suite covers 8 behavior tests.
 
 ## Known Debt And Boundaries
 
-- [ ] Existing `hoffdigital-full` data contains two legacy TikTok symlinks. The
-  new stack reports them and should not create new symlinks.
+- [ ] Existing legacy audit data may contain TikTok symlinks. The new stack
+  reports them and should not create new symlinks.
 - [ ] Browser-captured profile state is still manual or external. TikTok bio,
   follower counts, pinned videos, playlists, and visual profile screenshots need
   a browser capture layer before the profile audit is complete.
