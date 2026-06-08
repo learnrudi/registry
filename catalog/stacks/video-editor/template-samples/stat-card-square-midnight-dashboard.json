@@ -1,0 +1,14 @@
+{
+  "template_id": "stat-card-short",
+  "format": "square",
+  "style": "dashboard",
+  "duration_seconds": 10,
+  "data": {
+    "eyebrow": "Midnight dashboard",
+    "headline": "The workflow found its bottleneck after hours",
+    "stat": "14 min",
+    "caption": "A routing fix cut handoff delay before the morning standup even started.",
+    "source": "Ops demo concept",
+    "accent_color": "#8ef6d0"
+  }
+}

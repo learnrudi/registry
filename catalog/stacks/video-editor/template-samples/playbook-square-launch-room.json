@@ -1,0 +1,32 @@
+{
+  "template_id": "playbook-story",
+  "format": "square",
+  "style": "launch",
+  "duration_seconds": 30,
+  "data": {
+    "title": "The launch room checklist",
+    "subtitle": "A compact square-format sequence for teams preparing a public release.",
+    "sections": [
+      {
+        "eyebrow": "Signal",
+        "headline": "Choose the metric that tells you to stay or shift",
+        "body": "Every launch needs one live signal the team can interpret without a meeting.",
+        "stat": "1"
+      },
+      {
+        "eyebrow": "Message",
+        "headline": "Write the sentence customers should repeat",
+        "body": "If the audience cannot retell the value, the campaign is still carrying too much weight.",
+        "stat": "2"
+      },
+      {
+        "eyebrow": "Response",
+        "headline": "Prepare answers before the questions arrive",
+        "body": "Support, sales, and social should share the same source of truth before launch day.",
+        "stat": "3"
+      }
+    ],
+    "cta": "Launch with fewer surprises.",
+    "accent_color": "#f5b84b"
+  }
+}

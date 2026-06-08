@@ -1,0 +1,14 @@
+{
+  "template_id": "stat-card-short",
+  "format": "portrait",
+  "style": "launch",
+  "duration_seconds": 15,
+  "data": {
+    "eyebrow": "Customer pulse",
+    "headline": "Support quality improved when the queue learned context",
+    "stat": "-38%",
+    "caption": "Repeat tickets fell after agents started every case with a clean account timeline.",
+    "source": "Service workflow sample",
+    "accent_color": "#ff7a90"
+  }
+}

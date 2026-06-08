@@ -1,0 +1,242 @@
+## Phase 0: Baseline And Manual Lookup
+
+- Status: complete.
+- Scope: Fix the `video-editor` stack so mutable run data is stored and resolved under RUDI state instead of the installed stack source tree, and make registry source the canonical install source for clean updates.
+- Files to inspect before editing:
+  - `AGENTS.md`
+  - `package.json`
+  - `schemas/package.schema.json`
+  - `catalog/stacks/video-editor/package.json`
+  - `catalog/stacks/video-editor/src/lib/files.js`
+  - `catalog/stacks/video-editor/src/operations/init.js`
+  - `catalog/stacks/video-editor/src/template-composer/constants.ts`
+  - `catalog/stacks/video-editor/manifest.json`
+  - `catalog/stacks/video-editor/manifest.v2.json`
+  - `catalog/stacks/video-editor/README.md`
+  - `catalog/stacks/video-editor/test/*`
+- Relevant SWE manual sections:
+  - `01-Master-Engineering-Doctrine.txt` from the local SWE Operating Manual: invariants, external inputs, failure behavior, state ownership, and Appendix C red-green-refactor.
+  - `10-Engineering-Operating-Manual-Index.md` from the local SWE Operating Manual: retrieval-first lookup entrypoint.
+- Current-state commands:
+  - `git status -sb`
+  - `rg -n "statePaths|additionalProperties|manifest\\.v2|package\\.schema|paths" schemas src catalog/stacks/video-editor/manifest.json catalog/stacks/video-editor/manifest.v2.json`
+  - `sed -n '1,240p' catalog/stacks/video-editor/src/lib/files.js`
+  - `sed -n '1,420p' catalog/stacks/video-editor/src/operations/init.js`
+  - `sed -n '1,220p' catalog/stacks/video-editor/README.md`
+- Risks and invariants:
+  - Installed stack source must stay replaceable by registry updates.
+  - Per-run media, renders, temporary data, and project JSON are mutable runtime state.
+  - Runtime state must not be lost when the installed stack is force-reinstalled.
+  - Install-local `runs/<slug>` directories must not be part of normal slug lookup.
+  - Template-composer job and bundle state must not live under installed source.
+  - Delivery render outputs must default outside installed source and remain user-overridable.
+  - Installed `manifest.json` must use the canonical package id `stack:video-editor`.
+  - Old installed run data must be migrated into RUDI state before installed source is replaced; repo-checkout test data remains separate and should be moved or discarded manually.
+  - `RUDI_VIDEO_EDITOR_STATE_DIR` and `RUDI_HOME` are external inputs and must resolve to deterministic absolute paths.
+- Exit criteria:
+  - Baseline confirms current install-local `runsRoot`.
+  - Manual lookup and repo instructions are recorded.
+  - Scope and test strategy are defined before source edits.
+
+## Phase 1: Scope Lock
+
+- Status: complete.
+- In scope:
+  - Make the default `video-editor` run root `~/.rudi/state/stacks/video-editor/runs`.
+  - Support `RUDI_VIDEO_EDITOR_STATE_DIR` as the stack-specific state root for tests and local overrides.
+  - Support `RUDI_HOME` as the RUDI home override when no stack-specific state root is set.
+  - Remove legacy install-local slug fallback to avoid carrying compatibility debt.
+  - Move template-composer job/bundle state under the stack state root.
+  - Keep default delivery video outputs under `~/.rudi/outputs`, with `RUDI_VIDEO_EDITOR_OUTPUT_DIR` as the explicit user override.
+  - Make `manifest.json` match the canonical registry package id `stack:video-editor`.
+  - Update docs to describe install source versus runtime state.
+- Non-goals:
+  - Do not change the registry package schema for `statePaths` in this fix.
+  - Handle the RUDI CLI update command in the companion CLI checklist, not in this registry source-layout checklist.
+  - Do not physically migrate existing local run directories from the registry repo checkout.
+  - Do not refactor unrelated video-editor operations.
+- Expected files touched:
+  - `docs/swe-compliance/2026-06-08-video-editor-state-layout.md`
+  - `catalog/stacks/video-editor/src/lib/files.js`
+  - `catalog/stacks/video-editor/src/operations/init.js`
+  - `catalog/stacks/video-editor/src/template-composer/constants.ts`
+  - `catalog/stacks/video-editor/test/files-state.test.js`
+  - `catalog/stacks/video-editor/test/template-composer-paths.test.ts`
+  - `catalog/stacks/video-editor/manifest.json`
+  - `catalog/stacks/video-editor/README.md`
+- External inputs and trust boundaries:
+  - `process.env.RUDI_VIDEO_EDITOR_STATE_DIR`
+  - `process.env.RUDI_VIDEO_EDITOR_OUTPUT_DIR`
+  - `process.env.RUDI_HOME`
+  - CLI `runArg` values passed to `resolveRunDir`
+  - Source media paths passed to `initRun`
+- Failure behavior to define:
+  - Missing run slug/path still throws `Run slug or path is required`.
+  - Unknown slugs still throw `Run not found: <arg>`.
+  - Direct existing paths still resolve before slug lookup.
+  - Slug lookup must only search the state-root `runs/` directory.
+  - Existing direct paths still resolve as direct paths; slug lookup does not infer install-local paths.
+  - Template `out_path` must remain inside the configured output root and end in `.mp4`.
+- Exit criteria:
+  - Scope is narrow enough to support a single red behavior test file.
+  - Files and verification commands are named before implementation.
+
+## Phase 2: Red Tests
+
+- Status: complete.
+- Observable behavior to prove:
+  - `runsRoot` uses `RUDI_VIDEO_EDITOR_STATE_DIR/runs` when that env var is set.
+  - `runsRoot` uses `RUDI_HOME/state/stacks/video-editor/runs` when only `RUDI_HOME` is set.
+  - `resolveRunDir` finds state-root slugs.
+  - `resolveRunDir` rejects install-local slugs that are absent from the state root.
+  - Template composer defaults state to `RUDI_HOME/state/stacks/video-editor/template-composer`.
+  - Template composer defaults delivery outputs to `RUDI_HOME/outputs`.
+  - Explicit state/output env roots are honored.
+- Test files to add or edit:
+  - `catalog/stacks/video-editor/test/files-state.test.js`
+  - `catalog/stacks/video-editor/test/template-composer-paths.test.ts`
+- Red command:
+  - `node --test test/files-state.test.js`
+- Initial expected failure:
+  - The original implementation returned install-local `video-editor/runs` and had no state-root export.
+- Initial red result:
+  - Failed as expected. `files.stateRoot` was `undefined`.
+- Revised expected failure after removing fallback from the requirement:
+  - The temporary fallback implementation resolves an install-local slug that should be rejected.
+- Revised red result:
+  - Failed as expected with `Missing expected rejection` for `install-local-only-test-run`.
+- Additional red command:
+  - `node --import tsx --test test/template-composer-paths.test.ts`
+- Additional red result:
+  - Failed as expected because template outputs ignored `RUDI_HOME` and template state did not append the `template-composer` state subdirectory.
+- Exit criteria:
+  - Red command fails for the expected state-layout reason before implementation.
+
+## Phase 3: Implementation
+
+- Status: complete.
+- Implementation rules:
+  - Keep the change inside the stack source and docs.
+  - Use Node standard library only; do not add dependencies.
+  - Keep path resolution explicit and absolute.
+  - Keep direct path resolution behavior intact.
+- Files allowed to change:
+  - `catalog/stacks/video-editor/src/lib/files.js`
+  - `catalog/stacks/video-editor/src/operations/init.js`
+  - `catalog/stacks/video-editor/src/template-composer/constants.ts`
+  - `catalog/stacks/video-editor/test/files-state.test.js`
+  - `catalog/stacks/video-editor/test/template-composer-paths.test.ts`
+  - `catalog/stacks/video-editor/README.md`
+  - `catalog/stacks/video-editor/docs/template-composer/API_CONTRACT.md`
+  - `catalog/stacks/video-editor/docs/template-composer/DEBT_GUARDRAILS.md`
+  - `catalog/stacks/video-editor/docs/template-composer/READINESS_AUDIT.md`
+  - `catalog/stacks/video-editor/manifest.json`
+  - This checklist.
+- Validation and error-handling requirements:
+  - Treat env vars as path inputs and normalize with `path.resolve`.
+  - Do not silently change the error contract for missing or unknown runs.
+  - Do not create or resolve legacy install-local state during new init flows or slug lookup.
+  - Do not write template-composer job or bundle state under installed stack source.
+  - Keep delivery output root explicit and bounded.
+- Observability requirements:
+  - No new logging required; this is deterministic local path resolution.
+  - Tests must expose the resolved state roots and prove install-local slug lookup is rejected.
+  - Tests must prove template-composer path defaults and env overrides.
+- Exit criteria:
+  - Red test passes without weakening assertions.
+  - Existing init flow creates staging directories under the new state root.
+  - `init.js` did not require an edit because it already creates and stages through the exported `runsRoot`.
+  - Template-composer constants route state and delivery outputs through their documented roots.
+
+## Phase 4: Green Tests And Refactor
+
+- Status: complete.
+- Green command:
+  - `node --test test/files-state.test.js`
+- Green result:
+  - Passed. 3 tests, 0 failures.
+  - `node --import tsx --test test/template-composer-paths.test.ts`
+  - Passed. 2 tests, 0 failures.
+- Refactor constraints:
+  - Only refactor if the behavior test is already green.
+  - Do not broaden into CLI update behavior.
+- Regression checks:
+  - Direct path lookup behavior remains unchanged.
+  - Install-local slug fallback remains absent.
+  - State slug lookup succeeds only for state-root runs.
+  - Template state and output roots remain outside installed source by default.
+- Exit criteria:
+  - Targeted behavior test is green.
+  - Any small cleanup is followed by the same green command.
+
+## Phase 5: Full Verification
+
+- Status: complete.
+- Targeted tests:
+  - `node --test test/files-state.test.js`
+  - Result: passed. 3 tests, 0 failures.
+  - `node --import tsx --test test/template-composer-paths.test.ts`
+  - Result: passed. 2 tests, 0 failures.
+- Full suite:
+  - `npm test` from `catalog/stacks/video-editor`
+  - Result: passed. 25 tests, 0 failures.
+  - `npm test` from the registry root if feasible
+  - Result: passed. 6 files, 98 tests, 0 failures.
+- Build/typecheck/lint:
+  - `npm run build` from `catalog/stacks/video-editor`
+  - Result: passed. `tsc` completed.
+  - `npm run build` from the registry root if feasible
+  - Result: passed. Validation found 83 catalog package files, all valid; compile produced platform indexes and release metadata under `dist/`.
+- JS/TS debt scan, if applicable:
+  - Run the local debt scanner against edited JS files with the nearest stack policy.
+  - Result: passed. Direct scanner with the stack policy reported 0 findings for `src/lib/files.js`, `src/template-composer/constants.ts`, `test/files-state.test.js`, and `test/template-composer-paths.test.ts`.
+- Live smoke checks:
+  - Local path-resolution smoke is satisfied by tests that create state-root and install-local run directories, verify state-only slug lookup, and clean their install-local fixture.
+  - Isolated CLI mutation smoke with temp `RUDI_HOME` and local registry passed:
+    - install `stack:video-editor`
+    - add install-local `stacks/video-editor/runs/sentinel/project.json`
+    - run `rudi update stack:video-editor`
+    - verify sentinel migrated into `state/stacks/video-editor/runs/sentinel/project.json`, install-local `runs/` absent, generated checkout dirs absent, canonical manifest installed, state-root code installed, and tool index rebuilt with 39 tools.
+- Exit criteria:
+  - Targeted tests, relevant stack test suite, build/typecheck, and debt scan pass or gaps are recorded.
+
+## Phase 6: Docs, Contracts, And Closure
+
+- Status: complete.
+- Docs or API contracts to update:
+  - `catalog/stacks/video-editor/README.md` layout and generated run shape.
+  - `catalog/stacks/video-editor/README.md` install/update commands.
+  - Template-composer API/readiness/debt docs for state and output roots.
+  - `catalog/stacks/video-editor/manifest.json` id now matches `manifest.v2.json` and the registry index: `stack:video-editor`.
+  - Registry package schema was not changed because `statePaths` is not currently a supported root manifest field.
+- Final files touched:
+  - `docs/swe-compliance/2026-06-08-video-editor-state-layout.md`
+  - `catalog/stacks/video-editor/manifest.json`
+  - `catalog/stacks/video-editor/src/lib/files.js`
+  - `catalog/stacks/video-editor/src/template-composer/constants.ts`
+  - `catalog/stacks/video-editor/test/files-state.test.js`
+  - `catalog/stacks/video-editor/test/template-composer-paths.test.ts`
+  - `catalog/stacks/video-editor/README.md`
+  - `catalog/stacks/video-editor/docs/template-composer/API_CONTRACT.md`
+  - `catalog/stacks/video-editor/docs/template-composer/DEBT_GUARDRAILS.md`
+  - `catalog/stacks/video-editor/docs/template-composer/READINESS_AUDIT.md`
+- Commands run and results:
+  - `node --test test/files-state.test.js`: red failed as expected before implementation; green passed after implementation.
+  - `node --import tsx --test test/template-composer-paths.test.ts`: red failed as expected before implementation; green passed after implementation.
+  - `npm test` in `catalog/stacks/video-editor`: passed.
+  - `npm run build` in `catalog/stacks/video-editor`: passed.
+  - `npm test` in the registry root: passed.
+  - `npm run build` in the registry root: passed.
+  - `node <swe-manual>/agent-debt-scan.js --repo catalog/stacks/video-editor --config catalog/stacks/video-editor/.debt-scan.json --graph-root . --scope . --files src/lib/files.js,src/template-composer/constants.ts,test/files-state.test.js,test/template-composer-paths.test.ts --json`: passed with 0 findings.
+- Accepted debt:
+  - Existing ignored install-local run data under `catalog/stacks/video-editor/runs/` was not moved or deleted.
+  - Existing installed run data under `~/.rudi/stacks/video-editor/runs/` was not moved or deleted in this session.
+  - No runtime fallback is included; update-time migration moves installed legacy state to the canonical state root.
+  - The CLI product gap is addressed in the companion CLI checklist; this registry checklist only records the source layout contract.
+- Update path:
+  - Published registry: `rudi update stack:video-editor`
+  - Local registry development: `USE_LOCAL_REGISTRY=true RUDI_REGISTRY_ROOT=/path/to/rudi/apps/registry rudi update stack:video-editor`
+- Definition of Done:
+  - Checklist phases are updated.
+  - Proof commands and results are recorded.
+  - Final report lists files touched, tests, builds, debt scan, and accepted debt.

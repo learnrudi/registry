@@ -1,0 +1,14 @@
+{
+  "template_id": "stat-card-short",
+  "format": "landscape",
+  "style": "dashboard",
+  "duration_seconds": 10,
+  "data": {
+    "eyebrow": "YouTube brief",
+    "headline": "A single metric can anchor the whole story",
+    "stat": "3x",
+    "caption": "Use landscape exports for YouTube intros, explainers, and presentation-ready cuts.",
+    "source": "RUDI sample",
+    "accent_color": "#4cc9f0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "video-agent-composer",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Remotion composer for video-agent run manifests.",
+  "scripts": {
+    "studio": "remotion studio src/index.jsx --browser-executable \"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\"",
+    "compositions": "remotion compositions src/index.jsx --browser-executable \"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\"",
+    "render": "node scripts/render-run.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "remotion": "latest"
+  },
+  "devDependencies": {}
+}

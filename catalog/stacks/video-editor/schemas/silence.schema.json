@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.video-agent/schemas/silence.schema.json",
+  "title": "VideoAgentSilenceAnalysis",
+  "type": "object",
+  "required": ["schemaVersion", "source", "settings", "duration", "silences", "keepRanges", "stats"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "settings": {
+      "type": "object",
+      "required": ["thresholdDb", "minDuration", "padding", "minKeepDuration"],
+      "additionalProperties": false,
+      "properties": {
+        "thresholdDb": { "type": "number" },
+        "minDuration": { "type": "number", "minimum": 0 },
+        "padding": { "type": "number", "minimum": 0 },
+        "minKeepDuration": { "type": "number", "minimum": 0 }
+      }
+    },
+    "duration": { "type": "number", "minimum": 0 },
+    "silences": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/timeRange" }
+    },
+    "keepRanges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/timeRange" }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["silenceCount", "keepRangeCount", "keepDuration", "removedDuration", "removedPercent"],
+      "additionalProperties": false,
+      "properties": {
+        "silenceCount": { "type": "integer", "minimum": 0 },
+        "keepRangeCount": { "type": "integer", "minimum": 0 },
+        "keepDuration": { "type": "number", "minimum": 0 },
+        "removedDuration": { "type": "number", "minimum": 0 },
+        "removedPercent": { "type": "number", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "timeRange": {
+      "type": "object",
+      "required": ["start", "end", "duration"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "exclusiveMinimum": 0 },
+        "duration": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

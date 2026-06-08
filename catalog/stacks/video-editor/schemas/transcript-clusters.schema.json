@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.video-agent/schemas/transcript-clusters.schema.json",
+  "title": "VideoAgentTranscriptClusters",
+  "type": "object",
+  "required": ["schemaVersion", "sourceTranscript", "corrections", "settings", "stats", "clusters", "keepRanges"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "sourceTranscript": { "type": "string", "minLength": 1 },
+    "corrections": {
+      "type": "object",
+      "required": ["path", "replacementCount", "requiredPhraseCount"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": ["string", "null"] },
+        "replacementCount": { "type": "integer", "minimum": 0 },
+        "requiredPhraseCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "required": ["paddingSec", "minGapToCutSec"],
+      "additionalProperties": false,
+      "properties": {
+        "paddingSec": { "type": "number", "minimum": 0 },
+        "minGapToCutSec": { "type": "number", "minimum": 0 }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["clusterCount", "keepRangeCount", "keepDuration"],
+      "additionalProperties": false,
+      "properties": {
+        "clusterCount": { "type": "integer", "minimum": 0 },
+        "keepRangeCount": { "type": "integer", "minimum": 0 },
+        "keepDuration": { "type": "number", "minimum": 0 }
+      }
+    },
+    "clusters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "start", "end", "keepStart", "keepEnd", "text", "rawText", "wordCount"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "source": { "type": "string" },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "keepStart": { "type": "number", "minimum": 0 },
+          "keepEnd": { "type": "number", "minimum": 0 },
+          "text": { "type": "string" },
+          "rawText": { "type": "string" },
+          "wordCount": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "keepRanges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "clusterIds"],
+        "additionalProperties": false,
+        "properties": {
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "clusterIds": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

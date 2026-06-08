@@ -1,0 +1,48 @@
+{
+  "entrypoints": [
+    "src/index.ts",
+    "src/legacy-cli-tools.ts",
+    "src/cli.js",
+    "src/template-composer/remotion/index.ts",
+    "composer/src/index.jsx",
+    "composer/scripts/render-run.mjs"
+  ],
+  "testPatterns": [".test.", ".spec.", "__tests__", "__mocks__"],
+  "fixturePatterns": ["__fixtures__", "fixtures"],
+  "ignore": ["node_modules", ".git", "dist", "build", "runs"],
+  "allowedShims": [],
+  "publicAPI": [],
+  "layerMatchers": {
+    "operations": "(^|/)operations/",
+    "utils": "(^|/)(utils?|helpers?|lib)/",
+    "config": "(^|/)config/",
+    "types": "(^|/)types?/",
+    "test": "\\.(test|spec)\\.|(^|/)(__tests__|__mocks__)/"
+  },
+  "layerOrder": {
+    "operations": 3,
+    "utils": 1,
+    "config": 1,
+    "types": 0,
+    "test": -1,
+    "unknown": 0
+  },
+  "boundaryRules": [
+    ["test", "operations"]
+  ],
+  "deprecatedImports": [],
+  "canonicalImports": {},
+  "thresholds": {
+    "maxLines": null,
+    "maxImports": null,
+    "maxFunctions": null,
+    "maxDeps": null
+  },
+  "allowlists": {
+    "orphans": { "paths": [] },
+    "logging": { "paths": [] },
+    "largeFiles": { "paths": [] },
+    "directDb": { "paths": [] }
+  },
+  "profiles": {}
+}

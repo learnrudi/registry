@@ -1,0 +1,13 @@
+{
+  "template_id": "stat-card-short",
+  "format": "story",
+  "duration_seconds": 6,
+  "data": {
+    "eyebrow": "Labor market",
+    "headline": "Teams are rewriting workflows",
+    "stat": "77%",
+    "caption": "AI adoption is changing how operating models are built.",
+    "source": "RUDI sample",
+    "accent_color": "#f5b84b"
+  }
+}

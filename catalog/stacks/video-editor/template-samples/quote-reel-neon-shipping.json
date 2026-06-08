@@ -1,0 +1,13 @@
+{
+  "template_id": "quote-reel",
+  "format": "square",
+  "style": "neon",
+  "duration_seconds": 10,
+  "data": {
+    "kicker": "Build note",
+    "quote": "A demo asks for attention. A workflow earns trust.",
+    "speaker": "Launch room",
+    "context": "From prototype to operating loop",
+    "accent_color": "#1af5d1"
+  }
+}

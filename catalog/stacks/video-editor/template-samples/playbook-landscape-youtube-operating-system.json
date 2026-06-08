@@ -1,0 +1,38 @@
+{
+  "template_id": "playbook-story",
+  "format": "landscape",
+  "style": "dashboard",
+  "duration_seconds": 45,
+  "data": {
+    "title": "Build an AI operating system without making the team slower",
+    "subtitle": "A YouTube-sized explainer for turning scattered experiments into repeatable work.",
+    "sections": [
+      {
+        "eyebrow": "Principle 1",
+        "headline": "Start with a workflow map, not a model menu",
+        "body": "List every handoff, decision, approval, and exception. The best automation target is usually hiding between two teams.",
+        "stat": "01"
+      },
+      {
+        "eyebrow": "Principle 2",
+        "headline": "Give the system a narrow promise",
+        "body": "A small reliable workflow beats a broad demo. Define the output, the owner, the fallback, and the failure behavior.",
+        "stat": "02"
+      },
+      {
+        "eyebrow": "Principle 3",
+        "headline": "Make review visible",
+        "body": "Humans should not have to reverse-engineer what happened. Put evidence, confidence, and exceptions in the path of work.",
+        "stat": "03"
+      },
+      {
+        "eyebrow": "Principle 4",
+        "headline": "Measure rework, not novelty",
+        "body": "The operating metric is whether work gets cleaner, faster, and easier to trust after the system ships.",
+        "stat": "04"
+      }
+    ],
+    "cta": "Ship one workflow the team can trust.",
+    "accent_color": "#4cc9f0"
+  }
+}

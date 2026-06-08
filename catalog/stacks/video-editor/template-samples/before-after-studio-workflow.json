@@ -1,0 +1,21 @@
+{
+  "template_id": "before-after-demo",
+  "format": "landscape",
+  "style": "studio",
+  "duration_seconds": 15,
+  "assets": {
+    "logo": "samples/assets/rudi-logo.png",
+    "before_image": "samples/assets/before-manual-workflow.png",
+    "after_image": "samples/assets/after-rudi-workflow.png"
+  },
+  "data": {
+    "title": "Turn a manual creative workflow into one clean render path.",
+    "subtitle": "A studio-style proof format for product demos, launches, and transformation stories.",
+    "before_label": "Manual workflow",
+    "after_label": "RUDI workflow",
+    "proof": "1 request",
+    "caption": "Validated inputs become a rendered MP4 with metadata.",
+    "cta": "Make the change visible.",
+    "accent_color": "#0071e3"
+  }
+}

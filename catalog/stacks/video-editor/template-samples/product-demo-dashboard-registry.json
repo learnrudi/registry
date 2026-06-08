@@ -1,0 +1,29 @@
+{
+  "template_id": "product-demo-sequence",
+  "format": "portrait",
+  "style": "dashboard",
+  "duration_seconds": 45,
+  "data": {
+    "product": "Registry Ops",
+    "promise": "See every install dependency before it becomes a support ticket.",
+    "steps": [
+      {
+        "label": "Scan",
+        "headline": "Read the manifest contract",
+        "detail": "Runtime, binaries, tools, and secrets become a visible checklist."
+      },
+      {
+        "label": "Resolve",
+        "headline": "Match the current platform",
+        "detail": "RUDI turns one stack definition into a local execution plan."
+      },
+      {
+        "label": "Verify",
+        "headline": "Run the smoke gate",
+        "detail": "The stack proves it can start, list tools, and complete the critical path."
+      }
+    ],
+    "outro": "Operational clarity is a feature.",
+    "accent_color": "#8ef6d0"
+  }
+}

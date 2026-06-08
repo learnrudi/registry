@@ -9,11 +9,14 @@ MCP (Model Context Protocol) servers that extend agents with tools for external 
 |-------|-------------|------------------|
 | `openai` | DALL-E images, Whisper transcription, TTS, Sora video | `OPENAI_API_KEY` |
 | `google-ai` | Gemini, Imagen 4, Veo 3.1 | `GOOGLE_AI_API_KEY` |
+| `image-generator` | Multi-provider image generation for content workflows | `GEMINI_API_KEY` / `OPENAI_API_KEY` / `REPLICATE_API_TOKEN` |
+| `video-generator` | Multi-provider video generation for content workflows | `GEMINI_API_KEY` / `REPLICATE_API_TOKEN` / `OPENAI_API_KEY` |
 
 ### Communication
 | Stack | Description | Secrets Required |
 |-------|-------------|------------------|
 | `slack` | Send messages, search channels, upload files | `SLACK_BOT_TOKEN` |
+| `twilio-sms` | Send SMS messages and inspect recent Twilio messages | `TWILIO_ACCOUNT_SID` plus token or API key credentials |
 | `zoho-mail` | Send, search, manage emails | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` |
 
 ### Productivity
@@ -40,14 +43,17 @@ MCP (Model Context Protocol) servers that extend agents with tools for external 
 | Stack | Description | Secrets Required |
 |-------|-------------|------------------|
 | `data-analysis` | Python/pandas analysis, charts, visualization | - |
+| `rudi-processor` | Local file metadata extraction, workspace audit, and indexed content search | optional LLM provider keys |
 | `finance` | Stock market data, crypto prices, portfolio tracking | `ALPHA_VANTAGE_API_KEY` (optional) |
 
 ### Content & Media
 | Stack | Description | Secrets Required |
 |-------|-------------|------------------|
-| `content-extractor` | YouTube, Reddit, TikTok, articles | - |
-| `social-media` | Twitter, LinkedIn, Facebook, Instagram | (platform-specific) |
-| `video-editor` | FFmpeg-based video editing | - |
+| `content-extractor` | YouTube, Reddit, TikTok, articles, links | - |
+| `creator-intelligence` | Creator audit style references, contact sheets, keyframe sheets, and local audit inventory | - |
+| `newsletter-extractor` | Newsletter email bodies, newsletter links, RSS/Atom feeds | - |
+| `social-media-publisher` | Twitter, LinkedIn, Facebook, Instagram, TikTok, and YouTube publishing | (platform-specific) |
+| `video-editor` | FFmpeg editing, structured edit runs, local transcription, captions, QA, and Remotion template rendering | - |
 | `web-export` | HTML to PNG/PDF | - |
 | `whisper` | Local audio transcription | - |
 

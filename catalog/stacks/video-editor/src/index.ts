@@ -20,9 +20,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { existsSync, statSync, readdirSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync } from "fs";
 import { basename, dirname, join, extname } from "path";
 import { homedir } from "os";
+import { isLegacyCliTool, legacyCliTools, runLegacyCliTool } from "./legacy-cli-tools.js";
+import { isTemplateVideoTool, runTemplateVideoTool, templateVideoTools } from "./template-tools.js";
+import { isTranscriptionVideoTool, runTranscriptionVideoTool, transcriptionVideoTools } from "./transcription-tools.js";
 
 const execAsync = promisify(exec);
 const DEFAULT_OUTPUT_DIR = join(homedir(), ".rudi", "output");
@@ -84,6 +87,56 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
   if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(1)} KB`;
   return `${bytes} bytes`;
+}
+
+function parsePositiveNumber(value: number | string | undefined, fallback: number, label: string): number {
+  const parsed = value === undefined ? fallback : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive number`);
+  }
+  return parsed;
+}
+
+function listPngFiles(directory: string): string[] {
+  return readdirSync(directory)
+    .filter((file) => file.toLowerCase().endsWith(".png"))
+    .sort()
+    .map((file) => join(directory, file));
+}
+
+function dedupeSlidesByFileSize(outputDir: string): { kept: number; removed: number } {
+  const files = listPngFiles(outputDir);
+  if (files.length <= 1) {
+    return { kept: files.length, removed: 0 };
+  }
+
+  const uniqueFiles: string[] = [];
+  let previousSize: number | null = null;
+
+  for (const file of files) {
+    const size = statSync(file).size;
+    if (previousSize === null || Math.abs(size - previousSize) > 5000) {
+      uniqueFiles.push(file);
+      previousSize = size;
+    }
+  }
+
+  const tempDir = join(outputDir, ".dedupe");
+  rmSync(tempDir, { recursive: true, force: true });
+  mkdirSync(tempDir, { recursive: true });
+
+  uniqueFiles.forEach((file, index) => {
+    const filename = `slide_${String(index + 1).padStart(5, "0")}.png`;
+    copyFileSync(file, join(tempDir, filename));
+  });
+
+  files.forEach((file) => unlinkSync(file));
+  readdirSync(tempDir).forEach((file) => {
+    renameSync(join(tempDir, file), join(outputDir, file));
+  });
+  rmSync(tempDir, { recursive: true, force: true });
+
+  return { kept: uniqueFiles.length, removed: files.length - uniqueFiles.length };
 }
 
 async function getVideoInfo(inputPath: string): Promise<{
@@ -501,6 +554,57 @@ async function videoFrames(
 ${outputPaths.slice(0, 10).map(p => `  - ${basename(p)}`).join("\n")}${outputPaths.length > 10 ? `\n  ... and ${outputPaths.length - 10} more` : ""}`;
 }
 
+async function videoExtractSlides(
+  input: string,
+  options: { interval?: number | string; width?: number | string; output?: string; dedupe?: boolean | string }
+): Promise<string> {
+  const inputPath = await resolveInputPath(input);
+  const info = await getVideoInfo(inputPath);
+  const interval = parsePositiveNumber(options.interval, 2, "interval");
+  const width = Math.round(parsePositiveNumber(options.width, 1920, "width"));
+  const shouldDedupe = options.dedupe !== false && options.dedupe !== "false";
+
+  const inputName = basename(inputPath, extname(inputPath));
+  const outputDir = options.output || join(dirname(inputPath), `${inputName}-slides`);
+  const outputDirExisted = existsSync(outputDir);
+
+  mkdirSync(outputDir, { recursive: true });
+  const existingPngs = listPngFiles(outputDir);
+  if (existingPngs.length > 0) {
+    throw new Error(`Output directory already contains PNG files: ${outputDir}`);
+  }
+
+  await execAsync(
+    `${FFMPEG} -hide_banner -loglevel error -i "${inputPath}" -vf "fps=1/${interval},scale=${width}:-2" -q:v 2 "${join(outputDir, "slide_%05d.png")}"`,
+    { maxBuffer: 50 * 1024 * 1024 }
+  );
+
+  const rawSlides = listPngFiles(outputDir);
+  if (rawSlides.length === 0) {
+    if (!outputDirExisted) {
+      rmSync(outputDir, { recursive: true, force: true });
+    }
+    throw new Error("No slides were extracted from the video");
+  }
+
+  const dedupe = shouldDedupe
+    ? dedupeSlidesByFileSize(outputDir)
+    : { kept: rawSlides.length, removed: 0 };
+  const finalSlides = listPngFiles(outputDir);
+
+  return `**Slides Extracted**
+
+**Input:** ${basename(inputPath)} (${formatDuration(info.duration)})
+**Output:** ${outputDir}
+**Interval:** every ${interval}s
+**Width:** ${width}px
+**Raw Frames:** ${rawSlides.length}
+**Slides Kept:** ${dedupe.kept}
+**Duplicates Removed:** ${dedupe.removed}
+**Files:**
+${finalSlides.slice(0, 10).map(p => `  - ${basename(p)}`).join("\n")}${finalSlides.length > 10 ? `\n  ... and ${finalSlides.length - 10} more` : ""}`;
+}
+
 async function videoThumbnail(
   input: string,
   options: { time?: string; output?: string }
@@ -716,6 +820,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "video_extract_slides",
+      description: "Extract presentation slide frames from a video as PNG images with adjacent-frame dedupe",
+      inputSchema: {
+        type: "object",
+        properties: {
+          input: { type: "string", description: "Path to the video file" },
+          output: { type: "string", description: "Output directory (optional)" },
+          interval: { type: "number", description: "Extract a candidate slide every N seconds (default: 2)" },
+          width: { type: "number", description: "Output image width in pixels (default: 1920)" },
+          dedupe: { type: "boolean", description: "Remove adjacent near-duplicate frames by file-size heuristic (default: true)" },
+        },
+        required: ["input"],
+      },
+    },
+    {
       name: "video_thumbnail",
       description: "Extract a single thumbnail image from a video",
       inputSchema: {
@@ -728,6 +847,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["input"],
       },
     },
+    ...legacyCliTools,
+    ...templateVideoTools,
+    ...transcriptionVideoTools,
   ],
 }));
 
@@ -801,6 +923,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           output: args?.output as string,
         });
         break;
+      case "video_extract_slides":
+        result = await videoExtractSlides(args?.input as string, {
+          interval: args?.interval as number,
+          width: args?.width as number,
+          output: args?.output as string,
+          dedupe: args?.dedupe as boolean,
+        });
+        break;
       case "video_thumbnail":
         result = await videoThumbnail(args?.input as string, {
           time: args?.time as string,
@@ -808,6 +938,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         break;
       default:
+        if (isLegacyCliTool(name)) {
+          result = await runLegacyCliTool(name, (args ?? {}) as Record<string, unknown>);
+          break;
+        }
+        if (isTemplateVideoTool(name)) {
+          result = await runTemplateVideoTool(name, (args ?? {}) as Record<string, unknown>);
+          break;
+        }
+        if (isTranscriptionVideoTool(name)) {
+          result = await runTranscriptionVideoTool(name, (args ?? {}) as Record<string, unknown>);
+          break;
+        }
         return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
     }
 
@@ -831,6 +973,7 @@ export {
   videoCompress,
   videoConcat,
   videoFrames,
+  videoExtractSlides,
   videoThumbnail,
   getVideoInfo,
 };
@@ -840,7 +983,7 @@ export {
 // =============================================================================
 
 const args = process.argv.slice(2);
-const commands = ["info", "trim", "speed", "audio", "silence", "resize", "compress", "concat", "frames", "thumbnail", "help"];
+const commands = ["info", "trim", "speed", "audio", "silence", "resize", "compress", "concat", "frames", "slides", "thumbnail", "help"];
 
 function parseArgs(args: string[]): Record<string, any> {
   const opts: Record<string, any> = {};
@@ -896,6 +1039,10 @@ Commands:
     --interval <seconds>          Extract every N seconds (default: 10)
     --count <n>                   Extract exactly N frames, evenly spaced
     --format <fmt>                Image format: jpg, png, webp
+  slides <video> [options]        Extract presentation slides as PNG images
+    --interval <seconds>          Extract candidate slides every N seconds (default: 2)
+    --width <pixels>              Output image width (default: 1920)
+    --dedupe <true|false>         Remove adjacent near-duplicate frames (default: true)
   thumbnail <video> [options]     Extract single thumbnail
     --time <timestamp>            Time to capture (default: 10% in)
 
@@ -965,6 +1112,14 @@ if (args.length > 0 && commands.includes(args[0])) {
             count: opts.count,
             format: opts.format,
             output: opts.output,
+          });
+          break;
+        case "slides":
+          result = await videoExtractSlides(opts.input, {
+            interval: opts.interval,
+            width: opts.width,
+            output: opts.output,
+            dedupe: opts.dedupe,
           });
           break;
         case "thumbnail":

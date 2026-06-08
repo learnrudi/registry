@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.video-agent/schemas/cut-audit.schema.json",
+  "title": "VideoAgentCutAudit",
+  "type": "object",
+  "required": ["schemaVersion", "source", "settings", "summary", "structuralFindings", "transcriptComparison", "splices", "resolvedKeepRanges"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "source": {
+      "type": "object",
+      "required": ["silence", "sourceTranscript", "sourceTranscriptAvailable", "outputTranscript", "outputTranscriptAvailable"],
+      "additionalProperties": false,
+      "properties": {
+        "silence": { "type": "string" },
+        "sourceTranscript": { "type": ["string", "null"] },
+        "sourceTranscriptAvailable": { "type": "boolean" },
+        "outputTranscript": { "type": ["string", "null"] },
+        "outputTranscriptAvailable": { "type": "boolean" }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "required": ["targetWordPaddingSec", "minimumWordPaddingSec", "minimumCutDurationSec", "maxCutsPerMinute", "maxWordsPerSecond", "maxMissingWordPercent", "minOutputWordGapSec", "spliceReviewWindowSec", "resolutionOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "targetWordPaddingSec": { "type": "number", "minimum": 0 },
+        "minimumWordPaddingSec": { "type": "number", "minimum": 0 },
+        "minimumCutDurationSec": { "type": "number", "minimum": 0 },
+        "maxCutsPerMinute": { "type": "number", "exclusiveMinimum": 0 },
+        "maxWordsPerSecond": { "type": "number", "exclusiveMinimum": 0 },
+        "maxMissingWordPercent": { "type": "number", "minimum": 0 },
+        "minOutputWordGapSec": { "type": "number", "minimum": 0 },
+        "spliceReviewWindowSec": { "type": "number", "exclusiveMinimum": 0 },
+        "resolutionOrder": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "string", "const": "adjust" },
+            { "type": "string", "const": "shorten" },
+            { "type": "string", "const": "skip" }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["sourceDuration", "outputDuration", "keepRangeCount", "spliceCount", "cutsPerMinute", "maxCutsPerMinute", "densityRisk", "plannedOutputDuration", "plannedKeepRangeCount", "plannedSpliceCount", "plannedCutsPerMinute", "plannedDensityRisk", "highRiskSpliceCount", "mediumRiskSpliceCount", "transcriptComparisonRisk"],
+      "additionalProperties": false,
+      "properties": {
+        "sourceDuration": { "type": "number", "minimum": 0 },
+        "outputDuration": { "type": "number", "minimum": 0 },
+        "keepRangeCount": { "type": "integer", "minimum": 0 },
+        "spliceCount": { "type": "integer", "minimum": 0 },
+        "cutsPerMinute": { "type": "number", "minimum": 0 },
+        "maxCutsPerMinute": { "type": "number", "exclusiveMinimum": 0 },
+        "densityRisk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "plannedOutputDuration": { "type": "number", "minimum": 0 },
+        "plannedKeepRangeCount": { "type": "integer", "minimum": 0 },
+        "plannedSpliceCount": { "type": "integer", "minimum": 0 },
+        "plannedCutsPerMinute": { "type": "number", "minimum": 0 },
+        "plannedDensityRisk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "highRiskSpliceCount": { "type": "integer", "minimum": 0 },
+        "mediumRiskSpliceCount": { "type": "integer", "minimum": 0 },
+        "transcriptComparisonRisk": { "type": "string", "enum": ["unknown", "low", "medium", "high"] }
+      }
+    },
+    "transcriptComparison": {
+      "type": "object",
+      "required": ["available"],
+      "additionalProperties": true,
+      "properties": {
+        "available": { "type": "boolean" }
+      }
+    },
+    "structuralFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["risk", "type", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+          "type": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "splices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "outputSec", "sourceGap", "leftKeep", "rightKeep", "words", "padding", "risk", "reasons", "resolution"],
+        "additionalProperties": true
+      }
+    },
+    "resolvedKeepRanges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/timeRange" }
+    }
+  },
+  "$defs": {
+    "timeRange": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

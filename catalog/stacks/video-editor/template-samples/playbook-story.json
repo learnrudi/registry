@@ -1,0 +1,31 @@
+{
+  "template_id": "playbook-story",
+  "format": "story",
+  "duration_seconds": 30,
+  "data": {
+    "title": "Three moves for a better AI operating model",
+    "subtitle": "A compact playbook for teams moving from experiments to durable workflows.",
+    "sections": [
+      {
+        "eyebrow": "Move 1",
+        "headline": "Map the workflow before choosing tools",
+        "body": "The system gets easier to improve when handoffs, decisions, and failure points are visible.",
+        "stat": "1"
+      },
+      {
+        "eyebrow": "Move 2",
+        "headline": "Keep human review where judgment matters",
+        "body": "Automation should reduce repetitive work without hiding consequential decisions from accountable people.",
+        "stat": "2"
+      },
+      {
+        "eyebrow": "Move 3",
+        "headline": "Measure the operating outcome",
+        "body": "Track cycle time, quality, rework, and customer impact instead of model usage alone.",
+        "stat": "3"
+      }
+    ],
+    "cta": "Build the workflow, then automate it.",
+    "accent_color": "#4cc9f0"
+  }
+}

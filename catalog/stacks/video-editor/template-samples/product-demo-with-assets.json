@@ -1,0 +1,39 @@
+{
+  "template_id": "product-demo-sequence",
+  "format": "landscape",
+  "style": "dashboard",
+  "duration_seconds": 30,
+  "assets": {
+    "logo": "samples/assets/rudi-logo.png",
+    "hero_image": "samples/assets/rudi-hero.png",
+    "screenshot_1": "samples/assets/rudi-install.png",
+    "screenshot_2": "samples/assets/rudi-configure.png",
+    "screenshot_3": "samples/assets/rudi-run.png"
+  },
+  "data": {
+    "product": "RUDI Video Composer",
+    "promise": "Turn repeatable video formats into renderable agent tools.",
+    "steps": [
+      {
+        "label": "Install",
+        "headline": "Install the stack with the runtime it needs",
+        "detail": "RUDI resolves Remotion, Chromium, and FFmpeg so the template can render deterministically.",
+        "asset_key": "screenshot_1"
+      },
+      {
+        "label": "Configure",
+        "headline": "Send structured data and local assets",
+        "detail": "The schema validates copy, duration, format, style, screenshots, and logo paths before render.",
+        "asset_key": "screenshot_2"
+      },
+      {
+        "label": "Render",
+        "headline": "Poll the job until MP4 metadata is ready",
+        "detail": "The output includes a video file, metadata sidecar, dimensions, codec, and input hash.",
+        "asset_key": "screenshot_3"
+      }
+    ],
+    "outro": "This is the bridge from design system to video system.",
+    "accent_color": "#35e59d"
+  }
+}

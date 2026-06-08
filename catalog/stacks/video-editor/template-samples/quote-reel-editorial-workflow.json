@@ -1,0 +1,13 @@
+{
+  "template_id": "quote-reel",
+  "format": "story",
+  "style": "editorial",
+  "duration_seconds": 15,
+  "data": {
+    "kicker": "Operating principle",
+    "quote": "The workflow is the product. The model is only one part of the system.",
+    "speaker": "RUDI",
+    "context": "AI operating system notes",
+    "accent_color": "#f5b84b"
+  }
+}

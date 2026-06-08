@@ -1,0 +1,41 @@
+{
+  "entrypoints": ["src/index.jsx", "scripts/render-run.mjs"],
+  "testPatterns": [".test.", ".spec.", "__tests__", "__mocks__"],
+  "fixturePatterns": ["__fixtures__", "fixtures"],
+  "ignore": ["node_modules", ".git", "dist", "build", "public"],
+  "allowedShims": [],
+  "publicAPI": [],
+  "layerMatchers": {
+    "scripts": "(^|/)scripts/",
+    "components": "(^|/)components/",
+    "utils": "(^|/)(utils?|helpers?|lib)/",
+    "config": "(^|/)config/",
+    "types": "(^|/)types?/",
+    "test": "\\.(test|spec)\\.|(^|/)(__tests__|__mocks__)/"
+  },
+  "layerOrder": {
+    "scripts": 3,
+    "components": 2,
+    "utils": 1,
+    "config": 1,
+    "types": 0,
+    "test": -1,
+    "unknown": 0
+  },
+  "boundaryRules": [],
+  "deprecatedImports": [],
+  "canonicalImports": {},
+  "thresholds": {
+    "maxLines": null,
+    "maxImports": null,
+    "maxFunctions": null,
+    "maxDeps": null
+  },
+  "allowlists": {
+    "orphans": { "paths": [] },
+    "logging": { "paths": [] },
+    "largeFiles": { "paths": [] },
+    "directDb": { "paths": [] }
+  },
+  "profiles": {}
+}

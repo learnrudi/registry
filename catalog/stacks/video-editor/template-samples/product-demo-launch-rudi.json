@@ -1,0 +1,29 @@
+{
+  "template_id": "product-demo-sequence",
+  "format": "landscape",
+  "style": "launch",
+  "duration_seconds": 30,
+  "data": {
+    "product": "RUDI",
+    "promise": "Turn stack setup into one repeatable workflow.",
+    "steps": [
+      {
+        "label": "Install",
+        "headline": "Choose the stack",
+        "detail": "Pick the capability and let RUDI resolve runtime, binaries, and setup."
+      },
+      {
+        "label": "Configure",
+        "headline": "Validate the boundary",
+        "detail": "Secrets, tool schemas, outputs, and failure states stay explicit."
+      },
+      {
+        "label": "Run",
+        "headline": "Use it from your agent",
+        "detail": "The MCP tool becomes available without hand-wiring every client."
+      }
+    ],
+    "outro": "Reliable tools beat fragile demos.",
+    "accent_color": "#ff7a90"
+  }
+}

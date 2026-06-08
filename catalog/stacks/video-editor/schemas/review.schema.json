@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.video-agent/schemas/review.schema.json",
+  "title": "VideoAgentReview",
+  "type": "object",
+  "required": ["schemaVersion", "run", "render", "overallRisk", "summary", "findings", "nextStep"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "run": { "type": "string", "minLength": 1 },
+    "render": { "type": ["string", "null"] },
+    "overallRisk": { "type": "string", "enum": ["low", "info", "medium", "high"] },
+    "summary": {
+      "type": "object",
+      "required": ["slug", "render", "source", "transcript", "cut", "qa"],
+      "additionalProperties": true,
+      "properties": {
+        "slug": { "type": "string" },
+        "render": { "type": ["string", "null"] },
+        "source": { "type": "object" },
+        "transcript": { "type": "object" },
+        "cut": { "type": "object" },
+        "qa": { "type": ["object", "null"] }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["risk", "type", "message", "evidence", "recommendation"],
+        "additionalProperties": false,
+        "properties": {
+          "risk": { "type": "string", "enum": ["info", "medium", "high"] },
+          "type": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string" },
+          "recommendation": { "type": "string" }
+        }
+      }
+    },
+    "nextStep": { "type": "string", "minLength": 1 }
+  }
+}

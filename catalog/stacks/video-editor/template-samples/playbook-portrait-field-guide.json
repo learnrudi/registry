@@ -1,0 +1,32 @@
+{
+  "template_id": "playbook-story",
+  "format": "portrait",
+  "style": "field-guide",
+  "duration_seconds": 30,
+  "data": {
+    "title": "A field guide for sharper team rituals",
+    "subtitle": "Portrait-format notes for turning recurring meetings into useful operating loops.",
+    "sections": [
+      {
+        "eyebrow": "Before",
+        "headline": "Send the decision frame before the meeting",
+        "body": "Context is cheaper before everyone is in the room. Share the question, options, and owner early.",
+        "stat": "A"
+      },
+      {
+        "eyebrow": "During",
+        "headline": "Separate discovery from decision",
+        "body": "A meeting gets cleaner when debate, choice, and next action are not treated as the same activity.",
+        "stat": "B"
+      },
+      {
+        "eyebrow": "After",
+        "headline": "Close the loop in the system of record",
+        "body": "Decisions decay when they live only in chat. Put the owner, deadline, and evidence where work happens.",
+        "stat": "C"
+      }
+    ],
+    "cta": "Make the ritual earn its calendar space.",
+    "accent_color": "#8ef6d0"
+  }
+}

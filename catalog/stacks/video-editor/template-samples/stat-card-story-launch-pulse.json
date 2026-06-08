@@ -1,0 +1,14 @@
+{
+  "template_id": "stat-card-short",
+  "format": "story",
+  "style": "launch",
+  "duration_seconds": 10,
+  "data": {
+    "eyebrow": "Launch pulse",
+    "headline": "The first useful signal arrived before the campaign peaked",
+    "stat": "2.4x",
+    "caption": "Early creative testing moved budget toward the message customers actually repeated.",
+    "source": "Growth room sample",
+    "accent_color": "#f7c948"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.video-agent/schemas/transcript.schema.json",
+  "title": "VideoAgentTranscript",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "media", "model", "language", "text", "segments", "words", "stats"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "enum": ["source", "output"] },
+    "media": {
+      "type": "object",
+      "required": ["path", "target"],
+      "additionalProperties": true,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "enum": ["source", "output"] }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["command", "model", "language", "wordTimestamps"],
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "language": { "type": "string", "minLength": 1 },
+        "wordTimestamps": { "type": "boolean" }
+      }
+    },
+    "language": { "type": "string" },
+    "text": { "type": "string" },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "start", "end", "text", "words"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": ["integer", "null"] },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "text": { "type": "string" },
+          "words": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/word" }
+          }
+        }
+      }
+    },
+    "words": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/word" }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["duration", "segmentCount", "wordCount", "wordsPerSecond"],
+      "additionalProperties": false,
+      "properties": {
+        "duration": { "type": "number", "minimum": 0 },
+        "segmentCount": { "type": "integer", "minimum": 0 },
+        "wordCount": { "type": "integer", "minimum": 0 },
+        "wordsPerSecond": { "type": "number", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "word": {
+      "type": "object",
+      "required": ["text", "start", "end"],
+      "additionalProperties": true,
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "minimum": 0 },
+        "probability": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}
