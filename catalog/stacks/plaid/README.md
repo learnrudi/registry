@@ -7,7 +7,7 @@ The implementation is split into:
 - `src/schemas.ts`: boundary contracts and validation.
 - `src/api/client.ts`: Plaid SDK configuration and error normalization.
 - `src/logic/*.ts`: account linking, secure token storage, balances, transaction fetch/sync, and CSV shaping.
-- `bin/plaid.ts`: personal CLI adapter.
+- `bin/plaid.ts`: local CLI adapter.
 - `src/index.ts`: MCP stdio adapter for RUDI.
 
 ## Environment
@@ -30,8 +30,9 @@ npm run cli -- items
 npm run cli -- accounts
 npm run cli -- balances
 npm run cli -- sync
-npm run cli -- transactions --start 2026-01-01 --end 2026-05-16 --account-name "P&P Management"
-npm run cli -- export-transactions --out ~/.plaid/exports/pp-management-ytd-2026.csv --account-name "P&P Management"
+npm run cli -- transactions --start 2026-01-01 --end 2026-05-16 --account-name "Operating"
+npm run cli -- export-transactions --out ~/.plaid/exports/operating-ytd-2026.csv --account-name "Operating"
+npm run cli -- export-transactions --out ~/.plaid/exports/account-ytd-2026.csv --account account_id
 ```
 
 `link` creates a Plaid Hosted Link URL, opens it in your browser, polls
@@ -43,7 +44,9 @@ you intentionally want the raw Plaid payload in stdout.
 
 `export-transactions` uses `/transactions/get` for an explicit date range and
 writes a local CSV with mode `0600`. If no `--start` or `--end` is provided, it
-defaults to year-to-date through today.
+defaults to year-to-date through today. When `--account` is provided without
+`--item`, the CLI resolves the linked Item that owns the account ID. If account
+IDs span multiple Items, run one export per Item or pass `--item` explicitly.
 
 ## MCP Tools
 

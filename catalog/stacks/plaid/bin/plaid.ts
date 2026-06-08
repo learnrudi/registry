@@ -145,7 +145,7 @@ function publicAccountFilter(
 }
 
 function usage(): void {
-  console.log(`Plaid personal CLI
+  console.log(`Plaid CLI
 
 Usage:
   plaid link [--label name] [--client-user-id id] [--client-name name] [--customization default] [--phone +15135550123] [--email name@example.com] [--days 730] [--browser default|chrome|chrome-clean] [--no-open] [--no-wait]
@@ -157,8 +157,8 @@ Usage:
   plaid accounts [--item item_id]
   plaid balances [--item item_id]
   plaid sync [--item item_id] [--count 500] [--no-persist] [--full]
-  plaid transactions --start YYYY-MM-DD --end YYYY-MM-DD [--account account_id] [--account-name text] [--full]
-  plaid export-transactions --out path.csv [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--account account_id] [--account-name text]
+  plaid transactions --start YYYY-MM-DD --end YYYY-MM-DD [--item item_id] [--account account_id] [--account-name text] [--full]
+  plaid export-transactions --out path.csv [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--item item_id] [--account account_id] [--account-name text]
   plaid summary [--item item_id] [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--account-name text] [--basis cash|normalized] [--out path.json] [--no-write] [--no-print]
   plaid config
 
@@ -321,7 +321,7 @@ async function run(): Promise<void> {
 
     case "link": {
       const link = await createHostedLinkToken({
-        clientUserId: flagString(flags, "client-user-id") || "personal-cli",
+        clientUserId: flagString(flags, "client-user-id") || "rudi-cli",
         clientName: flagString(flags, "client-name") || "Personal Plaid",
         linkCustomizationName: flagString(flags, "customization"),
         userPhoneNumber: flagString(flags, "phone"),
@@ -438,7 +438,7 @@ async function run(): Promise<void> {
       const endDate = flagString(flags, "end");
       if (!startDate || !endDate) {
         throw new Error(
-          "Usage: plaid transactions --start YYYY-MM-DD --end YYYY-MM-DD [--account account_id] [--account-name text] [--full]"
+          "Usage: plaid transactions --start YYYY-MM-DD --end YYYY-MM-DD [--item item_id] [--account account_id] [--account-name text] [--full]"
         );
       }
 
@@ -474,7 +474,7 @@ async function run(): Promise<void> {
       const outputPath = flagString(flags, "out");
       if (!outputPath) {
         throw new Error(
-          "Usage: plaid export-transactions --out path.csv [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--account account_id] [--account-name text]"
+          "Usage: plaid export-transactions --out path.csv [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--item item_id] [--account account_id] [--account-name text]"
         );
       }
 
@@ -531,8 +531,7 @@ async function run(): Promise<void> {
       if (shouldWrite) {
         let outPath = flagString(flags, "out");
         if (!outPath) {
-          const reportDir =
-            "/Users/hoff/dev/RUDI/business/finance/sources/plaid/reports";
+          const reportDir = join(homedir(), ".rudi", "outputs", "plaid", "reports");
           await mkdir(reportDir, { recursive: true });
 
           const basisSlug = basis;

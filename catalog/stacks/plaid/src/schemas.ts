@@ -32,7 +32,7 @@ export const CountryCodeSchema = z
   .regex(/^[A-Z]{2}$/);
 
 export const CreateHostedLinkInputSchema = z.object({
-  clientUserId: NonEmptyStringSchema.max(128).default("personal-cli"),
+  clientUserId: NonEmptyStringSchema.max(128).default("rudi-cli"),
   clientName: NonEmptyStringSchema.max(128).default("Personal Plaid"),
   linkCustomizationName: NonEmptyStringSchema.max(128).optional(),
   userPhoneNumber: z

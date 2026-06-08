@@ -58,7 +58,7 @@
     "cwd": "."
   },
   "meta": {
-    "description": "Connect personal bank accounts through Plaid, list accounts and balances, and sync transactions.",
+    "description": "Connect bank accounts through Plaid, list accounts and balances, and sync transactions.",
     "author": "CO-LLAB",
     "license": "MIT",
     "category": "finance",

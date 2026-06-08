@@ -2,7 +2,7 @@
   "id": "plaid",
   "name": "Plaid",
   "version": "0.1.0",
-  "description": "Connect personal bank accounts through Plaid, list accounts and balances, and sync transactions.",
+  "description": "Connect bank accounts through Plaid, list accounts and balances, and sync transactions.",
   "runtime": "node",
   "command": [
     "npx",

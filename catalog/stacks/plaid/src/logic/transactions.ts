@@ -5,6 +5,7 @@ import {
 import type {
   AccountBase,
   PersonalFinanceCategoryVersion,
+  PlaidApi,
   Transaction,
   TransactionsGetRequest,
   TransactionsGetRequestOptions,
@@ -19,11 +20,23 @@ import {
 } from "../schemas.js";
 import {
   getLinkedItem,
+  listLinkedTokenRecords,
   redactItem,
   updateTransactionsCursor,
 } from "./tokens.js";
+import type { TokenRecord } from "../schemas.js";
 
 const MUTATION_DURING_PAGINATION = "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION";
+type ParsedGetTransactionsInput = ReturnType<
+  (typeof GetTransactionsInputSchema)["parse"]
+>;
+type AccountsGetResponse = Awaited<ReturnType<PlaidApi["accountsGet"]>>;
+
+export interface TransactionItemContext {
+  item: TokenRecord;
+  accountResponse: AccountsGetResponse;
+  accounts: AccountBase[];
+}
 
 function accountMatchesName(account: AccountBase, nameIncludes: string): boolean {
   const needle = nameIncludes.toLowerCase();
@@ -40,6 +53,130 @@ function toPersonalFinanceCategoryVersion(
   version: "v1" | "v2" | undefined
 ): PersonalFinanceCategoryVersion | undefined {
   return version as PersonalFinanceCategoryVersion | undefined;
+}
+
+function accountIdsMissingFromItem(
+  accountIds: string[] | undefined,
+  accounts: AccountBase[]
+): string[] {
+  if (!accountIds) {
+    return [];
+  }
+
+  const linkedAccountIds = new Set(
+    accounts.map((account) => account.account_id)
+  );
+  return accountIds.filter((accountId) => !linkedAccountIds.has(accountId));
+}
+
+function formatAccountIds(accountIds: string[]): string {
+  return accountIds.map((accountId) => `"${accountId}"`).join(", ");
+}
+
+async function getAccountsForItem(
+  client: PlaidApi,
+  item: TokenRecord
+): Promise<TransactionItemContext> {
+  const accountResponse = await client.accountsGet({
+    access_token: item.accessToken,
+  });
+
+  return {
+    item,
+    accountResponse,
+    accounts: accountResponse.data.accounts,
+  };
+}
+
+function noLinkedItemsError(): Error {
+  return new Error(
+    "No Plaid Items are linked. Run `plaid link` or call plaid_create_link first."
+  );
+}
+
+export async function resolveTransactionItemContext(
+  input: ParsedGetTransactionsInput,
+  client: PlaidApi
+): Promise<TransactionItemContext> {
+  const requestedAccountIds = input.accountIds;
+
+  if (input.itemId || !requestedAccountIds) {
+    const item = await getLinkedItem(input.itemId);
+    const context = await getAccountsForItem(client, item);
+    const missingAccountIds = accountIdsMissingFromItem(
+      requestedAccountIds,
+      context.accounts
+    );
+
+    if (missingAccountIds.length > 0) {
+      throw new Error(
+        `Requested Plaid account_id(s) ${formatAccountIds(
+          missingAccountIds
+        )} are not linked to Plaid Item "${item.itemId}". Pass the matching --item, or omit --item so account IDs can be resolved across linked Items.`
+      );
+    }
+
+    return context;
+  }
+
+  const items = await listLinkedTokenRecords();
+  if (items.length === 0) {
+    throw noLinkedItemsError();
+  }
+
+  const fullMatches: TransactionItemContext[] = [];
+  const partialMatches: Array<{
+    item: TokenRecord;
+    matchedAccountIds: string[];
+  }> = [];
+
+  for (const item of items) {
+    const context = await getAccountsForItem(client, item);
+    const linkedAccountIds = new Set(
+      context.accounts.map((account) => account.account_id)
+    );
+    const matchedAccountIds = requestedAccountIds.filter((accountId) =>
+      linkedAccountIds.has(accountId)
+    );
+
+    if (matchedAccountIds.length === requestedAccountIds.length) {
+      fullMatches.push(context);
+    } else if (matchedAccountIds.length > 0) {
+      partialMatches.push({ item, matchedAccountIds });
+    }
+  }
+
+  if (fullMatches.length === 1) {
+    return fullMatches[0];
+  }
+
+  if (fullMatches.length > 1) {
+    throw new Error(
+      `Requested Plaid account_id(s) ${formatAccountIds(
+        requestedAccountIds
+      )} matched multiple linked Items. Pass --item to choose one explicitly.`
+    );
+  }
+
+  if (partialMatches.length > 0) {
+    const matches = partialMatches
+      .map(
+        (match) =>
+          `"${match.item.itemId}" has ${formatAccountIds(match.matchedAccountIds)}`
+      )
+      .join("; ");
+    throw new Error(
+      `Requested Plaid account_id(s) ${formatAccountIds(
+        requestedAccountIds
+      )} span multiple linked Items and cannot be fetched in one /transactions/get request. Run separate exports per Item. Matches: ${matches}.`
+    );
+  }
+
+  throw new Error(
+    `No linked Plaid Item contains account_id(s): ${formatAccountIds(
+      requestedAccountIds
+    )}. Run \`plaid accounts\` to verify account IDs.`
+  );
 }
 
 export async function syncTransactions(rawInput: SyncTransactionsInput = {}) {
@@ -140,12 +277,9 @@ export async function syncTransactions(rawInput: SyncTransactionsInput = {}) {
 
 export async function getTransactions(rawInput: GetTransactionsInput) {
   const input = GetTransactionsInputSchema.parse(rawInput);
-  const item = await getLinkedItem(input.itemId);
   const client = createPlaidClient();
-  const accountResponse = await client.accountsGet({
-    access_token: item.accessToken,
-  });
-  const allAccounts = accountResponse.data.accounts;
+  const { item, accountResponse, accounts: allAccounts } =
+    await resolveTransactionItemContext(input, client);
 
   let accountIds = input.accountIds;
   if (!accountIds && input.accountNameIncludes) {

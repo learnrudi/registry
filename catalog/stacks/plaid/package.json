@@ -1,13 +1,14 @@
 {
   "name": "@learnrudi/plaid",
   "version": "0.1.0",
-  "description": "Plaid MCP stack and personal CLI for accounts, balances, and transaction sync",
+  "description": "Plaid MCP stack and local CLI for accounts, balances, and transaction sync",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "start": "npx tsx src/index.ts",
     "cli": "npx tsx bin/plaid.ts",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

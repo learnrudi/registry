@@ -90,6 +90,11 @@ export async function listLinkedItems(): Promise<PublicTokenRecord[]> {
   return Object.values(store.items).map(toPublicRecord);
 }
 
+export async function listLinkedTokenRecords(): Promise<TokenRecord[]> {
+  const store = await loadTokenStore();
+  return Object.values(store.items);
+}
+
 export async function saveLinkedItem(
   input: Omit<TokenRecord, "linkedAt" | "updatedAt"> &
     Partial<Pick<TokenRecord, "linkedAt" | "updatedAt">>
