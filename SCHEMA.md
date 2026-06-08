@@ -117,6 +117,21 @@ For `source: "catalog"`, the payload lives inside the registry itself:
   - `prompt:code-review` → `catalog/prompts/code-review.md`
 - Integrity handled at registry-release artifact level (no per-file checksum)
 
+### Skill Markdown Packages
+
+Skills are stored as ready-to-run, editable Markdown under `catalog/skills/{name}.md`.
+During v2 validation and compile, the registry derives:
+
+- `id`: `skill:{name}` from the Markdown filename
+- `kind`: `skill`
+- `delivery`: `remote`
+- `install.source`: `catalog`
+- `install.path`: the Markdown file path
+
+The Markdown frontmatter must include `name` and `description`; `version` defaults to `1.0.0` when omitted. Optional `requires.stacks` entries are normalized to canonical `stack:*` package IDs and must resolve to existing v2 stack packages.
+
+Public registry skills must avoid personal, client-specific, machine-specific, or brand-specific defaults. Consumers can edit the installed local copy or layer a private skill on top of the public one.
+
 ---
 
 ## Platform Keys
@@ -300,6 +315,7 @@ Given this manifest:
 ```json
 "requires": {
   "binaries": ["ffmpeg"],
+  "stacks": ["stack:video-editor"],
   "secrets": [
     {
       "key": "OPENAI_API_KEY",
@@ -311,12 +327,23 @@ Given this manifest:
 }
 ```
 
+Use `requires.stacks` for skill packages that need one or more stacks to perform their workflow. Stack dependencies are hard requirements; optional workflow recommendations belong under `related.skills`.
+
 ### `provides`
 ```json
 "provides": {
   "tools": ["video_trim", "video_speed"]
 }
 ```
+
+### `related`
+```json
+"related": {
+  "skills": ["skill:shortform-your-words-script"]
+}
+```
+
+Use `related.skills` for companion agent workflows commonly used with a package. A stack does not provide these skills as MCP tools; it advertises them so agents and installers can discover the instruction layer that belongs with the execution layer.
 
 ### `mcp`
 ```json
@@ -538,6 +565,10 @@ Given this manifest:
 
   "provides": {
     "tools": ["video_trim", "video_speed", "video_compress"]
+  },
+
+  "related": {
+    "skills": ["skill:shortform-your-words-script"]
   },
 
   "mcp": {

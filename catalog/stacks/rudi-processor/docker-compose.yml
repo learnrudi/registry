@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  rudi-processor:
+    build: .
+    container_name: rudi-processor
+    environment:
+      - RUDI_BASE_PATH=/data
+      - RUDI_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RUDI_CONFIDENCE=${CONFIDENCE:-0.7}
+    volumes:
+      # Map local directories to container
+      - ${RUDI_DIR:-./RUDI}:/data/RUDI
+      - ${INDEX_DIR:-./Index}:/data/Index
+      - ${CONFIG_DIR:-./config}:/app/config:ro
+    restart: unless-stopped
+
+  # Optional: Web UI for monitoring (future)
+  # rudi-web:
+  #   build: ./web
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - rudi-processor
+  #   volumes:
+  #     - ${INDEX_DIR:-./Index}:/data/Index:ro

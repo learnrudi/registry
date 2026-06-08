@@ -12,8 +12,6 @@
  */
 
 import fs from "node:fs/promises";
-import path from "node:path";
-import fg from "fast-glob";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 
@@ -23,6 +21,13 @@ import {
   type Package,
   type ResolveContext,
 } from "./resolver.js";
+import {
+  assertCatalogReferences,
+  CatalogPackageError,
+  discoverCatalogPackageFiles,
+  readCatalogPackage,
+  type CatalogPackageFile,
+} from "./catalog.js";
 
 // Load schema (ESM with JSON import)
 const schemaPath = new URL("../schemas/package.schema.json", import.meta.url);
@@ -51,29 +56,6 @@ function detectPlatform(): ResolveContext {
 }
 
 // =============================================================================
-// File Utilities
-// =============================================================================
-
-async function readJson(file: string): Promise<unknown> {
-  const raw = await fs.readFile(file, "utf8");
-  try {
-    return JSON.parse(raw);
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Invalid JSON in ${file}: ${msg}`);
-  }
-}
-
-function isV2Manifest(file: string): boolean {
-  // v2 directory examples + stack v2 manifest naming
-  return (
-    file.includes(`${path.sep}v2${path.sep}`) ||
-    file.includes("/v2/") ||
-    file.endsWith("manifest.v2.json")
-  );
-}
-
-// =============================================================================
 // Validation
 // =============================================================================
 
@@ -85,19 +67,17 @@ interface ValidationResult {
 }
 
 async function validateFile(
-  file: string,
+  item: CatalogPackageFile,
   validate: ReturnType<Ajv["compile"]>,
   ctx: ResolveContext
 ): Promise<ValidationResult> {
   const errors: string[] = [];
-  let id = "(unknown)";
+  const file = item.path;
+  const id = item.manifest.id;
 
   try {
-    const obj = await readJson(file);
-    id = (obj as Record<string, unknown>).id as string ?? "(no id)";
-
     // 1) Schema validation
-    const valid = validate(obj);
+    const valid = validate(item.manifest);
     if (!valid) {
       const ajv = new Ajv();
       const msg = ajv.errorsText(validate.errors, { separator: "; " });
@@ -106,7 +86,7 @@ async function validateFile(
     }
 
     // 2) Resolve for current platform
-    const resolved = resolve(obj as Package, ctx);
+    const resolved = resolve(item.manifest as Package, ctx);
 
     // 3) Effective policy validation
     assertEffectivePolicy(resolved);
@@ -132,32 +112,56 @@ async function main() {
   addFormats(ajv);
   const validate = ajv.compile(schema);
 
-  // Find v2 manifests
-  const files = await fg(
-    ["catalog/**/v2/**/*.json", "catalog/**/manifest.v2.json"],
-    {
-      dot: false,
-      onlyFiles: true,
-      cwd: process.cwd(),
-    }
-  );
+  // Find v2 manifests and Markdown skills
+  const files = await discoverCatalogPackageFiles();
 
   if (files.length === 0) {
     console.log(
-      "No v2 manifests found (catalog/**/v2/**/*.json, catalog/**/manifest.v2.json)."
+      "No catalog package files found (v2 JSON manifests or catalog/skills/**/*.md)."
     );
-    console.log("Create v2 manifests to validate them.");
+    console.log("Create catalog packages to validate them.");
     process.exit(0);
   }
 
-  console.log(`Found ${files.length} v2 manifest(s)\n`);
+  console.log(`Found ${files.length} catalog package file(s)\n`);
 
   // Validate each file
   const results: ValidationResult[] = [];
+  const validPackages: CatalogPackageFile[] = [];
   for (const file of files) {
-    if (!isV2Manifest(file)) continue;
-    const result = await validateFile(file, validate, ctx);
+    let item: CatalogPackageFile;
+    try {
+      item = await readCatalogPackage(file);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const packageError = error instanceof CatalogPackageError ? error : undefined;
+      results.push({
+        file,
+        id: packageError?.packageId ?? "(unknown)",
+        valid: false,
+        errors: [msg],
+      });
+      continue;
+    }
+
+    const result = await validateFile(item, validate, ctx);
+    if (result.valid) validPackages.push(item);
     results.push(result);
+  }
+
+  if (results.every((result) => result.valid)) {
+    try {
+      assertCatalogReferences(validPackages);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const packageError = error instanceof CatalogPackageError ? error : undefined;
+      results.push({
+        file: packageError?.file ?? "(catalog references)",
+        id: packageError?.packageId ?? "(catalog references)",
+        valid: false,
+        errors: [msg],
+      });
+    }
   }
 
   // Report results

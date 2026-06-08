@@ -13,7 +13,7 @@
   "runtime": "node",
 
   "requires": {
-    "binaries": ["ffmpeg"],
+    "binaries": ["ffmpeg", "ffprobe", "whisper", "chromium"],
     "secrets": []
   },
 
@@ -28,7 +28,43 @@
       "video_compress",
       "video_concat",
       "video_frames",
-      "video_thumbnail"
+      "video_extract_slides",
+      "video_thumbnail",
+      "video_make_transcript_clips",
+      "video_make_topic_clips",
+      "video_cut_silence",
+      "video_cut_silence_batch",
+      "video_silence_presets",
+      "video_init_run",
+      "video_probe_run",
+      "video_normalize_run",
+      "video_transcribe_run",
+      "video_cluster_transcript",
+      "video_detect_silence",
+      "video_audit_cuts",
+      "video_plan_cut",
+      "video_render_rough",
+      "video_generate_captions",
+      "video_render_captions",
+      "video_grade_source",
+      "video_grade_render",
+      "video_grade_presets",
+      "video_add_lower_third",
+      "video_apply_overlays",
+      "video_qa",
+      "video_review",
+      "video_list_templates",
+      "video_render_template",
+      "video_get_render_job",
+      "video_transcribe_audio",
+      "video_process_video_transcript"
+    ]
+  },
+
+  "related": {
+    "skills": [
+      "skill:shortform-your-words-script",
+      "skill:shortform-publish-copy"
     ]
   },
 
@@ -40,11 +76,11 @@
   },
 
   "meta": {
-    "description": "Edit videos with ffmpeg - trim, speed up, extract clips, remove silence, and more",
+    "description": "Comprehensive local video editing stack for quick ffmpeg operations, structured runs, captions, rendering, and QA.",
     "author": "CO-LLAB",
     "license": "MIT",
     "category": "media",
-    "tags": ["video", "ffmpeg", "editing", "media"],
+    "tags": ["video", "ffmpeg", "editing", "silence", "transcript", "slides", "captions", "remotion", "templates", "qa", "media"],
     "icon": "🎬"
   }
 }

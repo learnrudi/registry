@@ -1,0 +1,21 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+dist/
+build/
+*.egg-info/
+
+# Runtime state belongs outside the package.
+RUDI/
+Index/
+metadata/
+logs/
+outputs/
+workspaces/

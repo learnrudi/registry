@@ -88,10 +88,15 @@ export interface Secret {
 export interface Requires {
   binaries?: string[];
   secrets?: Secret[];
+  stacks?: string[];
 }
 
 export interface Provides {
   tools?: string[];
+}
+
+export interface Related {
+  skills?: string[];
 }
 
 export interface Mcp {
@@ -119,6 +124,7 @@ export interface Package {
   runtime?: "node" | "python" | "deno" | "bun";
   requires?: Requires;
   provides?: Provides;
+  related?: Related;
   mcp?: Mcp;
 }
 

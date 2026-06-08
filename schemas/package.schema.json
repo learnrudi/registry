@@ -67,6 +67,7 @@
     },
     "requires": { "$ref": "#/$defs/Requires" },
     "provides": { "$ref": "#/$defs/Provides" },
+    "related": { "$ref": "#/$defs/Related" },
     "mcp": { "$ref": "#/$defs/Mcp" }
   },
 
@@ -381,6 +382,14 @@
           "type": "array",
           "items": { "$ref": "#/$defs/Secret" },
           "description": "Required secrets/API keys"
+        },
+        "stacks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^stack:[a-z0-9][a-z0-9-_]*$"
+          },
+          "description": "Required stack package dependencies"
         }
       }
     },
@@ -419,6 +428,21 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "description": "MCP tools this stack exposes"
+        }
+      }
+    },
+
+    "Related": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^skill:[a-z0-9][a-z0-9-_]*$"
+          },
+          "description": "Companion registry skills commonly used with this package"
         }
       }
     },

@@ -1,0 +1,541 @@
+{
+  "last_updated": "2025-08-07",
+  "currency": "USD",
+  "pricing_unit": "per_million_tokens",
+  "providers": {
+    "openai": {
+      "company": "OpenAI",
+      "models": {
+        "gpt-5": {
+          "name": "GPT-5",
+          "tier": "flagship",
+          "input_price": 1.25,
+          "output_price": 10.00,
+          "context_window": 200000,
+          "capabilities": ["best_generalist", "coding", "reasoning", "health", "dialog"],
+          "benchmark_score": 1450,
+          "strengths": "Best overall model, automatic routing, PhD-level expertise",
+          "release_date": "2025-08-07"
+        },
+        "gpt-5-mini": {
+          "name": "GPT-5 Mini",
+          "tier": "efficient",
+          "input_price": 0.25,
+          "output_price": 2.00,
+          "context_window": 128000,
+          "capabilities": ["fast", "lightweight", "general_tasks"],
+          "benchmark_score": 1380,
+          "strengths": "Smaller/faster for lighter tasks"
+        },
+        "o3": {
+          "name": "o3",
+          "tier": "reasoning",
+          "input_price": 10.00,
+          "output_price": 40.00,
+          "context_window": 200000,
+          "capabilities": ["elite_reasoning", "complex_code", "multi_step", "agents"],
+          "benchmark_score": 1409,
+          "strengths": "Elite reasoning, best for complex dev/agent workloads",
+          "note": "Price may be $2/$8 for high-volume accounts"
+        },
+        "o3-pro": {
+          "name": "o3-pro",
+          "tier": "premium",
+          "input_price": 20.00,
+          "output_price": 80.00,
+          "context_window": 200000,
+          "capabilities": ["highest_reasoning", "premium_compute"],
+          "benchmark_score": 1415,
+          "strengths": "Maximum compute and reasoning capability"
+        },
+        "o3-mini": {
+          "name": "o3-mini",
+          "tier": "efficient",
+          "input_price": 1.10,
+          "output_price": 4.40,
+          "context_window": 200000,
+          "capabilities": ["fast", "efficient", "coding", "summarization"],
+          "benchmark_score": 1321,
+          "strengths": "Fast, efficient, good for everyday tasks"
+        },
+        "gpt-4.1": {
+          "name": "GPT-4.1",
+          "tier": "standard",
+          "input_price": 2.00,
+          "output_price": 8.00,
+          "context_window": 128000,
+          "capabilities": ["versatile", "robust", "general"],
+          "benchmark_score": 1405,
+          "strengths": "Versatile, faster/cheaper than o3"
+        },
+        "gpt-4.1-mini": {
+          "name": "GPT-4.1 mini",
+          "tier": "efficient",
+          "input_price": 0.40,
+          "output_price": 1.60,
+          "context_window": 128000,
+          "capabilities": ["low_latency", "coding", "general"],
+          "benchmark_score": 1340,
+          "strengths": "Lower latency, solid accuracy"
+        },
+        "gpt-4.1-nano": {
+          "name": "GPT-4.1 nano",
+          "tier": "budget",
+          "input_price": 0.10,
+          "output_price": 0.40,
+          "context_window": 64000,
+          "capabilities": ["ultra_fast", "chat", "summarization"],
+          "benchmark_score": 1280,
+          "strengths": "Cheapest OpenAI, ultra-fast text"
+        },
+        "gpt-4o": {
+          "name": "GPT-4o",
+          "tier": "legacy",
+          "input_price": 2.50,
+          "output_price": 10.00,
+          "context_window": 128000,
+          "capabilities": ["multimodal", "vision", "general"],
+          "benchmark_score": 1390,
+          "strengths": "Previous flagship, still widely used"
+        },
+        "gpt-3.5-turbo": {
+          "name": "GPT-3.5 Turbo",
+          "tier": "legacy",
+          "input_price": 0.50,
+          "output_price": 1.50,
+          "context_window": 16000,
+          "capabilities": ["lightweight", "fast", "basic"],
+          "benchmark_score": 1270,
+          "strengths": "Entry-level, cost-sensitive tasks"
+        }
+      }
+    },
+    "anthropic": {
+      "company": "Anthropic",
+      "models": {
+        "claude-opus-4.1": {
+          "name": "Claude Opus 4.1",
+          "tier": "flagship",
+          "input_price": 15.00,
+          "output_price": 75.00,
+          "context_window": 200000,
+          "capabilities": ["complex_reasoning", "agentic_code", "long_context"],
+          "benchmark_score": 1440,
+          "strengths": "Best for complex reasoning, agentic programming",
+          "release_date": "2025-08"
+        },
+        "claude-sonnet-4": {
+          "name": "Claude Sonnet 4",
+          "tier": "standard",
+          "input_price": 3.00,
+          "output_price": 15.00,
+          "context_window": 200000,
+          "capabilities": ["balanced", "coding", "multimodal", "long_outputs"],
+          "benchmark_score": 1287,
+          "strengths": "Balanced performance, cost-effective production"
+        },
+        "claude-3.5-haiku": {
+          "name": "Claude 3.5 Haiku",
+          "tier": "efficient",
+          "input_price": 0.80,
+          "output_price": 4.00,
+          "context_window": 200000,
+          "capabilities": ["fastest", "bulk_processing", "lightweight"],
+          "benchmark_score": 1250,
+          "strengths": "Fastest Claude, best for bulk/casual tasks"
+        },
+        "claude-3.5-sonnet": {
+          "name": "Claude 3.5 Sonnet",
+          "tier": "legacy",
+          "input_price": 3.00,
+          "output_price": 15.00,
+          "context_window": 200000,
+          "capabilities": ["coding", "analysis", "general"],
+          "benchmark_score": 1275,
+          "strengths": "Previous standard model"
+        }
+      }
+    },
+    "google": {
+      "company": "Google",
+      "models": {
+        "gemini-2.5-pro": {
+          "name": "Gemini 2.5 Pro",
+          "tier": "flagship",
+          "input_price": 1.25,
+          "output_price": 10.00,
+          "context_window": 1000000,
+          "capabilities": ["huge_context", "multimodal", "speed"],
+          "benchmark_score": 1446,
+          "strengths": "1M token context, price/performance leader",
+          "note": "Price increases to $2.50/$15 for >200k context"
+        },
+        "gemini-2.5-flash": {
+          "name": "Gemini 2.5 Flash",
+          "tier": "efficient",
+          "input_price": 0.30,
+          "output_price": 2.50,
+          "context_window": 1000000,
+          "capabilities": ["cost_efficient", "rapid", "high_throughput"],
+          "benchmark_score": 1350,
+          "strengths": "Lowest cost mainstream Gemini",
+          "batch_pricing": {
+            "input_price": 0.15,
+            "output_price": 1.25
+          }
+        },
+        "gemini-2.5-flash-lite": {
+          "name": "Gemini 2.5 Flash-Lite",
+          "tier": "budget",
+          "input_price": 0.10,
+          "output_price": 0.40,
+          "context_window": 1000000,
+          "capabilities": ["extreme_efficiency", "translation", "classification"],
+          "benchmark_score": 1200,
+          "strengths": "Cheapest major model",
+          "batch_pricing": {
+            "input_price": 0.05,
+            "output_price": 0.20
+          }
+        },
+        "gemini-2.0-flash": {
+          "name": "Gemini 2.0 Flash",
+          "tier": "efficient",
+          "input_price": 0.15,
+          "output_price": 0.60,
+          "context_window": 2000000,
+          "capabilities": ["fast", "streaming", "chat", "lightweight"],
+          "benchmark_score": 1320,
+          "strengths": "2M context, high throughput",
+          "batch_pricing": {
+            "input_price": 0.075,
+            "output_price": 0.30
+          }
+        },
+        "gemini-1.5-pro": {
+          "name": "Gemini 1.5 Pro",
+          "tier": "legacy",
+          "input_price": 3.50,
+          "output_price": 10.50,
+          "context_window": 1000000,
+          "capabilities": ["multimodal", "general", "long_context"],
+          "benchmark_score": 1380,
+          "strengths": "Previous flagship"
+        },
+        "gemini-1.5-flash": {
+          "name": "Gemini 1.5 Flash",
+          "tier": "legacy",
+          "input_price": 0.35,
+          "output_price": 1.05,
+          "context_window": 1000000,
+          "capabilities": ["fast", "efficient"],
+          "benchmark_score": 1310,
+          "strengths": "Previous efficient model"
+        },
+        "gemma-2": {
+          "name": "Gemma 2",
+          "tier": "open",
+          "input_price": 0,
+          "output_price": 0,
+          "context_window": 128000,
+          "capabilities": ["open_source", "efficient", "safe"],
+          "benchmark_score": 1340,
+          "strengths": "Google's open model, safe deployment",
+          "note": "Free to run locally"
+        }
+      }
+    },
+    "xai": {
+      "company": "xAI",
+      "models": {
+        "grok-4-heavy": {
+          "name": "Grok 4 Heavy",
+          "tier": "flagship",
+          "input_price": null,
+          "output_price": null,
+          "subscription_price": 300,
+          "context_window": 131000,
+          "capabilities": ["top_reasoning", "multi_agent", "academic"],
+          "benchmark_score": 1399,
+          "strengths": "Best on academic reasoning, real-time multi-agent",
+          "note": "Consumer subscription only, no public API"
+        },
+        "grok-4": {
+          "name": "Grok 4",
+          "tier": "standard",
+          "input_price": 3.00,
+          "output_price": 15.00,
+          "subscription_price": 30,
+          "context_window": 131000,
+          "capabilities": ["code", "multi_agent", "rapid"],
+          "benchmark_score": 1385,
+          "strengths": "Code, multi-agent, rapid responses"
+        }
+      }
+    },
+    "meta": {
+      "company": "Meta AI",
+      "models": {
+        "llama-4": {
+          "name": "Llama 4",
+          "tier": "open",
+          "input_price": 0,
+          "output_price": 0,
+          "api_price_range": "0.50+",
+          "context_window": 128000,
+          "capabilities": ["open_source", "multimodal", "customizable"],
+          "benchmark_score": 1340,
+          "strengths": "Best open-source, vast community, edge deployment",
+          "note": "Free to run locally, API prices vary by provider"
+        },
+        "llama-3.1-405b": {
+          "name": "Llama 3.1 405B",
+          "tier": "open",
+          "input_price": 0,
+          "output_price": 0,
+          "context_window": 128000,
+          "capabilities": ["open_source", "large", "general"],
+          "benchmark_score": 1310,
+          "strengths": "Previous flagship open model"
+        }
+      }
+    },
+    "deepseek": {
+      "company": "DeepSeek",
+      "models": {
+        "deepseek-v3": {
+          "name": "DeepSeek V3",
+          "tier": "open",
+          "input_price": 0.27,
+          "output_price": 1.10,
+          "context_window": 64000,
+          "capabilities": ["open", "code", "reasoning", "low_cost"],
+          "benchmark_score": 1368,
+          "strengths": "Beats GPT-4 on code/reasoning, extremely low cost",
+          "note": "Open weights available"
+        },
+        "deepseek-r1": {
+          "name": "DeepSeek R1",
+          "tier": "open",
+          "input_price": 0.55,
+          "output_price": 2.19,
+          "context_window": 64000,
+          "capabilities": ["code", "reasoning"],
+          "benchmark_score": 1345,
+          "strengths": "Strong open coding model"
+        },
+        "deepseek-chat": {
+          "name": "DeepSeek Chat",
+          "tier": "standard",
+          "input_price": 0.14,
+          "output_price": 0.28,
+          "context_window": 32000,
+          "capabilities": ["chat", "general", "technical"],
+          "benchmark_score": 1290,
+          "strengths": "General purpose, technical content"
+        },
+        "deepseek-coder": {
+          "name": "DeepSeek Coder",
+          "tier": "specialized",
+          "input_price": 0.14,
+          "output_price": 0.28,
+          "context_window": 16000,
+          "capabilities": ["code_generation", "documentation"],
+          "benchmark_score": 1300,
+          "strengths": "Specialized for code understanding"
+        }
+      }
+    },
+    "alibaba": {
+      "company": "Alibaba Cloud",
+      "models": {
+        "qwen-3-235b": {
+          "name": "Qwen 3 235B",
+          "tier": "flagship",
+          "input_price": 1.60,
+          "output_price": 6.40,
+          "context_window": 131000,
+          "capabilities": ["math", "code", "enterprise", "multilingual"],
+          "benchmark_score": 1337,
+          "strengths": "Math/code leader, Asian NLP, MoE architecture"
+        },
+        "qwen-3-72b": {
+          "name": "Qwen 3 72B",
+          "tier": "standard",
+          "input_price": 0.80,
+          "output_price": 3.20,
+          "context_window": 131000,
+          "capabilities": ["math", "code", "multilingual"],
+          "benchmark_score": 1320,
+          "strengths": "Efficient, strong multilingual"
+        },
+        "qwen-2.5": {
+          "name": "Qwen 2.5",
+          "tier": "efficient",
+          "input_price": 0.40,
+          "output_price": 1.20,
+          "context_window": 32000,
+          "capabilities": ["efficient", "general"],
+          "benchmark_score": 1307,
+          "strengths": "Cost-effective, general purpose"
+        }
+      }
+    },
+    "mistral": {
+      "company": "Mistral AI",
+      "models": {
+        "mixtral-8x22b": {
+          "name": "Mixtral 8x22B",
+          "tier": "open",
+          "input_price": 0,
+          "output_price": 0,
+          "api_price": "varies",
+          "context_window": 128000,
+          "capabilities": ["open_source", "MoE", "multilingual", "math"],
+          "benchmark_score": 1330,
+          "strengths": "European open model, MoE architecture",
+          "note": "Free locally, API prices vary"
+        },
+        "mistral-large": {
+          "name": "Mistral Large",
+          "tier": "flagship",
+          "input_price": 2.00,
+          "output_price": 6.00,
+          "context_window": 128000,
+          "capabilities": ["reasoning", "code", "multilingual"],
+          "benchmark_score": 1320,
+          "strengths": "Strong European alternative"
+        },
+        "mistral-small": {
+          "name": "Mistral Small",
+          "tier": "efficient",
+          "input_price": 0.20,
+          "output_price": 0.60,
+          "context_window": 32000,
+          "capabilities": ["fast", "efficient", "general"],
+          "benchmark_score": 1280,
+          "strengths": "Cost-effective, rapid"
+        }
+      }
+    },
+    "cohere": {
+      "company": "Cohere",
+      "models": {
+        "command-r-plus": {
+          "name": "Command R+",
+          "tier": "enterprise",
+          "input_price": 2.50,
+          "output_price": 10.00,
+          "context_window": 256000,
+          "capabilities": ["retrieval_augmented", "enterprise", "production"],
+          "benchmark_score": 1303,
+          "strengths": "RAG optimized, B2B focused, production-grade"
+        },
+        "command-r": {
+          "name": "Command R",
+          "tier": "standard",
+          "input_price": 0.50,
+          "output_price": 1.50,
+          "context_window": 128000,
+          "capabilities": ["retrieval", "general"],
+          "benchmark_score": 1280,
+          "strengths": "Good for RAG applications"
+        }
+      }
+    },
+    "moonshot": {
+      "company": "Moonshot AI",
+      "models": {
+        "kimi-k2": {
+          "name": "Kimi K2",
+          "tier": "open",
+          "input_price": "low",
+          "output_price": "low",
+          "context_window": 32000,
+          "capabilities": ["reasoning", "code", "open"],
+          "benchmark_score": 1290,
+          "strengths": "32B open model, strong reasoning",
+          "note": "China-focused pricing"
+        }
+      }
+    },
+    "minimax": {
+      "company": "MiniMax",
+      "models": {
+        "minimax-text-01": {
+          "name": "MiniMax-Text-01",
+          "tier": "efficient",
+          "input_price": "low",
+          "output_price": "low",
+          "context_window": 4000000,
+          "capabilities": ["huge_context", "asian_nlp"],
+          "benchmark_score": null,
+          "strengths": "4M context window, Asia-focused",
+          "note": "Cheapest in Asia"
+        }
+      }
+    },
+    "baidu": {
+      "company": "Baidu",
+      "models": {
+        "ernie-4.0": {
+          "name": "Ernie 4.0",
+          "tier": "enterprise",
+          "input_price": "regional",
+          "output_price": "regional",
+          "context_window": 128000,
+          "capabilities": ["chinese", "enterprise", "nlp"],
+          "benchmark_score": null,
+          "strengths": "Chinese enterprise leader",
+          "note": "Regional pricing"
+        }
+      }
+    },
+    "tii": {
+      "company": "Technology Innovation Institute",
+      "models": {
+        "falcon-2-11b": {
+          "name": "Falcon 2 11B",
+          "tier": "open",
+          "input_price": 0,
+          "output_price": 0,
+          "context_window": 128000,
+          "capabilities": ["open_source", "vision_language", "multimodal"],
+          "benchmark_score": null,
+          "strengths": "Vision-language, 5.5T token pretrain",
+          "note": "Free to run locally"
+        }
+      }
+    }
+  },
+  "subscription_plans": {
+    "openai": {
+      "individual": "$20-30/month",
+      "team": "Custom",
+      "enterprise": "Custom"
+    },
+    "anthropic": {
+      "free": "Limited access",
+      "pro": "$17-20/month",
+      "max": "$100+/month"
+    },
+    "google": {
+      "free": "Limited access",
+      "advanced": "$19.99/month",
+      "team": "Custom"
+    },
+    "xai": {
+      "basic": "$30/month",
+      "premium": "$300/month"
+    }
+  },
+  "notes": {
+    "pricing": "All prices in USD per million tokens unless noted",
+    "benchmark_scores": "Arena/benchmark scores typically range 1200-1450, higher is better",
+    "open_models": "Open models are free to run locally but require compute resources",
+    "batch_discounts": "Most providers offer 50-90% discounts for batch processing",
+    "cache_discounts": "Caching can reduce costs by 75-90% for repeated queries",
+    "context_windows": "Token limits for single requests",
+    "api_availability": "Some models are API-only, subscription-only, or open-source only"
+  }
+}

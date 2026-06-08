@@ -1,0 +1,26 @@
+# Core dependencies
+PyPDF2>=3.0.0
+pdfplumber>=0.11.0
+python-docx>=1.2.0
+openpyxl>=3.1.0
+pillow>=11.0.0
+pillow-heif>=1.1.0  # For HEIC/HEIF image support
+pytesseract>=0.3.13
+mutagen>=1.47.0
+opencv-python-headless>=4.12.0
+
+# Optional but recommended
+python-magic>=0.4.27  # For MIME type detection
+python-dotenv>=1.0.0  # For .env file support
+
+# LLM Providers (Stage 2)
+anthropic>=0.39.0  # For Claude models
+openai>=1.55.0  # For GPT models
+google-generativeai>=0.8.3  # For Gemini models
+
+# Development dependencies (optional)
+# pytest>=7.4.0
+# coverage>=7.3.0
+# black>=23.0.0
+# flake8>=6.1.0
+# mypy>=1.5.0

@@ -10,7 +10,7 @@ Official registry of MCP stacks, binaries, agents, runtimes, and skills for the 
 | **Binary** | Standalone binaries/CLIs | `catalog/binaries/{id}.json` |
 | **Agent** | AI coding assistants | `catalog/agents/{id}.json` |
 | **Runtime** | Language interpreters | `catalog/runtimes/{id}.json` |
-| **Skill** | Reusable skill templates | `catalog/skills/{id}.md` |
+| **Skill** | Ready-to-run, editable agent workflow packages | `catalog/skills/{id}.md` |
 
 ## Usage
 
@@ -40,8 +40,8 @@ catalog/
 │       ├── manifest.json     # Stack metadata
 │       └── node/src/ or python/src/
 │
-├── skills/                   # Skill templates
-│   └── {skill-id}.md         # Markdown with YAML frontmatter
+├── skills/                   # Ready-to-run skill packages
+│   └── {skill-id}.md         # Markdown source with package frontmatter
 │
 ├── binaries/                 # Binary manifests
 │   └── {binary-id}.json
@@ -75,6 +75,9 @@ dist/                         # GitHub Releases (binaries)
   "provides": {
     "tools": ["my_tool_1", "my_tool_2"]
   },
+  "related": {
+    "skills": ["skill:my-workflow"]
+  },
   "requires": {
     "binaries": ["ffmpeg"],
     "secrets": [
@@ -102,19 +105,30 @@ When users install a stack with secrets:
 2. User runs `rudi secrets set MY_API_KEY` to add their key
 3. MCP registration reads secrets and injects into agent configs (Claude, Codex, Gemini)
 
+Use `related.skills` for companion workflows that help agents use a stack. Do not list skills in `provides.tools`; `provides.tools` is only for MCP tools exposed by the stack.
+
 ## Creating a Skill
+
+Registry skills should be generic enough to publish and complete enough to use
+immediately. Installed skill files are user-editable local copies; put personal
+voice, brand rules, client-specific paths, and approval workflows in local
+skills or overrides, not in public defaults.
 
 1. Create file: `catalog/skills/{skill-id}.md`
 
-2. Add YAML frontmatter + content:
+2. Add YAML frontmatter + content. The v2 validator and compiler derive the package id, install path, and `kind:"skill"` from the file path.
 
 ```markdown
 ---
 name: My Skill
 description: What this skill does
+version: 1.0.0
 category: coding
 tags:
   - example
+requires:
+  stacks:
+    - stack:my-stack
 author: Your Name
 ---
 
@@ -123,7 +137,14 @@ author: Your Name
 Your skill instructions here...
 ```
 
-3. Add entry to `index.json` under `packages.skills.official`
+3. Run validation and compile:
+
+```bash
+npm run validate:v2
+npm run compile
+```
+
+For legacy consumers of the root `index.json`, also keep the matching `packages.skills` entry updated until that index is fully generated from v2 catalog packages.
 
 ## Adding a Binary
 

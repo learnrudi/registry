@@ -1,0 +1,60 @@
+{
+  "id": "image-generator",
+  "name": "Image Generator",
+  "version": "0.1.0",
+  "description": "Agent-safe multi-provider image generation for content creation workflows.",
+  "runtime": "python",
+  "command": [
+    "python",
+    "src/server.py"
+  ],
+  "provides": {
+    "tools": [
+      "generate_image",
+      "compare_providers",
+      "list_models"
+    ]
+  },
+  "requires": {
+    "binaries": [],
+    "secrets": [
+      {
+        "name": "GEMINI_API_KEY",
+        "description": "Google AI Studio API key for Gemini image models.",
+        "label": "Gemini API key",
+        "required": false,
+        "link": "https://aistudio.google.com/apikey"
+      },
+      {
+        "name": "OPENAI_API_KEY",
+        "description": "OpenAI API key for GPT Image models.",
+        "label": "OpenAI API key",
+        "required": false,
+        "link": "https://platform.openai.com/api-keys"
+      },
+      {
+        "name": "REPLICATE_API_TOKEN",
+        "description": "Replicate API token for flux-2 and other hosted models.",
+        "label": "Replicate API token",
+        "required": false,
+        "link": "https://replicate.com/account/api-tokens"
+      }
+    ]
+  },
+  "meta": {
+    "author": "brandonz@heritagehill.co",
+    "license": "MIT",
+    "category": "ai-generation",
+    "tags": [
+      "image",
+      "generation",
+      "ai",
+      "gemini",
+      "openai",
+      "replicate",
+      "content-creation",
+      "social-media"
+    ],
+    "icon": "🎨"
+  }
+}

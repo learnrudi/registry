@@ -28,6 +28,80 @@
           ]
         },
         {
+          "id": "stack:creator-intelligence",
+          "name": "Creator Intelligence",
+          "version": "0.1.0",
+          "description": "Creator audit and style-reference tooling for shortform research, contact sheets, keyframe sheets, and local audit inventory",
+          "path": "catalog/stacks/creator-intelligence",
+          "runtime": "runtime:node",
+          "category": "creator-intelligence",
+          "tags": [
+            "creator",
+            "tiktok",
+            "youtube",
+            "shortform",
+            "audit",
+            "style-reference",
+            "contact-sheet",
+            "keyframes"
+          ],
+          "requires": {
+            "binaries": [
+              "yt-dlp",
+              "ffmpeg",
+              "ffprobe"
+            ]
+          }
+        },
+        {
+          "id": "stack:newsletter-extractor",
+          "name": "Newsletter Extractor",
+          "version": "0.1.0",
+          "description": "Extract newsletter email bodies, normalize newsletter links, and read RSS/Atom feeds",
+          "path": "catalog/stacks/newsletter-extractor",
+          "runtime": "runtime:node",
+          "category": "data-extraction",
+          "tags": [
+            "newsletter",
+            "email",
+            "gmail",
+            "rss",
+            "atom",
+            "links",
+            "extraction",
+            "content"
+          ]
+        },
+        {
+          "id": "stack:rudi-processor",
+          "name": "RUDI Processor",
+          "version": "2.0.0",
+          "description": "Local file metadata extraction, workspace audit, and indexed content search",
+          "path": "catalog/stacks/rudi-processor",
+          "runtime": "runtime:python",
+          "category": "data-extraction",
+          "tags": [
+            "metadata",
+            "files",
+            "documents",
+            "ocr",
+            "indexing",
+            "search"
+          ],
+          "requires": {
+            "binaries": [
+              "ffmpeg",
+              "tesseract"
+            ],
+            "secrets": [
+              "ANTHROPIC_API_KEY",
+              "OPENAI_API_KEY",
+              "GOOGLE_API_KEY",
+              "DEEPSEEK_API_KEY"
+            ]
+          }
+        },
+        {
           "id": "stack:google-ai",
           "name": "Google AI Suite",
           "version": "1.0.0",
@@ -47,6 +121,60 @@
           "requires": {
             "secrets": [
               "GOOGLE_AI_API_KEY"
+            ]
+          }
+        },
+        {
+          "id": "stack:image-generator",
+          "name": "Image Generator",
+          "version": "0.1.0",
+          "description": "Agent-safe multi-provider image generation for content creation workflows",
+          "path": "catalog/stacks/image-generator",
+          "runtime": "runtime:python",
+          "category": "ai-generation",
+          "tags": [
+            "image",
+            "generation",
+            "ai",
+            "gemini",
+            "openai",
+            "replicate",
+            "content-creation",
+            "social-media"
+          ],
+          "requires": {
+            "secrets": [
+              "GEMINI_API_KEY",
+              "OPENAI_API_KEY",
+              "REPLICATE_API_TOKEN"
+            ]
+          }
+        },
+        {
+          "id": "stack:video-generator",
+          "name": "Video Generator",
+          "version": "0.1.0",
+          "description": "Agent-safe multi-provider video generation for content creation workflows",
+          "path": "catalog/stacks/video-generator",
+          "runtime": "runtime:python",
+          "category": "ai-generation",
+          "tags": [
+            "video",
+            "generation",
+            "ai",
+            "gemini",
+            "veo",
+            "replicate",
+            "openai",
+            "sora",
+            "content-creation",
+            "social-media"
+          ],
+          "requires": {
+            "secrets": [
+              "GEMINI_API_KEY",
+              "REPLICATE_API_TOKEN",
+              "OPENAI_API_KEY"
             ]
           }
         },
@@ -159,11 +287,11 @@
           }
         },
         {
-          "id": "stack:social-media",
-          "name": "Social Media",
+          "id": "stack:social-media-publisher",
+          "name": "Social Media Publisher",
           "version": "1.0.0",
-          "description": "Post to Twitter, LinkedIn, Facebook, and Instagram from one unified interface",
-          "path": "catalog/stacks/social-media",
+          "description": "Post to Twitter, LinkedIn, Facebook, Instagram, TikTok, and YouTube with readiness checks and unified publisher validation",
+          "path": "catalog/stacks/social-media-publisher",
           "runtime": "runtime:node",
           "category": "social-media",
           "tags": [
@@ -172,6 +300,8 @@
             "linkedin",
             "facebook",
             "instagram",
+            "tiktok",
+            "youtube",
             "marketing"
           ]
         },
@@ -179,7 +309,7 @@
           "id": "stack:video-editor",
           "name": "Video Editor",
           "version": "1.0.0",
-          "description": "Edit videos with ffmpeg - trim, speed up, extract clips, remove silence, and more",
+          "description": "Edit videos with ffmpeg - trim, speed up, extract clips, remove silence, extract slides, and more",
           "path": "catalog/stacks/video-editor",
           "runtime": "runtime:node",
           "category": "media",
@@ -187,11 +317,17 @@
             "video",
             "ffmpeg",
             "editing",
+            "slides",
             "media"
           ],
           "requires": {
             "binaries": [
               "ffmpeg"
+            ]
+          },
+          "related": {
+            "skills": [
+              "skill:shortform-your-words-script"
             ]
           }
         },
@@ -768,6 +904,42 @@
               "google-workspace"
             ]
           }
+        },
+        {
+          "id": "skill:client-engagement-intake",
+          "name": "Client Engagement Intake",
+          "version": "1.0.0",
+          "description": "Create RUDI client engagement workspaces and private GitHub repos from client conversations, transcripts, and pipeline discussions",
+          "path": "catalog/skills/client-engagement-intake.md",
+          "category": "business",
+          "tags": [
+            "clients",
+            "pipeline",
+            "engagements",
+            "github",
+            "handoff"
+          ]
+        },
+        {
+          "id": "skill:shortform-your-words-script",
+          "name": "Shortform Your-Words Script",
+          "version": "1.0.0",
+          "description": "Create short-form video scripts and teleprompter files from raw thoughts while preserving the original author's voice and words",
+          "path": "catalog/skills/shortform-your-words-script.md",
+          "category": "creative",
+          "tags": [
+            "video",
+            "shortform",
+            "script",
+            "teleprompter",
+            "creator-voice",
+            "captions"
+          ],
+          "requires": {
+            "stacks": [
+              "video-editor"
+            ]
+          }
         }
       ],
       "community": []
@@ -827,9 +999,16 @@
           "id": "runtime:ollama",
           "name": "Ollama",
           "version": "0.5.4",
-          "description": "Run local LLMs and embedding models (Llama, Mistral, nomic-embed-text)",
+          "description": "Run local LLMs and embedding models with an OpenAI-compatible local HTTP API",
           "path": "catalog/runtimes/ollama.json",
-          "category": "model",
+          "category": "model-runtime",
+          "tags": [
+            "llm",
+            "local",
+            "openai-compatible",
+            "ollama",
+            "embeddings"
+          ],
           "platforms": [
             "darwin-arm64",
             "darwin-x64",

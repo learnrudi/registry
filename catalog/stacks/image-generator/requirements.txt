@@ -1,0 +1,7 @@
+mcp>=1.16.0,<2.0.0
+google-genai>=1.49.0,<2.0.0
+openai>=2.0.0,<3.0.0
+replicate>=1.0.7,<2.0.0
+Pillow>=10.0.0,<13.0.0
+# Keep the shared RUDI Python runtime compatible with its installed FastAPI.
+starlette>=0.36.3,<0.37.0

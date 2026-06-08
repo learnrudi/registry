@@ -5,12 +5,30 @@
   "type": "module",
   "scripts": {
     "validate:v2": "tsx src/validate.ts",
+    "validate:public": "tsx src/public-readiness.ts",
     "validate": "npm run validate:v2",
     "compile": "tsx src/compile.ts",
     "build": "npm run validate && npm run compile",
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "files": [
+    "index.json",
+    "dist/index.json",
+    "dist/index.*.json",
+    "dist/catalog.sha256.json",
+    "dist/release.json",
+    "dist/stacks/*.tar.gz",
+    "catalog/agents/**/*.json",
+    "catalog/binaries/**/*.json",
+    "catalog/runtimes/**/*.json",
+    "catalog/skills/**/*.md",
+    "catalog/workflows/**/*.{json,yaml,yml,md}",
+    "README.md",
+    "LICENSE",
+    "SCHEMA.md",
+    "MANIFEST_SCHEMA.md"
+  ],
   "devDependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

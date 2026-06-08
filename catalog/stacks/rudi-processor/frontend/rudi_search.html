@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUDI Search - AI-Powered File Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .search-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        #searchInput {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 1.1em;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        #searchInput:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .filter-chip:hover {
+            background: #e0e0e0;
+        }
+
+        .filter-chip.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .stats {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .results-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .result-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .result-card:hover {
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+
+        .result-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .result-type {
+            padding: 5px 12px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .result-type.pdf { background: #ffe5e5; color: #cc0000; }
+        .result-type.image { background: #e5f5ff; color: #0066cc; }
+        .result-type.text { background: #e5ffe5; color: #00cc00; }
+        .result-type.video { background: #ffe5f5; color: #cc00cc; }
+
+        .result-summary {
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #999;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .upload-zone {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            background: rgba(102, 126, 234, 0.05);
+            transition: all 0.3s;
+        }
+
+        .upload-zone.dragover {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: #764ba2;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔮 RUDI Search</h1>
+            <p class="subtitle">AI-Powered File Intelligence System</p>
+        </header>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalFiles">0</div>
+                <div class="stat-label">Total Files</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="processedFiles">0</div>
+                <div class="stat-label">AI Enhanced</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalCategories">0</div>
+                <div class="stat-label">Categories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="visionAnalyzed">0</div>
+                <div class="stat-label">Vision Analyzed</div>
+            </div>
+        </div>
+
+        <div class="search-container">
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📁</div>
+                <p>Drag & drop files here for instant AI processing</p>
+                <p style="color: #999; margin-top: 10px; font-size: 0.9em;">or click to browse</p>
+            </div>
+
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search by content, description, entities, or ask a question...">
+                <button class="search-btn" onclick="performSearch()">🔍 Search</button>
+            </div>
+
+            <div class="filters">
+                <div class="filter-chip" onclick="toggleFilter(this, 'documents')">📄 Documents</div>
+                <div class="filter-chip" onclick="toggleFilter(this, 'images')">🖼️ Images</div>
+                <div class="filter-chip" onclick="toggleFilter(this, 'text')">📝 Text</div>
+                <div class="filter-chip" onclick="toggleFilter(this, 'video')">🎥 Video</div>
+                <div class="filter-chip" onclick="toggleFilter(this, 'audio')">🎵 Audio</div>
+                <div class="filter-chip" onclick="toggleFilter(this, 'structured')">📊 Data</div>
+            </div>
+        </div>
+
+        <div class="results-container" id="results">
+            <div class="loading">
+                <p>Ready to search your AI-enhanced file system</p>
+                <p style="margin-top: 10px; color: #999;">Try: "contracts from 2025" or "images with documents"</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeFilters = new Set();
+        let metadataCache = {};
+
+        // Initialize stats
+        async function loadStats() {
+            try {
+                const response = await fetch('http://localhost:8001/api/stats');
+                const stats = await response.json();
+
+                document.getElementById('totalFiles').textContent = stats.total_files || 0;
+                document.getElementById('processedFiles').textContent = stats.processed_files || 0;
+                document.getElementById('totalCategories').textContent = stats.categories || 0;
+                document.getElementById('visionAnalyzed').textContent = stats.vision_analyzed || 0;
+            } catch (error) {
+                console.log('Stats API not available yet');
+                // Load from local storage or show demo data
+                loadDemoStats();
+            }
+        }
+
+        function loadDemoStats() {
+            document.getElementById('totalFiles').textContent = '32';
+            document.getElementById('processedFiles').textContent = '28';
+            document.getElementById('totalCategories').textContent = '5';
+            document.getElementById('visionAnalyzed').textContent = '2';
+        }
+
+        function toggleFilter(chip, type) {
+            chip.classList.toggle('active');
+            if (activeFilters.has(type)) {
+                activeFilters.delete(type);
+            } else {
+                activeFilters.add(type);
+            }
+            performSearch();
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            const resultsDiv = document.getElementById('results');
+
+            // Show loading
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Searching with AI...</div>';
+
+            try {
+                const params = new URLSearchParams({
+                    q: query,
+                    filters: Array.from(activeFilters).join(',')
+                });
+
+                const response = await fetch(`http://localhost:8001/api/search?${params}`);
+                const results = await response.json();
+
+                displayResults(results);
+            } catch (error) {
+                // Show demo results if API not available
+                displayDemoResults(query);
+            }
+        }
+
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('results');
+
+            if (!results || results.length === 0) {
+                resultsDiv.innerHTML = '<div class="loading">No results found</div>';
+                return;
+            }
+
+            let html = `<h2>Found ${results.length} results</h2>`;
+
+            results.forEach(result => {
+                html += createResultCard(result);
+            });
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function createResultCard(result) {
+            const typeClass = result.file_type || 'text';
+            const icon = getFileIcon(typeClass);
+
+            return `
+                <div class="result-card" onclick="openFile('${result.file_path}')">
+                    <div class="result-header">
+                        <div class="result-title">${icon} ${result.original_name}</div>
+                        <div class="result-type ${typeClass}">${typeClass}</div>
+                    </div>
+                    <div class="result-summary">${result.summary || 'No summary available'}</div>
+                    <div class="result-meta">
+                        <span>📅 ${formatDate(result.modified)}</span>
+                        <span>📊 ${formatSize(result.size_bytes)}</span>
+                        <span>🏷️ ${result.category || 'Uncategorized'}</span>
+                        ${result.vision_analyzed ? '<span>👁️ Vision analyzed</span>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayDemoResults(query) {
+            const demoResults = [
+                {
+                    original_name: 'sample-contract.pdf',
+                    file_type: 'pdf',
+                    summary: 'Sample contractor agreement including W-9 tax form, taxpayer identification, and certification requirements.',
+                    modified: '2025-08-07',
+                    size_bytes: 144167,
+                    category: 'Legal/Contracts',
+                    file_path: '~/.rudi/workspaces/rudi-processor/inbox/sample-contract.pdf'
+                },
+                {
+                    original_name: 'sample-image.png',
+                    file_type: 'image',
+                    summary: 'Cartoon illustration showing a document box with papers and a brain with thought bubble saying "I want the STUFF inside!" - representing information processing.',
+                    modified: '2025-08-07',
+                    size_bytes: 1821942,
+                    category: 'Personal/Images',
+                    vision_analyzed: true,
+                    file_path: '~/.rudi/workspaces/rudi-processor/inbox/sample-image.png'
+                },
+                {
+                    original_name: 'sample-compliance-document.pdf',
+                    file_type: 'pdf',
+                    summary: 'Sample Business Associate Agreement for HIPAA compliance, detailing responsibilities for protected health information handling.',
+                    modified: '2025-08-05',
+                    size_bytes: 456589,
+                    category: 'Legal/Compliance',
+                    file_path: '~/.rudi/workspaces/rudi-processor/inbox/sample-compliance-document.pdf'
+                }
+            ];
+
+            // Filter based on query
+            let filtered = demoResults;
+            if (query) {
+                filtered = demoResults.filter(r =>
+                    r.original_name.toLowerCase().includes(query.toLowerCase()) ||
+                    r.summary.toLowerCase().includes(query.toLowerCase())
+                );
+            }
+
+            displayResults(filtered);
+        }
+
+        function getFileIcon(type) {
+            const icons = {
+                'pdf': '📄',
+                'documents': '📄',
+                'image': '🖼️',
+                'images': '🖼️',
+                'text': '📝',
+                'video': '🎥',
+                'audio': '🎵',
+                'structured': '📊'
+            };
+            return icons[type] || '📎';
+        }
+
+        function formatDate(dateStr) {
+            return new Date(dateStr).toLocaleDateString();
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function openFile(path) {
+            console.log('Opening file:', path);
+            // Could open file or show detailed view
+        }
+
+        // Drag and drop
+        const uploadZone = document.getElementById('uploadZone');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+
+            const files = Array.from(e.dataTransfer.files);
+            console.log('Files dropped:', files);
+            // Process files with RUDI
+        });
+
+        // Initialize on load
+        loadStats();
+
+        // Search on Enter
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    </script>
+</body>
+</html>

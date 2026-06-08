@@ -1,0 +1,109 @@
+{
+  "providers": {
+    "anthropic": {
+      "enabled": true,
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "models": {
+        "claude-3-5-sonnet": {
+          "name": "claude-3-5-sonnet-20241022",
+          "max_tokens": 8192,
+          "temperature": 0.3,
+          "use_for": ["categorization", "summarization", "entity_extraction"]
+        },
+        "claude-3-5-haiku": {
+          "name": "claude-3-5-haiku-20241022",
+          "max_tokens": 8192,
+          "temperature": 0.3,
+          "use_for": ["quick_analysis", "classification"]
+        }
+      },
+      "default_model": "claude-3-5-haiku"
+    },
+    "openai": {
+      "enabled": true,
+      "api_key_env": "OPENAI_API_KEY",
+      "models": {
+        "gpt-4o": {
+          "name": "gpt-4o",
+          "max_tokens": 4096,
+          "temperature": 0.3,
+          "use_for": ["summarization", "complex_analysis"]
+        },
+        "gpt-4o-mini": {
+          "name": "gpt-4o-mini",
+          "max_tokens": 4096,
+          "temperature": 0.3,
+          "use_for": ["quick_analysis", "classification"]
+        }
+      },
+      "default_model": "gpt-4o-mini"
+    },
+    "google": {
+      "enabled": true,
+      "api_key_env": "GOOGLE_API_KEY",
+      "models": {
+        "gemini-2.0-flash": {
+          "name": "gemini-2.0-flash-exp",
+          "max_tokens": 8192,
+          "temperature": 0.3,
+          "use_for": ["long_context", "multimodal_analysis"]
+        },
+        "gemini-1.5-flash": {
+          "name": "gemini-1.5-flash",
+          "max_tokens": 8192,
+          "temperature": 0.3,
+          "use_for": ["quick_analysis", "cost_effective"]
+        }
+      },
+      "default_model": "gemini-1.5-flash"
+    },
+    "deepseek": {
+      "enabled": true,
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "base_url": "https://api.deepseek.com/v1",
+      "models": {
+        "deepseek-chat": {
+          "name": "deepseek-chat",
+          "max_tokens": 4096,
+          "temperature": 0.3,
+          "use_for": ["code_analysis", "technical_content"]
+        },
+        "deepseek-coder": {
+          "name": "deepseek-coder",
+          "max_tokens": 4096,
+          "temperature": 0.3,
+          "use_for": ["code_understanding", "documentation"]
+        }
+      },
+      "default_model": "deepseek-chat"
+    }
+  },
+  "stage2_settings": {
+    "primary_provider": "google",
+    "fallback_providers": ["deepseek", "openai", "anthropic"],
+    "retry_attempts": 3,
+    "retry_delay": 2,
+    "batch_size": 10,
+    "concurrent_requests": 3,
+    "cache_responses": true,
+    "cache_ttl_hours": 24
+  },
+  "prompts": {
+    "categorization": {
+      "system": "You are an expert document categorizer. Analyze the content and metadata to determine the most appropriate category and subcategory.",
+      "template": "Analyze this document and provide:\n1. Primary category (e.g., 'legal', 'technical', 'business', 'personal')\n2. Subcategory (be specific)\n3. Confidence score (0-1)\n\nContent:\n{content}\n\nMetadata:\n{metadata}\n\nRespond in JSON format."
+    },
+    "summarization": {
+      "system": "You are an expert at creating concise, informative summaries that capture the essence of documents.",
+      "template": "Create a comprehensive summary of this document including:\n1. Brief overview (2-3 sentences)\n2. Key points (bullet list)\n3. Important entities mentioned\n4. Document purpose\n\nContent:\n{content}\n\nProvide response in JSON format."
+    },
+    "entity_extraction": {
+      "system": "You are an expert at identifying and extracting important entities from documents.",
+      "template": "Extract all important entities from this document including:\n1. People names\n2. Organizations\n3. Locations\n4. Dates/Times\n5. Key concepts\n6. Technical terms\n\nContent:\n{content}\n\nProvide response in JSON format with categorized entities."
+    },
+    "topic_modeling": {
+      "system": "You are an expert at identifying topics and themes in documents.",
+      "template": "Identify the main topics and themes in this document:\n1. Primary topics (up to 5)\n2. Keywords for each topic\n3. Relevance score for each topic\n\nContent:\n{content}\n\nProvide response in JSON format."
+    }
+  }
+}

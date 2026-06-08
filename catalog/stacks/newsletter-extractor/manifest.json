@@ -1,0 +1,39 @@
+{
+  "id": "newsletter-extractor",
+  "name": "Newsletter Extractor",
+  "version": "0.1.0",
+  "description": "Extract newsletter email bodies, normalize newsletter links, and read RSS/Atom feeds",
+  "runtime": "node",
+  "command": [
+    "npx",
+    "tsx",
+    "src/index.ts"
+  ],
+  "provides": {
+    "tools": [
+      "extract_newsletter_email",
+      "extract_newsletter_links",
+      "extract_rss_feed"
+    ]
+  },
+  "requires": {
+    "binaries": [],
+    "secrets": []
+  },
+  "meta": {
+    "author": "CO-LLAB",
+    "license": "MIT",
+    "category": "data-extraction",
+    "tags": [
+      "newsletter",
+      "email",
+      "gmail",
+      "rss",
+      "atom",
+      "links",
+      "extraction",
+      "content"
+    ],
+    "icon": "📬"
+  }
+}

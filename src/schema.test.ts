@@ -248,6 +248,26 @@ describe("schema validation - valid manifests", () => {
     expect(valid).toBe(true);
   });
 
+  it("should accept skill manifest requiring stack package ids", () => {
+    const manifest = {
+      id: "skill:shortform-your-words-script",
+      kind: "skill",
+      name: "Shortform Your-Words Script",
+      version: "1.0.0",
+      delivery: "remote",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/shortform-your-words-script.md",
+      },
+      requires: {
+        stacks: ["stack:video-editor"],
+      },
+    };
+
+    const valid = validate(manifest);
+    expect(valid).toBe(true);
+  });
+
   it("should accept agent manifest with npm source", () => {
     const manifest = {
       id: "agent:claude",
@@ -343,6 +363,9 @@ describe("schema validation - valid manifests", () => {
       provides: {
         tools: ["video_trim", "video_speed", "video_concat"],
       },
+      related: {
+        skills: ["skill:shortform-your-words-script"],
+      },
       mcp: {
         transport: "stdio",
         command: "npx",
@@ -354,6 +377,37 @@ describe("schema validation - valid manifests", () => {
 
     const valid = validate(manifest);
     expect(valid).toBe(true);
+  });
+
+  it("should reject related.skills entries that are not skill package ids", () => {
+    const manifest = {
+      id: "stack:video-editor",
+      kind: "stack",
+      name: "Video Editor",
+      version: "1.0.0",
+      delivery: "remote",
+      install: {
+        source: "catalog",
+        path: "catalog/stacks/video-editor",
+      },
+      runtime: "node",
+      provides: {
+        tools: ["video_trim"],
+      },
+      related: {
+        skills: ["stack:video-editor"],
+      },
+      mcp: {
+        transport: "stdio",
+        command: "npx",
+      },
+    };
+
+    const valid = validate(manifest);
+    expect(valid).toBe(false);
+    expect(getErrorMessages(validate)).toContainEqual(
+      expect.stringContaining("pattern")
+    );
   });
 
   it("should accept platform with system override to download", () => {

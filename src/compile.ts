@@ -21,6 +21,11 @@ import {
   type ResolveContext,
   type ResolvedPackage,
 } from "./resolver.js";
+import {
+  assertCatalogReferences,
+  discoverCatalogPackages,
+  type CatalogPackageFile,
+} from "./catalog.js";
 
 // =============================================================================
 // Types
@@ -69,11 +74,6 @@ const SCHEMA_URL = "https://learn-rudi.dev/schemas/registry/v2/index.schema.json
 // File Utilities
 // =============================================================================
 
-async function readJson(file: string): Promise<unknown> {
-  const raw = await fs.readFile(file, "utf8");
-  return JSON.parse(raw);
-}
-
 async function writeJson(file: string, data: unknown): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(data, null, 2) + "\n");
@@ -84,56 +84,11 @@ async function hashFile(file: string): Promise<string> {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
-function isV2Manifest(file: string): boolean {
-  return (
-    file.includes(`${path.sep}v2${path.sep}`) ||
-    file.includes("/v2/") ||
-    file.endsWith("manifest.v2.json")
-  );
-}
-
-// =============================================================================
-// Manifest Discovery
-// =============================================================================
-
-interface ManifestFile {
-  path: string;
-  manifest: Package;
-}
-
-async function discoverManifests(): Promise<ManifestFile[]> {
-  const patterns = [
-    "catalog/**/v2/**/*.json",
-    "catalog/**/manifest.v2.json",
-  ];
-
-  const files = await fg(patterns, {
-    dot: false,
-    onlyFiles: true,
-    cwd: process.cwd(),
-  });
-
-  const manifests: ManifestFile[] = [];
-
-  for (const file of files) {
-    if (!isV2Manifest(file)) continue;
-
-    try {
-      const manifest = (await readJson(file)) as Package;
-      manifests.push({ path: file, manifest });
-    } catch (e) {
-      console.error(`Failed to parse ${file}:`, e);
-    }
-  }
-
-  return manifests;
-}
-
 // =============================================================================
 // Index Building
 // =============================================================================
 
-function buildBaseIndex(manifests: ManifestFile[]): RegistryIndex {
+function buildBaseIndex(manifests: CatalogPackageFile[]): RegistryIndex {
   const packages: Record<string, Package> = {};
   const aliases: Record<string, string> = {};
   const byKind: Record<string, number> = {};
@@ -167,7 +122,7 @@ function buildBaseIndex(manifests: ManifestFile[]): RegistryIndex {
 }
 
 function buildPlatformIndex(
-  manifests: ManifestFile[],
+  manifests: CatalogPackageFile[],
   ctx: ResolveContext
 ): PlatformIndex {
   const packages: Record<string, ResolvedPackage> = {};
@@ -225,9 +180,10 @@ function buildPlatformIndex(
 async function buildCatalogHash(): Promise<CatalogHash> {
   // Find all catalog payload files (stacks, skills, prompts)
   const patterns = [
-    "catalog/stacks/**/!(node_modules)/**/*.{ts,js,json,md}",
+    "catalog/stacks/**/!(node_modules)/**/*.{ts,js,json,md,py,txt}",
     "catalog/stacks/*/manifest.json",
     "catalog/stacks/*/manifest.v2.json",
+    "catalog/stacks/*/.env.example",
     "catalog/skills/**/*.md",
     "catalog/prompts/**/*.md",
   ];
@@ -267,12 +223,13 @@ async function main() {
   console.log("RUDI Registry Compiler\n");
 
   // Discover manifests
-  console.log("Discovering v2 manifests...");
-  const manifests = await discoverManifests();
-  console.log(`Found ${manifests.length} manifest(s)\n`);
+  console.log("Discovering catalog packages...");
+  const manifests = await discoverCatalogPackages();
+  assertCatalogReferences(manifests);
+  console.log(`Found ${manifests.length} package(s)\n`);
 
   if (manifests.length === 0) {
-    console.log("No v2 manifests found. Nothing to compile.");
+    console.log("No catalog packages found. Nothing to compile.");
     process.exit(0);
   }
 

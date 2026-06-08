@@ -146,6 +146,32 @@ describe("index structure", () => {
       expect(id.startsWith(`${pkg.kind}:`)).toBe(true);
     }
   });
+
+  it("should include Markdown skills as package entries", async () => {
+    const index = (await readJson("dist/index.json")) as {
+      packages: Record<string, { kind: string; install: { source: string; path: string } }>;
+      stats: { byKind: Record<string, number> };
+    };
+
+    expect(index.stats.byKind.skill).toBeGreaterThan(0);
+    expect(index.packages["skill:shortform-your-words-script"]).toMatchObject({
+      kind: "skill",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/shortform-your-words-script.md",
+      },
+    });
+  });
+
+  it("should preserve related skill relationships in generated indexes", async () => {
+    const index = (await readJson("dist/index.json")) as {
+      packages: Record<string, { related?: { skills?: string[] } }>;
+    };
+
+    expect(index.packages["stack:video-editor"].related?.skills).toContain(
+      "skill:shortform-your-words-script"
+    );
+  });
 });
 
 // =============================================================================

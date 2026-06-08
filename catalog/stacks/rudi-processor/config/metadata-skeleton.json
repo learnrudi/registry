@@ -1,0 +1,55 @@
+{
+  "metadata_version": "1.0",
+  "required_fields": {
+    "original_name": "string",
+    "file_path": "string",
+    "hash": "string",
+    "file_type": "string",
+    "basic_metadata": {
+      "size_bytes": "number",
+      "created": "datetime",
+      "modified": "datetime",
+      "extension": "string",
+      "mime_type": "string"
+    },
+    "extracted_content": {
+      "full_text": "string or null",
+      "ocr_text": "string or null",
+      "transcript": "string or null",
+      "page_count": "number or null",
+      "duration_seconds": "number or null",
+      "dimensions": "object or null",
+      "has_images": "boolean or null",
+      "has_audio": "boolean or null",
+      "frame_rate": "number or null",
+      "bitrate": "number or null"
+    },
+    "llm_enhanced": {
+      "description": "string or null",
+      "category": "string or null",
+      "subcategory": "string or null",
+      "summary": "string or null",
+      "topics": "array or null",
+      "entities": "array or null",
+      "searchable_keywords": "array or null",
+      "confidence": "number or null"
+    },
+    "processing_status": {
+      "python_processed": "boolean",
+      "llm_processed": "boolean",
+      "stage": "string",
+      "errors": "array or null"
+    }
+  },
+  "file_type_mappings": {
+    "text": [".txt", ".md", ".log", ".csv", ".tsv"],
+    "code": [".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".cpp", ".c", ".h", ".cs", ".rb", ".go", ".rs", ".swift", ".kt", ".php", ".sh", ".bash", ".zsh"],
+    "structured": [".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg"],
+    "documents": [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".odt", ".rtf"],
+    "images": [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tiff", ".heic"],
+    "video": [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v", ".mpg", ".mpeg"],
+    "audio": [".mp3", ".wav", ".flac", ".m4a", ".ogg", ".wma", ".aac", ".opus"],
+    "archives": [".zip", ".tar", ".gz", ".rar", ".7z", ".bz2", ".xz"],
+    "other": [".exe", ".dll", ".so", ".dylib", ".app", ".dmg", ".iso"]
+  }
+}

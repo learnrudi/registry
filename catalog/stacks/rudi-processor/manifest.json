@@ -1,0 +1,65 @@
+{
+  "id": "rudi-processor",
+  "name": "RUDI Processor",
+  "version": "2.0.0",
+  "description": "Local file metadata extraction, workspace audit, and indexed content search.",
+  "runtime": "python",
+  "command": [
+    "python3",
+    "src/index.py"
+  ],
+  "provides": {
+    "tools": [
+      "rudi_process_file",
+      "rudi_audit_files",
+      "rudi_search_index",
+      "rudi_processor_config"
+    ]
+  },
+  "requires": {
+    "binaries": [
+      "ffmpeg",
+      "tesseract"
+    ],
+    "secrets": [
+      {
+        "name": "ANTHROPIC_API_KEY",
+        "label": "Anthropic API Key",
+        "description": "Optional for Stage 2 LLM enhancement.",
+        "required": false
+      },
+      {
+        "name": "OPENAI_API_KEY",
+        "label": "OpenAI API Key",
+        "description": "Optional for Stage 2 LLM enhancement.",
+        "required": false
+      },
+      {
+        "name": "GOOGLE_API_KEY",
+        "label": "Google API Key",
+        "description": "Optional for Stage 2 LLM enhancement.",
+        "required": false
+      },
+      {
+        "name": "DEEPSEEK_API_KEY",
+        "label": "DeepSeek API Key",
+        "description": "Optional for Stage 2 LLM enhancement.",
+        "required": false
+      }
+    ]
+  },
+  "meta": {
+    "author": "RUDI",
+    "license": "MIT",
+    "category": "data-extraction",
+    "tags": [
+      "metadata",
+      "files",
+      "documents",
+      "ocr",
+      "indexing",
+      "search"
+    ],
+    "icon": "processor"
+  }
+}

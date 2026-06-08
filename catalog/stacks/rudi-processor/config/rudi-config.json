@@ -1,0 +1,40 @@
+{
+  "base_path": "~/.rudi/workspaces/rudi-processor",
+  "rudi_path": "~/.rudi/workspaces/rudi-processor/inbox",
+  "index_path": "~/.rudi/workspaces/rudi-processor/index",
+  "library_path": "~/.rudi/workspaces/rudi-processor/library",
+
+  "output_organization": "month",
+  "output_organization_options_comment": "Options: month (2025-08), date (2025-08-07), year (2025), flat (no subdirs)",
+  "output_subdir": "stage1",
+  "supported_extensions": {
+    "text": [".txt", ".md", ".json", ".yaml", ".yml", ".csv"],
+    "code": [".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css"],
+    "documents": [".pdf", ".docx", ".doc"],
+    "media": [".mp3", ".mp4", ".wav", ".jpg", ".jpeg", ".png", ".gif"]
+  },
+  "metadata_schema": {
+    "version": "1.0",
+    "required_fields": ["title", "type", "created", "hash"],
+    "optional_fields": ["tags", "summary", "category", "project", "related_files", "entities", "topics"]
+  },
+  "embedding_config": {
+    "model": "text-embedding-3-small",
+    "dimensions": 1536,
+    "batch_size": 100
+  },
+  "classification_categories": [
+    "Education/AI-Literacy",
+    "Education/Curriculum",
+    "RealEstate/PropertyScope",
+    "RealEstate/StLouis",
+    "Media/YouTube",
+    "Media/TikTok",
+    "Policy/Governance",
+    "Policy/DataEthics",
+    "Personal/VoiceNotes",
+    "Personal/Ideas",
+    "Development/Code",
+    "Development/Documentation"
+  ]
+}
