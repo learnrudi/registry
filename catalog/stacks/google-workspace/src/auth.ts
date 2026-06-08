@@ -13,16 +13,23 @@
 import { google } from "googleapis";
 import { createServer } from "http";
 import { parse } from "url";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import { promisify } from "util";
+import { copyFileSync, existsSync, readdirSync } from "fs";
+import { join } from "path";
 import * as net from "net";
 import open from "open";
+import { loadGoogleCredentials } from "./oauthCredentials.js";
+import {
+  ensurePrivateDir,
+  getWorkspacePaths,
+  migrateLegacyStateIfNeeded,
+  setPrivateFileMode,
+  writeJsonFile,
+} from "./state.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ACCOUNTS_DIR = join(__dirname, "..", "accounts");
-const DEFAULT_CREDENTIALS = join(__dirname, "..", "accounts", "brandonzhoff@gmail.com", "credentials.json");
+const WORKSPACE_PATHS = getWorkspacePaths();
+migrateLegacyStateIfNeeded(WORKSPACE_PATHS);
+const ACCOUNTS_DIR = WORKSPACE_PATHS.accountsDir;
+const DEFAULT_CREDENTIALS = join(ACCOUNTS_DIR, "brandonzhoff@gmail.com", "credentials.json");
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -69,6 +76,7 @@ async function authenticate(accountEmail?: string) {
   // Determine account directory
   let accountDir: string;
   let credentialsPath: string;
+  let selectedAccount = accountEmail;
 
   if (accountEmail) {
     accountDir = join(ACCOUNTS_DIR, accountEmail);
@@ -77,34 +85,37 @@ async function authenticate(accountEmail?: string) {
     // Create account folder if it doesn't exist
     if (!existsSync(accountDir)) {
       console.log(`Creating account folder: ${accountEmail}`);
-      mkdirSync(accountDir, { recursive: true });
+      ensurePrivateDir(accountDir);
 
-      // Copy credentials from existing account
-      if (existsSync(DEFAULT_CREDENTIALS)) {
+      if (process.env.GOOGLE_CREDENTIALS?.trim()) {
+        console.log("Using OAuth credentials from RUDI secret GOOGLE_CREDENTIALS");
+      } else if (existsSync(DEFAULT_CREDENTIALS)) {
         copyFileSync(DEFAULT_CREDENTIALS, credentialsPath);
+        setPrivateFileMode(credentialsPath);
         console.log(`Copied credentials.json to ${accountDir}`);
       } else {
-        console.error("No credentials.json found. Please add one to the account folder.");
+        console.error("No OAuth credentials found. Set GOOGLE_CREDENTIALS or add credentials.json to the account state folder.");
         process.exit(1);
       }
     }
   } else {
     // Find first account with credentials
     const accounts = existsSync(ACCOUNTS_DIR)
-      ? require("fs").readdirSync(ACCOUNTS_DIR).filter((f: string) => !f.startsWith("."))
+      ? readdirSync(ACCOUNTS_DIR).filter((f: string) => !f.startsWith("."))
       : [];
 
     if (accounts.length === 0) {
-      console.error("No accounts found. Run with email: npx tsx src/auth.ts user@gmail.com");
+      console.error(`No accounts found in ${ACCOUNTS_DIR}. Run with email: npx tsx src/auth.ts user@gmail.com`);
       process.exit(1);
     }
 
     accountDir = join(ACCOUNTS_DIR, accounts[0]);
     credentialsPath = join(accountDir, "credentials.json");
+    selectedAccount = accounts[0];
     console.log(`Using account: ${accounts[0]}`);
   }
 
-  if (!existsSync(credentialsPath)) {
+  if (!existsSync(credentialsPath) && !process.env.GOOGLE_CREDENTIALS?.trim()) {
     console.error(`credentials.json not found at ${credentialsPath}`);
     process.exit(1);
   }
@@ -117,8 +128,17 @@ async function authenticate(accountEmail?: string) {
     console.log(`Port ${requestedPort} unavailable, using port ${port} instead`);
   }
 
-  const credentials = JSON.parse(readFileSync(credentialsPath, "utf-8"));
-  const { client_id, client_secret } = credentials.installed || credentials.web;
+  const credentials = loadGoogleCredentials(WORKSPACE_PATHS, selectedAccount);
+  if (!credentials) {
+    console.error("No OAuth credentials found. Set GOOGLE_CREDENTIALS or add credentials.json to the account state folder.");
+    process.exit(1);
+  }
+  const oauthConfig = credentials.installed || credentials.web;
+  if (!oauthConfig?.client_id || !oauthConfig?.client_secret) {
+    console.error("OAuth credentials must include installed or web client_id/client_secret.");
+    process.exit(1);
+  }
+  const { client_id, client_secret } = oauthConfig;
 
   const oauth2Client = new google.auth.OAuth2(
     client_id,
@@ -157,14 +177,13 @@ async function authenticate(accountEmail?: string) {
             refresh_token: tokens.refresh_token,
             token_uri: "https://oauth2.googleapis.com/token",
             client_id,
-            client_secret,
             scopes: SCOPES,
             universe_domain: "googleapis.com",
-            account: accountEmail || "",
+            account: selectedAccount || "",
             expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
           };
 
-          writeFileSync(tokenPath, JSON.stringify(tokenData, null, 2));
+          writeJsonFile(tokenPath, tokenData);
 
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end(`

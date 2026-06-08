@@ -13,11 +13,27 @@ import {
 import { google } from "googleapis";
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { basename, dirname, extname, join } from "path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from "fs";
 import { execSync } from "child_process";
 import { tmpdir } from "os";
 import { homedir } from "os";
+import { buildCalendarEventInsert } from "./calendar.js";
+import {
+  buildGmailDraftMessage,
+  buildGmailRawMessage,
+  encodeMimeBody,
+  encodeMimeHeaderValue,
+  inferGmailContentType,
+  resolveRequestedAccount,
+} from "./gmail.js";
+import { resolveOAuthClientConfig } from "./oauthCredentials.js";
+import {
+  getWorkspacePaths,
+  migrateLegacyStateIfNeeded,
+  readJsonFile,
+  writeJsonFile,
+} from "./state.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,26 +54,47 @@ function generateOutputPath(prefix: string, name: string): string {
 }
 config({ path: join(__dirname, "..", ".env") });
 
-const ACCOUNTS_DIR = join(__dirname, "..", "accounts");
-const TOKEN_FILE = join(__dirname, "..", "token.json");
-const STATE_FILE = join(__dirname, "..", "state.json");
+const WORKSPACE_PATHS = getWorkspacePaths({ packageRoot: join(__dirname, "..") });
+migrateLegacyStateIfNeeded(WORKSPACE_PATHS);
+const ACCOUNTS_DIR = WORKSPACE_PATHS.accountsDir;
+const TOKEN_FILE = WORKSPACE_PATHS.tokenFile;
+const STATE_FILE = WORKSPACE_PATHS.stateFile;
+
+type AccountState = {
+  currentAccount?: string;
+};
+
+type TokenData = {
+  token?: string;
+  refresh_token?: string;
+  expiry?: string | null;
+  client_id?: string;
+  client_secret?: string;
+  account?: string;
+};
+
+type EmailAttachment = {
+  filename: string;
+  mimeType: string;
+  data: Buffer;
+};
 
 // Load persisted account on startup
 function loadCurrentAccount(): string | null {
-  if (existsSync(STATE_FILE)) {
-    try {
-      const state = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
-      if (state.currentAccount && existsSync(join(ACCOUNTS_DIR, state.currentAccount, "token.json"))) {
-        return state.currentAccount;
-      }
-    } catch {}
+  try {
+    const state = readJsonFile<AccountState>(STATE_FILE);
+    if (state?.currentAccount && existsSync(join(ACCOUNTS_DIR, state.currentAccount, "token.json"))) {
+      return state.currentAccount;
+    }
+  } catch {
+    return null;
   }
   return null;
 }
 
 // Save current account to disk
 function saveCurrentAccount(account: string | null) {
-  writeFileSync(STATE_FILE, JSON.stringify({ currentAccount: account }, null, 2));
+  writeJsonFile(STATE_FILE, { currentAccount: account });
 }
 
 let currentAccount: string | null = loadCurrentAccount();
@@ -77,21 +114,26 @@ function loadToken(account?: string) {
   } else if (currentAccount) {
     tokenPath = join(ACCOUNTS_DIR, currentAccount, "token.json");
   }
-  if (existsSync(tokenPath)) {
-    return JSON.parse(readFileSync(tokenPath, "utf-8"));
-  }
-  return null;
+  return readJsonFile<TokenData>(tokenPath);
 }
 
-function getAuth() {
-  const token = loadToken();
+function getAuth(account?: string | null) {
+  const requestedAccount = account || undefined;
+  const token = loadToken(requestedAccount);
   if (!token) {
-    throw new Error("Not authenticated. Run 'npm run auth' first.");
+    const suffix = requestedAccount ? ` for account '${requestedAccount}'` : "";
+    throw new Error(`Not authenticated${suffix}. Run 'npm run auth' first.`);
   }
 
+  const credentials = resolveOAuthClientConfig(
+    WORKSPACE_PATHS,
+    token,
+    requestedAccount || currentAccount || token.account
+  );
+
   const oauth2Client = new google.auth.OAuth2(
-    token.client_id,
-    token.client_secret
+    credentials.client_id,
+    credentials.client_secret
   );
   oauth2Client.setCredentials({
     access_token: token.token,
@@ -100,6 +142,287 @@ function getAuth() {
   });
   return oauth2Client;
 }
+
+function getAuthForArgs(args: Record<string, unknown> | undefined) {
+  return getAuth(resolveRequestedAccount(args, currentAccount));
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${field} is required`);
+  }
+  return value;
+}
+
+function hasToolArg(args: Record<string, unknown> | undefined, field: string): boolean {
+  return Object.prototype.hasOwnProperty.call(args || {}, field);
+}
+
+function optionalToolString(args: Record<string, unknown> | undefined, field: string): string | undefined {
+  if (!hasToolArg(args, field)) return undefined;
+  const value = args?.[field];
+  if (value == null) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string`);
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function optionalStringArray(args: Record<string, unknown> | undefined, field: string): string[] | undefined {
+  if (!hasToolArg(args, field)) return undefined;
+  const value = args?.[field];
+  if (value == null) return undefined;
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => {
+      if (typeof entry !== "string" || entry.trim() === "") {
+        throw new Error(`${field}[${index}] must be a non-empty string`);
+      }
+      return entry.trim();
+    });
+  }
+  if (typeof value === "string") {
+    return value.split(",").map((entry) => entry.trim()).filter(Boolean);
+  }
+  throw new Error(`${field} must be an array of strings or a comma-separated string`);
+}
+
+function requireStringArray(args: Record<string, unknown> | undefined, field: string): string[] {
+  const values = optionalStringArray(args, field);
+  if (!values || values.length === 0) {
+    throw new Error(`${field} must include at least one value`);
+  }
+  return values;
+}
+
+function getHeaderValue(headers: any[], name: string): string {
+  return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || "";
+}
+
+function extractGmailPayloadBody(payload: any): { text: string; html: string } {
+  const result = { text: "", html: "" };
+  if (!payload) return result;
+
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const nested = extractGmailPayloadBody(part);
+      if (nested.text) result.text = nested.text;
+      if (nested.html) result.html = nested.html;
+    }
+    return result;
+  }
+
+  if (payload.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64url").toString("utf-8");
+    if (payload.mimeType === "text/html") {
+      result.html = decoded;
+    } else {
+      result.text = decoded;
+    }
+  }
+
+  return result;
+}
+
+function chooseDraftContentType(payload: any): string | undefined {
+  return payload?.mimeType === "text/html" ? "text/html; charset=utf-8" : undefined;
+}
+
+function summarizeGmailMessage(message: any): Record<string, unknown> {
+  const headers = message?.payload?.headers || [];
+  const body = extractGmailPayloadBody(message?.payload);
+  return {
+    id: message?.id,
+    threadId: message?.threadId,
+    subject: getHeaderValue(headers, "Subject"),
+    from: getHeaderValue(headers, "From"),
+    to: getHeaderValue(headers, "To"),
+    cc: getHeaderValue(headers, "Cc"),
+    date: getHeaderValue(headers, "Date"),
+    snippet: message?.snippet,
+    labels: message?.labelIds,
+    body: body.text || body.html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim(),
+    bodyHtml: body.html,
+  };
+}
+
+function optionalAttachmentPaths(args: Record<string, unknown> | undefined): string[] {
+  return optionalStringArray(args, "attachments") || [];
+}
+
+function loadAttachmentFiles(paths: string[]): EmailAttachment[] {
+  return paths.map((filePath) => {
+    if (!existsSync(filePath)) {
+      throw new Error(`Attachment not found: ${filePath}`);
+    }
+    return {
+      filename: basename(filePath),
+      mimeType: guessMimeType(filePath),
+      data: readFileSync(filePath),
+    };
+  });
+}
+
+async function loadGmailPayloadAttachments(gmail: any, messageId: string, payload: any): Promise<EmailAttachment[]> {
+  const attachments: EmailAttachment[] = [];
+
+  async function visit(part: any): Promise<void> {
+    if (!part) return;
+    if (part.filename && part.body?.attachmentId) {
+      const attachment = await gmail.users.messages.attachments.get({
+        userId: "me",
+        messageId,
+        id: part.body.attachmentId,
+      });
+      attachments.push({
+        filename: part.filename,
+        mimeType: part.mimeType || guessMimeType(part.filename),
+        data: Buffer.from(attachment.data.data || "", "base64url"),
+      });
+    }
+    for (const child of part.parts || []) {
+      await visit(child);
+    }
+  }
+
+  await visit(payload);
+  return attachments;
+}
+
+function buildRawEmail(options: {
+  to: unknown;
+  cc?: unknown;
+  bcc?: unknown;
+  subject: unknown;
+  body: unknown;
+  contentType?: unknown;
+  inReplyTo?: unknown;
+  references?: unknown;
+  attachments?: EmailAttachment[];
+}): string {
+  const attachments = options.attachments || [];
+  if (attachments.length === 0) {
+    return buildGmailRawMessage(options);
+  }
+
+  const body = requireString(options.body, "body");
+  const boundary = `rudi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const lines = [
+    `To: ${sanitizeHeaderValue(requireString(options.to, "to"), "to")}`,
+  ];
+  const cc = optionalHeaderValue(options.cc, "cc");
+  const bcc = optionalHeaderValue(options.bcc, "bcc");
+  const inReplyTo = optionalHeaderValue(options.inReplyTo, "In-Reply-To");
+  const references = optionalHeaderValue(options.references, "References");
+  const contentType = optionalHeaderValue(options.contentType, "Content-Type") || inferGmailContentType(body);
+
+  if (cc) lines.push(`Cc: ${cc}`);
+  if (bcc) lines.push(`Bcc: ${bcc}`);
+  lines.push(`Subject: ${encodeMimeHeaderValue(sanitizeHeaderValue(requireString(options.subject, "subject"), "subject"))}`);
+  if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
+  if (references) lines.push(`References: ${references}`);
+  lines.push("MIME-Version: 1.0");
+  lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  lines.push("");
+  lines.push(`--${boundary}`);
+  lines.push(`Content-Type: ${contentType}`);
+  lines.push("Content-Transfer-Encoding: base64");
+  lines.push("");
+  lines.push(encodeMimeBody(body));
+
+  for (const attachment of attachments) {
+    lines.push(`--${boundary}`);
+    lines.push(`Content-Type: ${sanitizeHeaderValue(attachment.mimeType, "attachment mimeType")}; name="${sanitizeHeaderValue(attachment.filename, "attachment filename")}"`);
+    lines.push("Content-Transfer-Encoding: base64");
+    lines.push(`Content-Disposition: attachment; filename="${sanitizeHeaderValue(attachment.filename, "attachment filename")}"`);
+    lines.push("");
+    lines.push(wrapBase64(attachment.data.toString("base64")));
+  }
+
+  lines.push(`--${boundary}--`);
+  return Buffer.from(lines.join("\r\n")).toString("base64url");
+}
+
+function optionalHeaderValue(value: unknown, field: string): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") throw new Error(`${field} must be a string`);
+  const trimmed = value.trim();
+  return trimmed ? sanitizeHeaderValue(trimmed, field) : undefined;
+}
+
+function sanitizeHeaderValue(value: string, field: string): string {
+  if (/[\r\n]/.test(value)) {
+    throw new Error(`${field} must not contain newlines`);
+  }
+  return value.trim();
+}
+
+function wrapBase64(value: string): string {
+  return value.match(/.{1,76}/g)?.join("\r\n") || "";
+}
+
+function guessMimeType(filePath: string): string {
+  switch (extname(filePath).toLowerCase()) {
+    case ".txt":
+    case ".md":
+      return "text/plain";
+    case ".html":
+    case ".htm":
+      return "text/html";
+    case ".csv":
+      return "text/csv";
+    case ".json":
+      return "application/json";
+    case ".pdf":
+      return "application/pdf";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    case ".docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case ".xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const ACCOUNT_INPUT = {
+  type: "string",
+  description: "Optional configured Google account email/name. Overrides the currently active account for this call.",
+};
+
+const MESSAGE_ID_INPUT = { type: "string", description: "Gmail message ID" };
+
+const MESSAGE_IDS_INPUT = {
+  type: "array",
+  items: { type: "string" },
+  description: "Gmail message IDs",
+};
+
+const LABEL_IDS_INPUT = {
+  type: "array",
+  items: { type: "string" },
+  description: "Gmail label IDs, not display names",
+};
+
+const ATTACHMENTS_INPUT = {
+  type: "array",
+  items: { type: "string" },
+  description: "Optional absolute local file paths to attach",
+};
 
 const server = new Server(
   { name: "google-workspace", version: "1.0.0" },
@@ -132,16 +455,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     // Gmail
     {
+      name: "gmail_profile",
+      description: "Show the authenticated Gmail profile for the selected account",
+      inputSchema: {
+        type: "object",
+        properties: {
+          account: ACCOUNT_INPUT,
+        },
+      },
+    },
+    {
       name: "gmail_send",
       description: "Send an email via Gmail",
       inputSchema: {
         type: "object",
         properties: {
-          to: { type: "string", description: "Recipient email" },
-          subject: { type: "string", description: "Email subject" },
+          to: { type: "string", description: "Recipient email. Optional for reply sends; defaults to the original sender." },
+          subject: { type: "string", description: "Email subject. Optional for reply sends; defaults to Re: original subject." },
           body: { type: "string", description: "Email body" },
+          cc: { type: "string", description: "Optional Cc recipient list" },
+          bcc: { type: "string", description: "Optional Bcc recipient list" },
+          reply_message_id: { type: "string", description: "Optional Gmail message ID to reply to so the email stays in the original thread" },
+          reply_all: { type: "boolean", description: "For threaded sends, include original To/Cc recipients except the authenticated account (default: false)" },
+          attachments: ATTACHMENTS_INPUT,
+          account: ACCOUNT_INPUT,
         },
-        required: ["to", "subject", "body"],
+        required: ["body"],
       },
     },
     {
@@ -152,22 +491,97 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           query: { type: "string", description: "Gmail search query" },
           max_results: { type: "number", description: "Max results (default 10)" },
+          next_page_token: { type: "string", description: "Pagination token from a previous Gmail search response" },
           output: { type: "string", description: "Optional file path to save results" },
+          account: ACCOUNT_INPUT,
         },
         required: ["query"],
       },
     },
     {
       name: "gmail_draft",
-      description: "Create an email draft",
+      description: "Create a Gmail draft. Pass reply_message_id to create a threaded reply draft.",
       inputSchema: {
         type: "object",
         properties: {
-          to: { type: "string", description: "Recipient email" },
-          subject: { type: "string", description: "Email subject" },
+          to: { type: "string", description: "Recipient email. Optional for reply drafts; defaults to the original sender." },
+          subject: { type: "string", description: "Email subject. Optional for reply drafts; defaults to Re: original subject." },
           body: { type: "string", description: "Email body" },
+          cc: { type: "string", description: "Optional Cc recipient list" },
+          bcc: { type: "string", description: "Optional Bcc recipient list" },
+          reply_message_id: { type: "string", description: "Optional Gmail message ID to reply to so the draft stays in the original thread" },
+          reply_all: { type: "boolean", description: "For reply drafts, include original To/Cc recipients except the authenticated account (default: false)" },
+          attachments: ATTACHMENTS_INPUT,
+          account: ACCOUNT_INPUT,
         },
-        required: ["to", "subject", "body"],
+        required: ["body"],
+      },
+    },
+    {
+      name: "gmail_draft_list",
+      description: "List Gmail drafts with draft IDs, message IDs, subjects, recipients, and thread IDs",
+      inputSchema: {
+        type: "object",
+        properties: {
+          max_results: { type: "number", description: "Max drafts to return (default 10)" },
+          next_page_token: { type: "string", description: "Pagination token from a previous draft list response" },
+          account: ACCOUNT_INPUT,
+        },
+      },
+    },
+    {
+      name: "gmail_draft_get",
+      description: "Get one Gmail draft by draft ID, including headers, thread ID, snippet, and body",
+      inputSchema: {
+        type: "object",
+        properties: {
+          draft_id: { type: "string", description: "Gmail draft ID" },
+          output: { type: "string", description: "Optional file path to save draft JSON" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["draft_id"],
+      },
+    },
+    {
+      name: "gmail_draft_update",
+      description: "Update an existing Gmail draft. Omitted to/subject/body/cc/bcc fields are preserved.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          draft_id: { type: "string", description: "Gmail draft ID" },
+          to: { type: "string", description: "Replacement recipient email list" },
+          subject: { type: "string", description: "Replacement email subject" },
+          body: { type: "string", description: "Replacement email body" },
+          cc: { type: "string", description: "Replacement Cc recipient list" },
+          bcc: { type: "string", description: "Replacement Bcc recipient list" },
+          attachments: ATTACHMENTS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["draft_id"],
+      },
+    },
+    {
+      name: "gmail_draft_delete",
+      description: "Delete a Gmail draft by draft ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          draft_id: { type: "string", description: "Gmail draft ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["draft_id"],
+      },
+    },
+    {
+      name: "gmail_draft_send",
+      description: "Send an existing Gmail draft by draft ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          draft_id: { type: "string", description: "Gmail draft ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["draft_id"],
       },
     },
     {
@@ -178,6 +592,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           message_id: { type: "string", description: "Gmail message ID" },
           output: { type: "string", description: "Optional file path to save email content" },
+          account: ACCOUNT_INPUT,
         },
         required: ["message_id"],
       },
@@ -189,6 +604,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {
           message_id: { type: "string", description: "Gmail message ID" },
+          account: ACCOUNT_INPUT,
         },
         required: ["message_id"],
       },
@@ -203,6 +619,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           attachment_id: { type: "string", description: "Attachment ID (from gmail_list_attachments)" },
           filename: { type: "string", description: "Original filename (for determining file type)" },
           output: { type: "string", description: "File path to save attachment (required for binary files)" },
+          account: ACCOUNT_INPUT,
         },
         required: ["message_id", "attachment_id"],
       },
@@ -214,10 +631,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {
           message_id: { type: "string", description: "Gmail message ID to reply to" },
+          to: { type: "string", description: "Optional replacement reply recipient list" },
+          subject: { type: "string", description: "Optional replacement reply subject" },
           body: { type: "string", description: "Reply body (HTML supported)" },
           reply_all: { type: "boolean", description: "Reply to all recipients (default: false)" },
+          cc: { type: "string", description: "Optional Cc recipient list" },
+          bcc: { type: "string", description: "Optional Bcc recipient list" },
+          attachments: ATTACHMENTS_INPUT,
+          account: ACCOUNT_INPUT,
         },
         required: ["message_id", "body"],
+      },
+    },
+    {
+      name: "gmail_forward",
+      description: "Forward an existing Gmail message with original content and attachments",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          to: { type: "string", description: "Forward recipient email list" },
+          note: { type: "string", description: "Optional note to include above the forwarded message" },
+          cc: { type: "string", description: "Optional Cc recipient list" },
+          bcc: { type: "string", description: "Optional Bcc recipient list" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id", "to"],
       },
     },
     {
@@ -228,8 +667,249 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           thread_id: { type: "string", description: "Gmail thread ID" },
           output: { type: "string", description: "Optional file path to save thread" },
+          account: ACCOUNT_INPUT,
         },
         required: ["thread_id"],
+      },
+    },
+    {
+      name: "gmail_message_trash",
+      description: "Move a Gmail message to trash",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: { type: "string", description: "Gmail message ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_untrash",
+      description: "Restore a Gmail message from trash",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: { type: "string", description: "Gmail message ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_delete",
+      description: "Permanently delete a Gmail message by message ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: { type: "string", description: "Gmail message ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_label_list",
+      description: "List Gmail labels with IDs, names, types, and message/thread counts",
+      inputSchema: {
+        type: "object",
+        properties: {
+          account: ACCOUNT_INPUT,
+        },
+      },
+    },
+    {
+      name: "gmail_label_create",
+      description: "Create a Gmail user label",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "New label display name" },
+          label_list_visibility: { type: "string", description: "Optional Gmail labelListVisibility value" },
+          message_list_visibility: { type: "string", description: "Optional Gmail messageListVisibility value" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "gmail_label_update",
+      description: "Update a Gmail user label",
+      inputSchema: {
+        type: "object",
+        properties: {
+          label_id: { type: "string", description: "Gmail label ID" },
+          name: { type: "string", description: "Replacement label display name" },
+          label_list_visibility: { type: "string", description: "Optional Gmail labelListVisibility value" },
+          message_list_visibility: { type: "string", description: "Optional Gmail messageListVisibility value" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["label_id"],
+      },
+    },
+    {
+      name: "gmail_label_delete",
+      description: "Delete a Gmail user label",
+      inputSchema: {
+        type: "object",
+        properties: {
+          label_id: { type: "string", description: "Gmail label ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["label_id"],
+      },
+    },
+    {
+      name: "gmail_message_modify_labels",
+      description: "Add or remove Gmail labels on one message by label ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          add_label_ids: LABEL_IDS_INPUT,
+          remove_label_ids: LABEL_IDS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_archive",
+      description: "Archive one Gmail message by removing the INBOX label",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_mark_read",
+      description: "Mark one Gmail message read by removing the UNREAD label",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_mark_unread",
+      description: "Mark one Gmail message unread by adding the UNREAD label",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_star",
+      description: "Star one Gmail message",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_unstar",
+      description: "Unstar one Gmail message",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_id: MESSAGE_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_id"],
+      },
+    },
+    {
+      name: "gmail_message_batch_get",
+      description: "Get multiple Gmail messages by message ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_ids: MESSAGE_IDS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_ids"],
+      },
+    },
+    {
+      name: "gmail_thread_batch_get",
+      description: "Get multiple Gmail threads by thread ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          thread_ids: {
+            type: "array",
+            items: { type: "string" },
+            description: "Gmail thread IDs",
+          },
+          max_messages: { type: "number", description: "Optional maximum messages per thread" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["thread_ids"],
+      },
+    },
+    {
+      name: "gmail_message_batch_modify_labels",
+      description: "Add or remove Gmail labels on multiple messages by label ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_ids: MESSAGE_IDS_INPUT,
+          add_label_ids: LABEL_IDS_INPUT,
+          remove_label_ids: LABEL_IDS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_ids"],
+      },
+    },
+    {
+      name: "gmail_message_batch_trash",
+      description: "Move multiple Gmail messages to trash",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_ids: MESSAGE_IDS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_ids"],
+      },
+    },
+    {
+      name: "gmail_message_batch_untrash",
+      description: "Restore multiple Gmail messages from trash",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_ids: MESSAGE_IDS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_ids"],
+      },
+    },
+    {
+      name: "gmail_message_batch_delete",
+      description: "Permanently delete multiple Gmail messages by message ID",
+      inputSchema: {
+        type: "object",
+        properties: {
+          message_ids: MESSAGE_IDS_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["message_ids"],
       },
     },
     // Sheets
@@ -348,6 +1028,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "drive_create_folder",
+      description: "Create a folder in Google Drive",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Folder name" },
+          parent_id: { type: "string", description: "Parent folder ID (optional, defaults to root)" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      name: "drive_move_file",
+      description: "Move a file to a different folder in Google Drive",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file_id: { type: "string", description: "File ID to move" },
+          new_parent_id: { type: "string", description: "Destination folder ID" },
+        },
+        required: ["file_id", "new_parent_id"],
+      },
+    },
+    {
+      name: "drive_download",
+      description: "Download a Drive file's bytes to a local path",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file_id: { type: "string", description: "File ID to download" },
+          output_path: { type: "string", description: "Local path to write to" },
+        },
+        required: ["file_id", "output_path"],
+      },
+    },
+    {
       name: "drive_make_public",
       description: "Make a Drive file publicly viewable and get a direct URL (useful for embedding images in Docs)",
       inputSchema: {
@@ -376,8 +1092,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
+          calendar_id: { type: "string", description: "Calendar ID to list (default: primary)" },
           days: { type: "number", description: "Days to look ahead (default 7)" },
           max_results: { type: "number", description: "Max events (default 20)" },
+          account: ACCOUNT_INPUT,
         },
       },
     },
@@ -387,11 +1105,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
+          calendar_id: { type: "string", description: "Calendar ID to create on (default: primary)" },
           summary: { type: "string", description: "Event title" },
           start: { type: "string", description: "Start datetime (ISO format)" },
           end: { type: "string", description: "End datetime (ISO format)" },
+          time_zone: { type: "string", description: "Optional IANA time zone, e.g. America/New_York" },
           description: { type: "string", description: "Event description" },
           location: { type: "string", description: "Event location" },
+          attendees: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional attendee email addresses",
+          },
+          create_meet: { type: "boolean", description: "Create a Google Meet conference link" },
+          send_updates: {
+            type: "string",
+            description: "Google Calendar guest notification mode: all, externalOnly, or none",
+          },
+          account: ACCOUNT_INPUT,
         },
         required: ["summary", "start", "end"],
       },
@@ -402,7 +1133,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
+          calendar_id: { type: "string", description: "Calendar ID for quick add (default: primary)" },
           text: { type: "string", description: "Natural language event description" },
+          send_updates: {
+            type: "string",
+            description: "Google Calendar guest notification mode: all, externalOnly, or none",
+          },
+          account: ACCOUNT_INPUT,
         },
         required: ["text"],
       },
@@ -413,7 +1150,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
+          calendar_id: { type: "string", description: "Calendar ID containing the event (default: primary)" },
           event_id: { type: "string", description: "Event ID to delete" },
+          send_updates: {
+            type: "string",
+            description: "Google Calendar guest notification mode: all, externalOnly, or none",
+          },
+          account: ACCOUNT_INPUT,
         },
         required: ["event_id"],
       },
@@ -434,7 +1177,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: "text",
             text: accounts.length > 0
               ? `Available accounts:\n${accounts.map(a => `- ${a}${a === currentAccount ? " (active)" : ""}`).join("\n")}`
-              : "No accounts configured. Add accounts to the 'accounts/' directory.",
+              : `No accounts configured. Run npm run auth to create accounts in ${ACCOUNTS_DIR}.`,
           }],
         };
       }
@@ -457,36 +1200,99 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: currentAccount ? `Current account: ${currentAccount}` : "No account selected (using default token.json)",
+            text: currentAccount ? `Current account: ${currentAccount}` : "No account selected (using default state token)",
           }],
         };
       }
 
       // Gmail
-      case "gmail_send": {
-        const auth = getAuth();
+      case "gmail_profile": {
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
-        const message = [
-          `To: ${args?.to}`,
-          `Subject: ${args?.subject}`,
-          "",
-          args?.body,
-        ].join("\n");
-        const encoded = Buffer.from(message).toString("base64url");
+        const profile = await gmail.users.getProfile({ userId: "me" });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              emailAddress: profile.data.emailAddress,
+              messagesTotal: profile.data.messagesTotal,
+              threadsTotal: profile.data.threadsTotal,
+              historyId: profile.data.historyId,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_send": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const replyMessageId = typeof args?.reply_message_id === "string"
+          ? args.reply_message_id.trim()
+          : "";
+        const original = replyMessageId
+          ? await gmail.users.messages.get({
+              userId: "me",
+              id: replyMessageId,
+              format: "full",
+            })
+          : null;
+        const profile = replyMessageId && args?.reply_all === true
+          ? await gmail.users.getProfile({ userId: "me" })
+          : null;
+        const attachments = loadAttachmentFiles(optionalAttachmentPaths(args));
+        const outgoing = replyMessageId
+          ? buildGmailDraftMessage({
+              to: args?.to,
+              cc: args?.cc,
+              bcc: args?.bcc,
+              subject: args?.subject,
+              body: args?.body,
+              replyMessageId,
+              replyAll: args?.reply_all,
+              originalMessage: original?.data,
+              selfEmail: profile?.data.emailAddress,
+            })
+          : {
+              to: args?.to as string,
+              cc: args?.cc as string | undefined,
+              bcc: args?.bcc as string | undefined,
+              subject: args?.subject as string,
+              body: args?.body as string,
+              threadId: undefined,
+              contentType: undefined,
+              inReplyTo: undefined,
+              references: undefined,
+            };
+        const raw = buildRawEmail({
+          to: outgoing.to,
+          cc: outgoing.cc,
+          bcc: outgoing.bcc,
+          subject: outgoing.subject,
+          body: args?.body,
+          contentType: outgoing.contentType,
+          inReplyTo: outgoing.inReplyTo,
+          references: outgoing.references,
+          attachments,
+        });
+        const requestBody: { raw: string; threadId?: string } = { raw };
+        if (outgoing.threadId) {
+          requestBody.threadId = outgoing.threadId;
+        }
         await gmail.users.messages.send({
           userId: "me",
-          requestBody: { raw: encoded },
+          requestBody,
         });
         return { content: [{ type: "text", text: "Email sent successfully" }] };
       }
 
       case "gmail_search": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
         const res = await gmail.users.messages.list({
           userId: "me",
           q: args?.query as string,
           maxResults: (args?.max_results as number) || 10,
+          pageToken: args?.next_page_token as string | undefined,
         });
         const messages = await Promise.all(
           (res.data.messages || []).map(async (m) => {
@@ -500,7 +1306,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
           })
         );
-        const text = JSON.stringify(messages, null, 2);
+        const text = JSON.stringify({
+          messages,
+          nextPageToken: res.data.nextPageToken || null,
+        }, null, 2);
         if (args?.output) {
           const filePath = args.output as string;
           writeFileSync(filePath, text, "utf-8");
@@ -510,24 +1319,227 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "gmail_draft": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
-        const message = [
-          `To: ${args?.to}`,
-          `Subject: ${args?.subject}`,
-          "",
-          args?.body,
-        ].join("\n");
-        const encoded = Buffer.from(message).toString("base64url");
+        const replyMessageId = typeof args?.reply_message_id === "string"
+          ? args.reply_message_id.trim()
+          : "";
+        const original = replyMessageId
+          ? await gmail.users.messages.get({
+              userId: "me",
+              id: replyMessageId,
+              format: "full",
+            })
+          : null;
+        const profile = replyMessageId && args?.reply_all === true
+          ? await gmail.users.getProfile({ userId: "me" })
+          : null;
+        const draftMessage = buildGmailDraftMessage({
+          to: args?.to,
+          cc: args?.cc,
+          bcc: args?.bcc,
+          subject: args?.subject,
+          body: args?.body,
+          replyMessageId,
+          replyAll: args?.reply_all,
+          originalMessage: original?.data,
+          selfEmail: profile?.data.emailAddress,
+        });
+        const attachments = loadAttachmentFiles(optionalAttachmentPaths(args));
+        const raw = buildRawEmail({
+          to: draftMessage.to,
+          cc: draftMessage.cc,
+          bcc: draftMessage.bcc,
+          subject: draftMessage.subject,
+          body: args?.body,
+          contentType: draftMessage.contentType,
+          inReplyTo: draftMessage.inReplyTo,
+          references: draftMessage.references,
+          attachments,
+        });
+        const messageRequest: { raw: string; threadId?: string } = { raw };
+        if (draftMessage.threadId) {
+          messageRequest.threadId = draftMessage.threadId;
+        }
         const draft = await gmail.users.drafts.create({
           userId: "me",
-          requestBody: { message: { raw: encoded } },
+          requestBody: { message: messageRequest },
         });
-        return { content: [{ type: "text", text: `Draft created: ${draft.data.id}` }] };
+        const threadText = draftMessage.threadId ? `\nThread: ${draftMessage.threadId}` : "";
+        return {
+          content: [{
+            type: "text",
+            text: `Draft created: ${draft.data.id}${threadText}\nTo: ${draftMessage.to}`,
+          }],
+        };
+      }
+
+      case "gmail_draft_list": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const maxResults = (args?.max_results as number) || 10;
+        const listed = await gmail.users.drafts.list({
+          userId: "me",
+          maxResults,
+          pageToken: args?.next_page_token as string | undefined,
+        });
+        const drafts = await Promise.all(
+          (listed.data.drafts || []).map(async (draftRef) => {
+            const draft = await gmail.users.drafts.get({
+              userId: "me",
+              id: draftRef.id!,
+              format: "full",
+            });
+            const message = draft.data.message;
+            const headers = message?.payload?.headers || [];
+            return {
+              draftId: draft.data.id || draftRef.id,
+              messageId: message?.id,
+              threadId: message?.threadId,
+              subject: getHeaderValue(headers, "Subject"),
+              to: getHeaderValue(headers, "To"),
+              cc: getHeaderValue(headers, "Cc"),
+              date: getHeaderValue(headers, "Date"),
+              snippet: message?.snippet,
+            };
+          })
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              drafts,
+              nextPageToken: listed.data.nextPageToken || null,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_draft_get": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const draftId = requireString(args?.draft_id, "draft_id");
+        const draft = await gmail.users.drafts.get({
+          userId: "me",
+          id: draftId,
+          format: "full",
+        });
+        const message = draft.data.message;
+        const headers = message?.payload?.headers || [];
+        const body = extractGmailPayloadBody(message?.payload);
+        const draftData = {
+          draftId: draft.data.id || draftId,
+          messageId: message?.id,
+          threadId: message?.threadId,
+          subject: getHeaderValue(headers, "Subject"),
+          to: getHeaderValue(headers, "To"),
+          cc: getHeaderValue(headers, "Cc"),
+          bcc: getHeaderValue(headers, "Bcc"),
+          date: getHeaderValue(headers, "Date"),
+          snippet: message?.snippet,
+          labels: message?.labelIds,
+          body: body.text || body.html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim(),
+          bodyHtml: body.html,
+        };
+        const text = JSON.stringify(draftData, null, 2);
+        if (args?.output) {
+          const filePath = args.output as string;
+          writeFileSync(filePath, text, "utf-8");
+          return { content: [{ type: "text", text: `Draft saved to ${filePath}` }] };
+        }
+        return { content: [{ type: "text", text }] };
+      }
+
+      case "gmail_draft_update": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const draftId = requireString(args?.draft_id, "draft_id");
+        const currentDraft = await gmail.users.drafts.get({
+          userId: "me",
+          id: draftId,
+          format: "full",
+        });
+        const currentMessage = currentDraft.data.message;
+        if (!currentMessage?.payload) {
+          throw new Error(`Draft '${draftId}' did not include a readable message payload.`);
+        }
+
+        const headers = currentMessage.payload.headers || [];
+        const currentBody = extractGmailPayloadBody(currentMessage.payload);
+        const attachments = hasToolArg(args, "attachments")
+          ? loadAttachmentFiles(optionalAttachmentPaths(args))
+          : currentMessage.id
+            ? await loadGmailPayloadAttachments(gmail, currentMessage.id, currentMessage.payload)
+            : [];
+        const raw = buildRawEmail({
+          to: optionalToolString(args, "to") || getHeaderValue(headers, "To"),
+          cc: hasToolArg(args, "cc") ? optionalToolString(args, "cc") : getHeaderValue(headers, "Cc"),
+          bcc: hasToolArg(args, "bcc") ? optionalToolString(args, "bcc") : getHeaderValue(headers, "Bcc"),
+          subject: optionalToolString(args, "subject") || getHeaderValue(headers, "Subject"),
+          body: hasToolArg(args, "body")
+            ? args?.body
+            : currentBody.html || currentBody.text || "",
+          contentType: chooseDraftContentType(currentMessage.payload),
+          inReplyTo: getHeaderValue(headers, "In-Reply-To"),
+          references: getHeaderValue(headers, "References"),
+          attachments,
+        });
+        const messageRequest: { raw: string; threadId?: string } = { raw };
+        if (currentMessage.threadId) {
+          messageRequest.threadId = currentMessage.threadId;
+        }
+        const updated = await gmail.users.drafts.update({
+          userId: "me",
+          id: draftId,
+          requestBody: { message: messageRequest },
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              updated: true,
+              draftId: updated.data.id || draftId,
+              messageId: updated.data.message?.id,
+              threadId: updated.data.message?.threadId || currentMessage.threadId,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_draft_delete": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const draftId = requireString(args?.draft_id, "draft_id");
+        await gmail.users.drafts.delete({
+          userId: "me",
+          id: draftId,
+        });
+        return { content: [{ type: "text", text: `Draft deleted: ${draftId}` }] };
+      }
+
+      case "gmail_draft_send": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const draftId = requireString(args?.draft_id, "draft_id");
+        const sent = await gmail.users.drafts.send({
+          userId: "me",
+          requestBody: { id: draftId },
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              sent: true,
+              draftId,
+              messageId: sent.data.id,
+              threadId: sent.data.threadId,
+            }, null, 2),
+          }],
+        };
       }
 
       case "gmail_get": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
         const messageId = args?.message_id as string;
         const msg = await gmail.users.messages.get({
@@ -597,7 +1609,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "gmail_list_attachments": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
         const messageId = args?.message_id as string;
         const msg = await gmail.users.messages.get({
@@ -627,7 +1639,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "gmail_get_attachment": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
         const messageId = args?.message_id as string;
         const attachmentId = args?.attachment_id as string;
@@ -696,70 +1708,107 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "gmail_reply": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
-        const messageId = args?.message_id as string;
-        const replyBody = args?.body as string;
-        const replyAll = args?.reply_all as boolean || false;
-
-        // Get original message for threading info
+        const messageId = requireString(args?.message_id, "message_id");
         const original = await gmail.users.messages.get({
           userId: "me",
           id: messageId,
           format: "full",
         });
-
-        const headers = original.data.payload?.headers || [];
-        const subject = headers.find((h) => h.name === "Subject")?.value || "";
-        const from = headers.find((h) => h.name === "From")?.value || "";
-        const to = headers.find((h) => h.name === "To")?.value || "";
-        const cc = headers.find((h) => h.name === "Cc")?.value || "";
-        const messageIdHeader = headers.find((h) => h.name === "Message-ID")?.value || "";
-        const references = headers.find((h) => h.name === "References")?.value || "";
-
-        // Build recipient list
-        let recipients = from; // Reply to sender
-        if (replyAll) {
-          // Add original To and Cc, excluding self
-          const profile = await gmail.users.getProfile({ userId: "me" });
-          const myEmail = profile.data.emailAddress || "";
-          const allRecipients = [from, to, cc]
-            .filter(Boolean)
-            .join(", ")
-            .split(",")
-            .map((e) => e.trim())
-            .filter((e) => !e.toLowerCase().includes(myEmail.toLowerCase()));
-          recipients = [...new Set(allRecipients)].join(", ");
-        }
-
-        // Build reply subject
-        const replySubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
-
-        // Build message with threading headers
-        const message = [
-          `To: ${recipients}`,
-          `Subject: ${replySubject}`,
-          `In-Reply-To: ${messageIdHeader}`,
-          `References: ${references ? `${references} ${messageIdHeader}` : messageIdHeader}`,
-          "Content-Type: text/html; charset=utf-8",
-          "",
-          replyBody,
-        ].join("\r\n");
-
-        const encoded = Buffer.from(message).toString("base64url");
+        const profile = args?.reply_all === true
+          ? await gmail.users.getProfile({ userId: "me" })
+          : null;
+        const replyMessage = buildGmailDraftMessage({
+          to: args?.to,
+          cc: args?.cc,
+          bcc: args?.bcc,
+          subject: args?.subject,
+          body: args?.body,
+          replyMessageId: messageId,
+          replyAll: args?.reply_all,
+          originalMessage: original.data,
+          selfEmail: profile?.data.emailAddress,
+        });
+        const raw = buildRawEmail({
+          to: replyMessage.to,
+          cc: replyMessage.cc,
+          bcc: replyMessage.bcc,
+          subject: replyMessage.subject,
+          body: args?.body,
+          contentType: replyMessage.contentType,
+          inReplyTo: replyMessage.inReplyTo,
+          references: replyMessage.references,
+          attachments: loadAttachmentFiles(optionalAttachmentPaths(args)),
+        });
         await gmail.users.messages.send({
           userId: "me",
           requestBody: {
-            raw: encoded,
-            threadId: original.data.threadId,
+            raw,
+            threadId: replyMessage.threadId,
           },
         });
 
-        return { content: [{ type: "text", text: `Reply sent to ${recipients}` }] };
+        return { content: [{ type: "text", text: `Reply sent to ${replyMessage.to}` }] };
+      }
+
+      case "gmail_forward": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageId = requireString(args?.message_id, "message_id");
+        const original = await gmail.users.messages.get({
+          userId: "me",
+          id: messageId,
+          format: "full",
+        });
+        const headers = original.data.payload?.headers || [];
+        const originalBody = extractGmailPayloadBody(original.data.payload);
+        const originalSubject = getHeaderValue(headers, "Subject");
+        const subject = originalSubject.toLowerCase().startsWith("fwd:")
+          ? originalSubject
+          : `Fwd: ${originalSubject}`;
+        const note = optionalToolString(args, "note");
+        const body = [
+          note ? `<p>${escapeHtml(note).replace(/\n/g, "<br>")}</p>` : "",
+          "<br><br>---------- Forwarded message ---------<br>",
+          `<b>From:</b> ${escapeHtml(getHeaderValue(headers, "From"))}<br>`,
+          `<b>Date:</b> ${escapeHtml(getHeaderValue(headers, "Date"))}<br>`,
+          `<b>Subject:</b> ${escapeHtml(originalSubject)}<br>`,
+          `<b>To:</b> ${escapeHtml(getHeaderValue(headers, "To"))}<br><br>`,
+          originalBody.html || `<pre>${escapeHtml(originalBody.text)}</pre>`,
+        ].join("");
+        const attachments = original.data.id && original.data.payload
+          ? await loadGmailPayloadAttachments(gmail, original.data.id, original.data.payload)
+          : [];
+        const raw = buildRawEmail({
+          to: args?.to,
+          cc: args?.cc,
+          bcc: args?.bcc,
+          subject,
+          body,
+          contentType: "text/html; charset=utf-8",
+          attachments,
+        });
+        const sent = await gmail.users.messages.send({
+          userId: "me",
+          requestBody: { raw },
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              forwarded: true,
+              sourceMessageId: messageId,
+              messageId: sent.data.id,
+              threadId: sent.data.threadId,
+              attachments: attachments.length,
+            }, null, 2),
+          }],
+        };
       }
 
       case "gmail_get_thread": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
         const threadId = args?.thread_id as string;
 
@@ -818,6 +1867,292 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return { content: [{ type: "text", text: `Thread saved to ${args.output}` }] };
         }
         return { content: [{ type: "text", text }] };
+      }
+
+      case "gmail_message_trash": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageId = requireString(args?.message_id, "message_id");
+        const trashed = await gmail.users.messages.trash({
+          userId: "me",
+          id: messageId,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              trashed: true,
+              messageId: trashed.data.id || messageId,
+              threadId: trashed.data.threadId,
+              labels: trashed.data.labelIds,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_message_untrash": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageId = requireString(args?.message_id, "message_id");
+        const restored = await gmail.users.messages.untrash({
+          userId: "me",
+          id: messageId,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              untrashed: true,
+              messageId: restored.data.id || messageId,
+              threadId: restored.data.threadId,
+              labels: restored.data.labelIds,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_message_delete": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageId = requireString(args?.message_id, "message_id");
+        await gmail.users.messages.delete({
+          userId: "me",
+          id: messageId,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              deleted: true,
+              messageId,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_label_list": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const labels = await gmail.users.labels.list({ userId: "me" });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify((labels.data.labels || []).map((label) => ({
+              id: label.id,
+              name: label.name,
+              type: label.type,
+              labelListVisibility: label.labelListVisibility,
+              messageListVisibility: label.messageListVisibility,
+              messagesTotal: label.messagesTotal,
+              messagesUnread: label.messagesUnread,
+              threadsTotal: label.threadsTotal,
+              threadsUnread: label.threadsUnread,
+            })), null, 2),
+          }],
+        };
+      }
+
+      case "gmail_label_create": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const created = await gmail.users.labels.create({
+          userId: "me",
+          requestBody: {
+            name: requireString(args?.name, "name"),
+            labelListVisibility: optionalToolString(args, "label_list_visibility") as any,
+            messageListVisibility: optionalToolString(args, "message_list_visibility") as any,
+          },
+        });
+        return { content: [{ type: "text", text: JSON.stringify(created.data, null, 2) }] };
+      }
+
+      case "gmail_label_update": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const labelId = requireString(args?.label_id, "label_id");
+        const updated = await gmail.users.labels.patch({
+          userId: "me",
+          id: labelId,
+          requestBody: {
+            name: optionalToolString(args, "name"),
+            labelListVisibility: optionalToolString(args, "label_list_visibility") as any,
+            messageListVisibility: optionalToolString(args, "message_list_visibility") as any,
+          },
+        });
+        return { content: [{ type: "text", text: JSON.stringify(updated.data, null, 2) }] };
+      }
+
+      case "gmail_label_delete": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const labelId = requireString(args?.label_id, "label_id");
+        await gmail.users.labels.delete({
+          userId: "me",
+          id: labelId,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({ deleted: true, labelId }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_message_modify_labels":
+      case "gmail_message_archive":
+      case "gmail_message_mark_read":
+      case "gmail_message_mark_unread":
+      case "gmail_message_star":
+      case "gmail_message_unstar": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageId = requireString(args?.message_id, "message_id");
+        const addLabelIds = optionalStringArray(args, "add_label_ids") || [];
+        const removeLabelIds = optionalStringArray(args, "remove_label_ids") || [];
+
+        if (name === "gmail_message_archive") removeLabelIds.push("INBOX");
+        if (name === "gmail_message_mark_read") removeLabelIds.push("UNREAD");
+        if (name === "gmail_message_mark_unread") addLabelIds.push("UNREAD");
+        if (name === "gmail_message_star") addLabelIds.push("STARRED");
+        if (name === "gmail_message_unstar") removeLabelIds.push("STARRED");
+
+        if (addLabelIds.length === 0 && removeLabelIds.length === 0) {
+          throw new Error("At least one label must be added or removed");
+        }
+
+        const modified = await gmail.users.messages.modify({
+          userId: "me",
+          id: messageId,
+          requestBody: {
+            addLabelIds: [...new Set(addLabelIds)],
+            removeLabelIds: [...new Set(removeLabelIds)],
+          },
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              messageId: modified.data.id || messageId,
+              threadId: modified.data.threadId,
+              labels: modified.data.labelIds,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_message_batch_get": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageIds = requireStringArray(args, "message_ids");
+        const messages = await Promise.all(messageIds.map(async (messageId) => {
+          const message = await gmail.users.messages.get({
+            userId: "me",
+            id: messageId,
+            format: "full",
+          });
+          return summarizeGmailMessage(message.data);
+        }));
+        return { content: [{ type: "text", text: JSON.stringify(messages, null, 2) }] };
+      }
+
+      case "gmail_thread_batch_get": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const threadIds = requireStringArray(args, "thread_ids");
+        const maxMessages = typeof args?.max_messages === "number" && args.max_messages > 0
+          ? Math.floor(args.max_messages)
+          : undefined;
+        const threads = await Promise.all(threadIds.map(async (threadId) => {
+          const thread = await gmail.users.threads.get({
+            userId: "me",
+            id: threadId,
+            format: "full",
+          });
+          const allMessages = thread.data.messages || [];
+          const selectedMessages = maxMessages ? allMessages.slice(-maxMessages) : allMessages;
+          return {
+            threadId: thread.data.id || threadId,
+            messageCount: allMessages.length,
+            messages: selectedMessages.map(summarizeGmailMessage),
+          };
+        }));
+        return { content: [{ type: "text", text: JSON.stringify(threads, null, 2) }] };
+      }
+
+      case "gmail_message_batch_modify_labels": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageIds = requireStringArray(args, "message_ids");
+        const addLabelIds = optionalStringArray(args, "add_label_ids") || [];
+        const removeLabelIds = optionalStringArray(args, "remove_label_ids") || [];
+        if (addLabelIds.length === 0 && removeLabelIds.length === 0) {
+          throw new Error("At least one label must be added or removed");
+        }
+        await gmail.users.messages.batchModify({
+          userId: "me",
+          requestBody: {
+            ids: messageIds,
+            addLabelIds: [...new Set(addLabelIds)],
+            removeLabelIds: [...new Set(removeLabelIds)],
+          },
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              modified: true,
+              messageIds,
+              addedLabelIds: [...new Set(addLabelIds)],
+              removedLabelIds: [...new Set(removeLabelIds)],
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_message_batch_trash":
+      case "gmail_message_batch_untrash": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageIds = requireStringArray(args, "message_ids");
+        const trashing = name === "gmail_message_batch_trash";
+        const messages = await Promise.all(messageIds.map(async (messageId) => {
+          const message = trashing
+            ? await gmail.users.messages.trash({ userId: "me", id: messageId })
+            : await gmail.users.messages.untrash({ userId: "me", id: messageId });
+          return {
+            messageId: message.data.id || messageId,
+            threadId: message.data.threadId,
+            labels: message.data.labelIds,
+          };
+        }));
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              [trashing ? "trashed" : "untrashed"]: true,
+              messages,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "gmail_message_batch_delete": {
+        const auth = getAuthForArgs(args);
+        const gmail = google.gmail({ version: "v1", auth });
+        const messageIds = requireStringArray(args, "message_ids");
+        await gmail.users.messages.batchDelete({
+          userId: "me",
+          requestBody: { ids: messageIds },
+        });
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              deleted: true,
+              messageIds,
+            }, null, 2),
+          }],
+        };
       }
 
       // Sheets
@@ -994,6 +2329,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "drive_create_folder": {
+        const auth = getAuth();
+        const drive = google.drive({ version: "v3", auth });
+        const name = requireString(args?.name, "name");
+        const parentId = args?.parent_id as string | undefined;
+        const res = await drive.files.create({
+          requestBody: {
+            name,
+            mimeType: "application/vnd.google-apps.folder",
+            parents: parentId ? [parentId] : undefined,
+          },
+          fields: "id, name, mimeType, parents",
+        });
+        return { content: [{ type: "text", text: JSON.stringify(res.data) }] };
+      }
+
+      case "drive_move_file": {
+        const auth = getAuth();
+        const drive = google.drive({ version: "v3", auth });
+        const fileId = requireString(args?.file_id, "file_id");
+        const newParentId = requireString(args?.new_parent_id, "new_parent_id");
+        const file = await drive.files.get({
+          fileId,
+          fields: "parents",
+        });
+        const previousParents = (file.data.parents || []).join(",");
+        const updateParams: {
+          fileId: string;
+          addParents: string;
+          removeParents?: string;
+          fields: string;
+        } = {
+          fileId,
+          addParents: newParentId,
+          fields: "id, name, parents",
+        };
+        if (previousParents) {
+          updateParams.removeParents = previousParents;
+        }
+        const res = await drive.files.update(updateParams);
+        return { content: [{ type: "text", text: JSON.stringify(res.data) }] };
+      }
+
+      case "drive_download": {
+        const auth = getAuth();
+        const drive = google.drive({ version: "v3", auth });
+        const fs = await import("fs");
+        const path = await import("path");
+        const { pipeline } = await import("stream/promises");
+        const fileId = requireString(args?.file_id, "file_id");
+        const outputPath = requireString(args?.output_path, "output_path");
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        const response = await drive.files.get(
+          { fileId, alt: "media" },
+          { responseType: "stream" }
+        );
+        await pipeline(response.data as NodeJS.ReadableStream, fs.createWriteStream(outputPath));
+        const stat = fs.statSync(outputPath);
+        return {
+          content: [{ type: "text", text: JSON.stringify({ path: outputPath, bytes: stat.size }) }],
+        };
+      }
+
       case "drive_make_public": {
         const auth = getAuth();
         const drive = google.drive({ version: "v3", auth });
@@ -1023,13 +2421,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Calendar
       case "calendar_list": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const calendar = google.calendar({ version: "v3", auth });
         const days = (args?.days as number) || 7;
         const now = new Date();
         const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
         const res = await calendar.events.list({
-          calendarId: "primary",
+          calendarId: optionalToolString(args, "calendar_id") || "primary",
           timeMin: now.toISOString(),
           timeMax: future.toISOString(),
           maxResults: (args?.max_results as number) || 20,
@@ -1047,29 +2445,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "calendar_create": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const calendar = google.calendar({ version: "v3", auth });
-        const event = await calendar.events.insert({
-          calendarId: "primary",
-          requestBody: {
-            summary: args?.summary as string,
-            start: { dateTime: args?.start as string },
-            end: { dateTime: args?.end as string },
-            description: args?.description as string,
-            location: args?.location as string,
-          },
-        });
+        const insert = buildCalendarEventInsert(args || {});
+        const event = await calendar.events.insert(insert);
         return {
-          content: [{ type: "text", text: `Event created: ${event.data.htmlLink}` }],
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              eventId: event.data.id,
+              calendarId: insert.calendarId,
+              htmlLink: event.data.htmlLink,
+              hangoutLink: event.data.hangoutLink,
+              meetLink: event.data.conferenceData?.entryPoints?.find((entry) => entry.entryPointType === "video")?.uri,
+              attendees: event.data.attendees?.map((attendee) => attendee.email),
+            }, null, 2),
+          }],
         };
       }
 
       case "calendar_quick_add": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const calendar = google.calendar({ version: "v3", auth });
         const event = await calendar.events.quickAdd({
-          calendarId: "primary",
+          calendarId: optionalToolString(args, "calendar_id") || "primary",
           text: args?.text as string,
+          sendUpdates: optionalToolString(args, "send_updates") as any,
         });
         return {
           content: [{ type: "text", text: `Event created: ${event.data.htmlLink}` }],
@@ -1077,11 +2478,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "calendar_delete": {
-        const auth = getAuth();
+        const auth = getAuthForArgs(args);
         const calendar = google.calendar({ version: "v3", auth });
         await calendar.events.delete({
-          calendarId: "primary",
+          calendarId: optionalToolString(args, "calendar_id") || "primary",
           eventId: args?.event_id as string,
+          sendUpdates: optionalToolString(args, "send_updates") as any,
         });
         return { content: [{ type: "text", text: "Event deleted successfully" }] };
       }
@@ -1109,8 +2511,11 @@ async function runMCP() {
 export async function gmailSend(options: { to: string; subject: string; body: string }) {
   const auth = getAuth();
   const gmail = google.gmail({ version: "v1", auth });
-  const message = [`To: ${options.to}`, `Subject: ${options.subject}`, "", options.body].join("\n");
-  const encoded = Buffer.from(message).toString("base64url");
+  const encoded = buildGmailRawMessage({
+    to: options.to,
+    subject: options.subject,
+    body: options.body,
+  });
   await gmail.users.messages.send({ userId: "me", requestBody: { raw: encoded } });
   return { success: true };
 }
@@ -1232,20 +2637,30 @@ export async function calendarList(options?: { days?: number; max_results?: numb
   }));
 }
 
-export async function calendarCreate(options: { summary: string; start: string; end: string; description?: string; location?: string }) {
+export async function calendarCreate(options: {
+  calendar_id?: string;
+  summary: string;
+  start: string;
+  end: string;
+  time_zone?: string;
+  description?: string;
+  location?: string;
+  attendees?: string[];
+  create_meet?: boolean;
+  send_updates?: "all" | "externalOnly" | "none";
+}) {
   const auth = getAuth();
   const calendar = google.calendar({ version: "v3", auth });
-  const event = await calendar.events.insert({
-    calendarId: "primary",
-    requestBody: {
-      summary: options.summary,
-      start: { dateTime: options.start },
-      end: { dateTime: options.end },
-      description: options.description,
-      location: options.location,
-    },
-  });
-  return { eventId: event.data.id, url: event.data.htmlLink };
+  const insert = buildCalendarEventInsert(options);
+  const event = await calendar.events.insert(insert);
+  return {
+    eventId: event.data.id,
+    calendarId: insert.calendarId,
+    url: event.data.htmlLink,
+    hangoutLink: event.data.hangoutLink,
+    meetLink: event.data.conferenceData?.entryPoints?.find((entry) => entry.entryPointType === "video")?.uri,
+    attendees: event.data.attendees?.map((attendee) => attendee.email),
+  };
 }
 
 // Only start MCP when run directly
