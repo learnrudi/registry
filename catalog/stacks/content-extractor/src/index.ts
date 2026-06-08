@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Content Extractor MCP
- * Extract content from YouTube, Reddit, TikTok, and web articles
+ * Extract content from YouTube, Reddit, TikTok, web articles, and link pages
  *
  * Usage:
  *   - As MCP: Run without args, speaks JSON-RPC
@@ -17,7 +17,7 @@ import { writeFileSync, existsSync, statSync, mkdirSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { config } from "dotenv";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { dirname, join } from "path";
 import { homedir } from "os";
 import * as cheerio from "cheerio";
@@ -40,16 +40,50 @@ function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
 }
 
-function resolveOutputPath(output: string | undefined, prefix: string, name: string): string {
-  const filename = `${prefix}-${slugify(name)}-${new Date().toISOString().split("T")[0]}.md`;
+function resolveOutputPath(output: string | undefined, prefix: string, name: string, extension = "md"): string {
+  const safeExtension = extension.replace(/[^a-z0-9]/gi, "") || "md";
+  const filename = `${prefix}-${slugify(name)}-${new Date().toISOString().split("T")[0]}.${safeExtension}`;
   if (!output) return join(DEFAULT_OUTPUT_DIR, filename);
   if (existsSync(output) && statSync(output).isDirectory()) return join(output, filename);
   if (output.endsWith("/") || !output.includes(".")) return join(output, filename);
   return output;
 }
 
-function ensureOutputDir() {
-  if (!existsSync(DEFAULT_OUTPUT_DIR)) mkdirSync(DEFAULT_OUTPUT_DIR, { recursive: true });
+function ensureOutputDir(outputPath = DEFAULT_OUTPUT_DIR) {
+  const dir = outputPath.includes(".") ? dirname(outputPath) : outputPath;
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+
+function parseHttpUrl(rawUrl: unknown, fieldName = "url"): URL {
+  if (typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
+    throw new Error(`${fieldName} must be a non-empty string`);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    throw new Error(`${fieldName} must be a valid URL`);
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`${fieldName} must use http or https`);
+  }
+
+  return parsed;
+}
+
+function hostnameMatches(parsed: URL, domains: string[]): boolean {
+  const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+  return domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+}
+
+function requirePlatformUrl(rawUrl: unknown, platform: string, domains: string[]): string {
+  const parsed = parseHttpUrl(rawUrl);
+  if (!hostnameMatches(parsed, domains)) {
+    throw new Error(`${platform} extractor requires a ${domains.join(" or ")} URL`);
+  }
+  return parsed.toString();
 }
 
 // =============================================================================
@@ -191,7 +225,7 @@ export async function extractYouTube(url: string): Promise<YouTubeResult> {
   for (const method of methods) {
     const result = await method();
     if (result.success && result.transcript) {
-      const wordCount = result.transcript.split(/\s+/).filter((w) => w.length > 0).length;
+      const wordCount = result.transcript.split(/\s+/).filter((w: string) => w.length > 0).length;
       return {
         ...metadata,
         duration: metadata.duration ? `${Math.floor(metadata.duration / 60)}m ${metadata.duration % 60}s` : "Unknown",
@@ -251,11 +285,18 @@ export interface RedditResult {
 }
 
 async function resolveRedditShortLink(url: string): Promise<string> {
+  const parsed = parseHttpUrl(url);
+  if (!hostnameMatches(parsed, ["reddit.com"])) throw new Error("Reddit extractor requires a reddit.com URL");
+
   if (!/\/r\/[^\/]+\/s\//.test(url)) return url;
   const response = await fetch(url, { headers: { "User-Agent": REDDIT_USER_AGENT }, redirect: "manual" });
   if (response.status === 301 || response.status === 302) {
     const location = response.headers.get("location");
-    if (location) return location.split("?")[0];
+    if (location) {
+      const redirected = parseHttpUrl(location.split("?")[0]);
+      if (!hostnameMatches(redirected, ["reddit.com"])) throw new Error("Reddit short link redirected outside reddit.com");
+      return redirected.toString();
+    }
   }
   throw new Error("Failed to resolve short link");
 }
@@ -351,7 +392,8 @@ function stripVtt(vtt: string): string {
 }
 
 export async function extractTikTok(url: string, preferLang = "eng"): Promise<TikTokResult> {
-  const response = await fetch(url, { headers: TIKTOK_HEADERS, redirect: "follow" });
+  const tiktokUrl = requirePlatformUrl(url, "TikTok", ["tiktok.com"]);
+  const response = await fetch(tiktokUrl, { headers: TIKTOK_HEADERS, redirect: "follow" });
   const fullUrl = response.url;
   const html = await response.text();
 
@@ -421,7 +463,9 @@ function htmlToMarkdown(html: string): string {
 }
 
 export async function extractArticle(url: string): Promise<ArticleResult> {
-  const response = await fetch(url, {
+  const articleUrl = parseHttpUrl(url).toString();
+
+  const response = await fetch(articleUrl, {
     headers: { "User-Agent": ARTICLE_USER_AGENT, Accept: "text/html" },
     redirect: "follow",
   });
@@ -432,7 +476,7 @@ export async function extractArticle(url: string): Promise<ArticleResult> {
   const finalUrl = response.url;
 
   // Uncomment hidden content for Sports Reference sites
-  if (url.includes("-reference.com")) {
+  if (articleUrl.includes("-reference.com")) {
     html = html.replace(/<!--([\s\S]*?)-->/g, "$1");
   }
 
@@ -442,7 +486,10 @@ export async function extractArticle(url: string): Promise<ArticleResult> {
 
   if (!article) throw new Error("Could not parse article");
 
-  const markdown = htmlToMarkdown(article.content);
+  const articleContent = article.content || article.textContent;
+  if (!articleContent) throw new Error("Parsed article contained no content");
+
+  const markdown = article.content ? htmlToMarkdown(article.content) : articleContent;
   const cleanText = markdown.replace(/\n{3,}/g, "\n\n").trim();
   const wordCount = cleanText.split(/\s+/).filter((w) => w.length > 0).length;
   const domain = new URL(finalUrl).hostname.replace("www.", "");
@@ -464,6 +511,138 @@ function formatArticleResult(result: ArticleResult): string {
 }
 
 // =============================================================================
+// LINK EXTRACTOR
+// =============================================================================
+
+export interface LinkItem {
+  title: string;
+  url: string;
+  domain: string;
+  category: string;
+  originalHref: string;
+}
+
+export interface LinksResult {
+  url: string;
+  totalLinks: number;
+  categories: Record<string, number>;
+  links: LinkItem[];
+  csv: string;
+}
+
+function categorizeLink(linkUrl: URL, baseUrl: URL, text: string): string {
+  const domain = linkUrl.hostname.toLowerCase();
+  const pathname = linkUrl.pathname.toLowerCase();
+  const label = text.toLowerCase();
+
+  if (domain.includes("youtube.com") || domain.includes("youtu.be")) return "video";
+  if (pathname.endsWith(".pdf")) return "document";
+  if (domain.includes("facebook") || domain.includes("twitter") || domain.includes("x.com") || domain.includes("instagram") || domain.includes("linkedin")) return "social";
+  if (label.includes("contact") || pathname.includes("contact")) return "contact";
+  if (label.includes("about") || pathname.includes("about")) return "about";
+  if (domain === baseUrl.hostname.toLowerCase()) return "internal";
+  return "external";
+}
+
+function collectLinksFromHtml(html: string, baseUrl: string, maxLinks: number): LinkItem[] {
+  const $ = cheerio.load(html);
+  const parsedBase = new URL(baseUrl);
+  const seenUrls = new Set<string>();
+  const links: LinkItem[] = [];
+
+  $("a[href]").each((_, element) => {
+    if (links.length >= maxLinks) return false;
+
+    const $link = $(element);
+    const href = $link.attr("href");
+    const text = $link.text().replace(/\s+/g, " ").trim();
+    const title = ($link.attr("title") || "").trim();
+    if (!href || href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) return;
+    if (!text && !title) return;
+
+    try {
+      const parsedUrl = new URL(href, baseUrl);
+      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") return;
+      const normalized = parsedUrl.toString();
+      if (seenUrls.has(normalized)) return;
+      seenUrls.add(normalized);
+
+      links.push({
+        title: text || title || "No title",
+        url: normalized,
+        domain: parsedUrl.hostname.toLowerCase(),
+        category: categorizeLink(parsedUrl, parsedBase, text || title),
+        originalHref: href,
+      });
+    } catch {
+      return;
+    }
+  });
+
+  return links.sort((a, b) => {
+    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function linksToCsv(result: Omit<LinksResult, "csv">): string {
+  const rows = [
+    ["Title", "URL", "Domain", "Category", "Original Href"],
+    ...result.links.map((link) => [link.title, link.url, link.domain, link.category, link.originalHref]),
+  ];
+
+  return rows
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+}
+
+export async function extractLinks(url: string, maxLinks = 250): Promise<LinksResult> {
+  const pageUrl = parseHttpUrl(url).toString();
+  const boundedMaxLinks = Math.min(Math.max(Math.floor(maxLinks || 250), 1), 1000);
+
+  const response = await fetch(pageUrl, {
+    headers: { "User-Agent": ARTICLE_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+    redirect: "follow",
+  });
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType && !contentType.includes("text/html")) {
+    throw new Error(`Expected HTML content, received ${contentType}`);
+  }
+
+  const html = await response.text();
+  const finalUrl = response.url;
+  const links = collectLinksFromHtml(html, finalUrl, boundedMaxLinks);
+  const categories = links.reduce<Record<string, number>>((acc, link) => {
+    acc[link.category] = (acc[link.category] || 0) + 1;
+    return acc;
+  }, {});
+
+  const partial = { url: finalUrl, totalLinks: links.length, categories, links };
+  return { ...partial, csv: linksToCsv(partial) };
+}
+
+function escapeMarkdownTableCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function formatLinksResult(result: LinksResult, format = "markdown"): string {
+  if (format === "json") return JSON.stringify(result, null, 2);
+  if (format === "csv") return result.csv;
+
+  const categorySummary = Object.entries(result.categories)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([category, count]) => `${category}: ${count}`)
+    .join(", ");
+
+  const rows = result.links.map((link) => `| ${escapeMarkdownTableCell(link.title)} | ${escapeMarkdownTableCell(link.category)} | ${escapeMarkdownTableCell(link.url)} |`);
+
+  return `**Links Extracted**\n\n**URL:** ${result.url}\n**Total:** ${result.totalLinks}\n**Categories:** ${categorySummary || "none"}\n\n| Title | Category | URL |\n| --- | --- | --- |\n${rows.join("\n")}`;
+}
+
+// =============================================================================
 // MCP SERVER
 // =============================================================================
 
@@ -473,7 +652,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "extract_youtube",
-      description: "Extract transcript from a YouTube video. Uses Supadata API (fastest) with fallbacks to youtube-transcript npm, HTML scraping, and yt-dlp. Returns video info and full transcript.",
+      description: "Extract transcript from a YouTube video. Uses Supadata API when configured, with fallbacks to youtube-transcript npm and HTML scraping. Returns video info and full transcript.",
       inputSchema: {
         type: "object",
         properties: {
@@ -521,6 +700,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["url"],
       },
     },
+    {
+      name: "extract_links",
+      description: "Extract and categorize links from an HTML page. Returns internal, external, document, video, social, contact, and about links.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "URL of the HTML page to scan" },
+          max_links: { type: "number", description: "Maximum links to return, from 1 to 1000 (default: 250)" },
+          format: { type: "string", enum: ["markdown", "json", "csv"], description: "Output format (default: markdown)" },
+          output: { type: "string", description: "Optional file path to save output" },
+        },
+        required: ["url"],
+      },
+    },
   ],
 }));
 
@@ -556,12 +749,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (args?.output) outputPath = resolveOutputPath(args.output as string, "article", data.title);
         break;
       }
+      case "extract_links": {
+        const data = await extractLinks(args?.url as string, args?.max_links as number);
+        const format = (args?.format as string) || "markdown";
+        result = formatLinksResult(data, format);
+        const extension = format === "csv" || format === "json" ? format : "md";
+        if (args?.output) outputPath = resolveOutputPath(args.output as string, "links", new URL(data.url).hostname, extension);
+        break;
+      }
       default:
         return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
     }
 
     if (outputPath) {
-      ensureOutputDir();
+      ensureOutputDir(outputPath);
       writeFileSync(outputPath, result, "utf-8");
       return { content: [{ type: "text", text: `Saved to ${outputPath}` }] };
     }
@@ -577,6 +778,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // =============================================================================
 
 const cliArgs = process.argv.slice(2);
+const isMainModule = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
 
 function detectPlatform(url: string): string | null {
   if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
@@ -586,8 +788,32 @@ function detectPlatform(url: string): string | null {
   return null;
 }
 
+if (isMainModule && cliArgs[0] === "links") {
+  const url = cliArgs[1];
+  const output = cliArgs[2];
+
+  (async () => {
+    try {
+      const data = await extractLinks(url);
+      const result = output?.endsWith(".csv") ? formatLinksResult(data, "csv") : formatLinksResult(data);
+      const extension = output?.endsWith(".csv") ? "csv" : "md";
+      const outputPath = output ? resolveOutputPath(output, "links", new URL(data.url).hostname, extension) : undefined;
+
+      if (outputPath) {
+        ensureOutputDir(outputPath);
+        writeFileSync(outputPath, result, "utf-8");
+        console.log(`Saved to ${outputPath}`);
+      } else {
+        console.log(result);
+      }
+    } catch (error: any) {
+      console.error("Error:", error.message);
+      process.exit(1);
+    }
+  })();
+}
 // CLI mode
-if (cliArgs.length > 0 && cliArgs[0] !== "--mcp") {
+else if (isMainModule && cliArgs.length > 0 && cliArgs[0] !== "--mcp") {
   const url = cliArgs[0];
   const output = cliArgs[1];
   const platform = detectPlatform(url);
@@ -632,7 +858,7 @@ if (cliArgs.length > 0 && cliArgs[0] !== "--mcp") {
       }
 
       if (outputPath) {
-        ensureOutputDir();
+        ensureOutputDir(outputPath);
         writeFileSync(outputPath, result, "utf-8");
         console.log(`Saved to ${outputPath}`);
       } else {
@@ -645,7 +871,7 @@ if (cliArgs.length > 0 && cliArgs[0] !== "--mcp") {
   })();
 }
 // MCP mode
-else {
+else if (isMainModule) {
   const transport = new StdioServerTransport();
   server.connect(transport).catch(console.error);
 }

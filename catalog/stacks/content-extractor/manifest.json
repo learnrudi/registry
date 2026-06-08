@@ -2,7 +2,7 @@
   "id": "content-extractor",
   "name": "Content Extractor",
   "version": "1.0.0",
-  "description": "Extract content from YouTube, Reddit, TikTok, and web articles",
+  "description": "Extract content from YouTube, Reddit, TikTok, web articles, and link pages",
   "runtime": "node",
   "command": [
     "npx",
@@ -14,7 +14,8 @@
       "extract_youtube",
       "extract_reddit",
       "extract_tiktok",
-      "extract_article"
+      "extract_article",
+      "extract_links"
     ]
   },
   "requires": {
@@ -38,6 +39,7 @@
       "reddit",
       "tiktok",
       "article",
+      "links",
       "transcript",
       "extraction",
       "scraping"

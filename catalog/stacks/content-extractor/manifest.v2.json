@@ -23,7 +23,7 @@
     ]
   },
   "provides": {
-    "tools": ["extract_youtube", "extract_reddit", "extract_tiktok", "extract_article"]
+    "tools": ["extract_youtube", "extract_reddit", "extract_tiktok", "extract_article", "extract_links"]
   },
   "mcp": {
     "transport": "stdio",
@@ -33,11 +33,11 @@
   },
 
   "meta": {
-    "description": "Extract content from YouTube, Reddit, TikTok, and web articles",
+    "description": "Extract content from YouTube, Reddit, TikTok, web articles, and link pages",
     "author": "CO-LLAB",
     "license": "MIT",
     "category": "data-extraction",
-    "tags": ["youtube", "reddit", "tiktok", "article", "transcript"],
+    "tags": ["youtube", "reddit", "tiktok", "article", "links", "transcript"],
     "icon": "📥"
   }
 }
