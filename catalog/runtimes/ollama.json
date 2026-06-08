@@ -32,11 +32,79 @@
     "message": "Ollama installed. To start:\n  ollama serve\n\nFor embeddings:\n  ollama pull nomic-embed-text\n\nFor chat:\n  ollama pull llama3.2"
   },
   "meta": {
-    "homepage": "https://ollama.ai",
-    "docs": "https://github.com/ollama/ollama",
+    "homepage": "https://ollama.com",
+    "docs": "https://docs.ollama.com/",
+    "openaiCompatibilityDocs": "https://docs.ollama.com/openai",
     "models": {
       "embedding": ["nomic-embed-text", "mxbai-embed-large", "all-minilm"],
       "chat": ["llama3.2", "mistral", "codellama", "qwen2.5-coder"]
+    },
+    "localLlm": {
+      "providerFamily": "openai_compatible",
+      "openaiCompatible": true,
+      "defaultBaseUrl": "http://localhost:11434/v1",
+      "dockerHostBaseUrl": "http://host.docker.internal:11434/v1",
+      "apiKeyPolicy": "placeholder-accepted",
+      "placeholderApiKey": "ollama",
+      "modelsEndpoint": "/models",
+      "chatEndpoint": "/chat/completions",
+      "targets": {
+        "mac_host": {
+          "runtimeBaseUrl": "http://localhost:11434/v1",
+          "consumerUrls": {
+            "host_process": "http://localhost:11434/v1",
+            "docker_container": "http://host.docker.internal:11434/v1"
+          },
+          "healthCheck": {
+            "method": "GET",
+            "path": "/models"
+          },
+          "apiKeyPolicy": "placeholder",
+          "placeholderApiKey": "ollama"
+        }
+      },
+      "consumers": {
+        "content-engine": {
+          "defaultConsumerContext": "docker_container",
+          "env": {
+            "ENABLE_LLM": "true",
+            "ENABLE_LOCAL_LLM": "true",
+            "LOCAL_LLM_PROVIDER": "local",
+            "LOCAL_LLM_BASE_URL": "{{baseUrl}}",
+            "LOCAL_LLM_API_KEY": "{{apiKey}}",
+            "LOCAL_LLM_MODEL": "{{model}}"
+          }
+        }
+      },
+      "consumerEnv": {
+        "contentEngine": {
+          "ENABLE_LLM": "true",
+          "ENABLE_LOCAL_LLM": "true",
+          "LOCAL_LLM_PROVIDER": "local",
+          "LOCAL_LLM_BASE_URL": "http://host.docker.internal:11434/v1",
+          "LOCAL_LLM_API_KEY": "ollama",
+          "LOCAL_LLM_MODEL": "<model-tag>"
+        }
+      },
+      "smokeChecks": [
+        {
+          "name": "binary",
+          "command": "ollama --version"
+        },
+        {
+          "name": "host-openai-models",
+          "command": "curl http://localhost:11434/v1/models"
+        },
+        {
+          "name": "docker-host-openai-models",
+          "command": "docker run --rm curlimages/curl:latest http://host.docker.internal:11434/v1/models"
+        }
+      ],
+      "securityNotes": [
+        "Prefer a host-local runtime bind for development.",
+        "Binding Ollama to 0.0.0.0 can expose the model runtime on the LAN; use firewall or trusted-network controls.",
+        "Consumer apps should not log prompts, completions, API keys, or full provider errors."
+      ]
     }
   }
 }
