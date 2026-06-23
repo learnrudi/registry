@@ -1,6 +1,6 @@
 # Google Workspace RUDI Stack
 
-RUDI MCP stack for Gmail, Google Drive, Google Docs, Google Sheets, and Google Calendar workflows.
+RUDI MCP stack for Gmail, Google Drive, Google Docs, Google Sheets, Google Calendar, and Google Tasks workflows.
 
 This stack owns Google Workspace OAuth, account selection, and direct Workspace API calls. Other stacks should call this stack for Gmail or Drive access instead of handling Google OAuth themselves.
 
@@ -12,13 +12,14 @@ This stack owns Google Workspace OAuth, account selection, and direct Workspace 
 - Docs tools: read, create, insert image
 - Drive tools: list, upload, create folder, move, download, make public, delete
 - Calendar tools: list, create, quick add, delete
+- Tasks tools: list task lists, list tasks, create, update, complete, delete
 
 ## Requirements
 
 - Node.js 20+
 - RUDI installed and integrated with your agent
 - A Google Cloud OAuth client for the Google account or Workspace tenant
-- Enabled Google APIs for the tools you plan to use: Gmail, Drive, Docs, Sheets, and Calendar
+- Enabled Google APIs for the tools you plan to use: Gmail, Drive, Docs, Sheets, Calendar, and Tasks
 
 ## OAuth Credentials
 
@@ -32,6 +33,8 @@ The stack reads OAuth client credentials from the RUDI secret `GOOGLE_CREDENTIAL
 The credentials JSON must contain either an `installed` or `web` OAuth client with `client_id` and `client_secret`.
 
 Do not paste OAuth client secrets, refresh tokens, access tokens, or connection strings into agent messages, logs, docs, or committed files.
+
+Do not copy credentials or tokens into `~/.rudi/stacks/google-workspace/`; installed stack source may be replaced during reinstall or update. Use `rudi secrets set GOOGLE_CREDENTIALS` for OAuth client credentials and let `rudi auth` write per-account tokens under RUDI state.
 
 ## RUDI Setup
 
@@ -67,6 +70,7 @@ The requested scopes are:
 - `https://www.googleapis.com/auth/documents`
 - `https://www.googleapis.com/auth/spreadsheets`
 - `https://www.googleapis.com/auth/calendar`
+- `https://www.googleapis.com/auth/tasks`
 
 ## State
 
@@ -88,7 +92,7 @@ State files are written with private file permissions where the filesystem suppo
 
 Use `account_current` before acting when account context matters. Use `account_switch` or pass the tool's account argument when working across multiple Google accounts.
 
-Ask for explicit user confirmation before sending email, sending a draft, deleting messages, deleting Drive files, making Drive files public, or creating/deleting calendar events.
+Ask for explicit user confirmation before sending email, sending a draft, deleting messages, deleting Drive files, making Drive files public, creating/deleting calendar events, or creating/updating/completing/deleting tasks.
 
 If a tool reports that authentication is missing, run:
 
@@ -111,6 +115,7 @@ npm install
 npm run build
 npm run test:gmail
 npm run test:calendar
+npm run test:tasks
 npm run test:state
 ```
 

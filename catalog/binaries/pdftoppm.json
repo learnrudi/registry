@@ -1,0 +1,13 @@
+{
+  "id": "binary:pdftoppm",
+  "name": "pdftoppm",
+  "version": "system",
+  "description": "PDF page renderer from Poppler",
+  "category": "document-processing",
+  "installType": "system",
+  "binary": "pdftoppm",
+  "bins": ["pdftoppm"],
+  "managed": false,
+  "checkCommand": "pdftoppm -v",
+  "instructions": "Install Poppler with brew install poppler on macOS, or install poppler-utils on Linux."
+}

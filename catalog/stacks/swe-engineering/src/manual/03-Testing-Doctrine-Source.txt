@@ -1,0 +1,150 @@
+ARCHIVAL NOTE
+
+This file is preserved as source material.
+
+The canonical combined doctrine document is `01-Master-Engineering-Doctrine.txt`, which now
+includes this testing content in Appendix C.
+
+[2026-03-16]
+
+Here’s a draft doctrine you could use as an internal engineering standard.
+
+## Software Testing Doctrine
+
+### Purpose
+
+Our testing strategy exists to maximize confidence per unit of engineering effort. We do not aim to test everything. We aim to test the parts of the system whose failure would be subtle, costly, or difficult to detect before reaching users.
+
+### Core principles
+
+1. **Test behavior, not implementation.**
+   Tests should verify what the system does from the perspective of a caller, user, or dependent module. Tests that lock in internal structure create brittle suites and punish refactoring.
+
+2. **Favor deterministic, high-signal tests.**
+   The best tests are fast, stable, and specific about what broke. A small number of trustworthy tests is better than a large number of flaky or vague ones.
+
+3. **Put most tests where failures are silent and expensive.**
+   Wrong data, wrong permissions, wrong calculations, wrong state transitions, and wrong normalization are higher priority than failures that are visually obvious during development.
+
+4. **Choose the lowest test level that can prove the behavior.**
+   Use unit tests for pure logic. Use integration or component tests when correctness depends on wiring, state, side effects, or rendering behavior. Use end-to-end tests only for critical user journeys.
+
+5. **Every test must earn its maintenance cost.**
+   A test is valuable only if it materially improves confidence. Low-signal, redundant, or fragile tests should be avoided or removed.
+
+### What we unit test
+
+We unit test code that is deterministic and logic-bearing, especially when defects are easy to miss in manual review.
+
+This includes:
+
+* pure functions and transformations
+* validation and parsing
+* calculations, formatting, and mapping
+* business rules
+* permission logic and eligibility checks
+* reducers, state machines, and transition guards
+* shared utilities used across the codebase
+* normalization and adapter boundaries
+* custom hooks that derive, transform, filter, or normalize data
+
+### What we usually do not unit test
+
+We generally avoid unit tests for code that adds little independent value or mostly re-tests framework behavior.
+
+This includes:
+
+* framework internals
+* trivial pass-through wrappers
+* simple presentational components with no meaningful branching
+* implementation details that are invisible to callers
+
+That said, UI behavior is not exempt from testing. Conditional rendering, disabled states, error states, role-based controls, and form interactions often deserve component or integration tests because they encode real product behavior.
+
+### The test pyramid we follow
+
+**Unit tests** protect logic.
+They should make up the majority of the suite.
+
+**Integration/component tests** protect wiring and behavior across boundaries.
+They should cover the interaction between UI, state, network boundaries, persistence layers, and domain rules.
+
+**End-to-end tests** protect a small number of mission-critical paths.
+They should verify that the system works in production-like conditions for the flows that matter most to the business.
+
+We do not use E2E tests as a substitute for missing unit and integration coverage.
+
+### Prioritization rules
+
+When deciding whether something needs a test, ask:
+
+* If this breaks, will the failure be silent?
+* If this breaks, will the cost be high?
+* Is the logic likely to change?
+* Is the code reused in many places?
+* Is this a boundary where raw data becomes app semantics?
+* Would a bug here escape local manual testing?
+
+The more “yes” answers, the stronger the case for a test.
+
+### Coverage philosophy
+
+Coverage is a diagnostic, not a goal.
+A high percentage can hide weak tests, and a lower percentage can still represent strong protection if the highest-risk behavior is well covered.
+
+We do not optimize for arbitrary coverage targets alone. We optimize for meaningful risk reduction.
+
+### Quality bar for tests
+
+A good test should be:
+
+* fast
+* deterministic
+* easy to understand
+* precise about failure
+* resilient to refactors
+* narrowly scoped to one behavior
+
+A bad test is one that is flaky, overly broad, tightly coupled to internals, or so opaque that engineers stop trusting it.
+
+### Rules for business-critical systems
+
+The following behaviors must have explicit tests at an appropriate level:
+
+* authorization and permission checks
+* money movement, pricing, billing, and payment state
+* status transitions and workflow gates
+* data normalization and schema adaptation
+* validation rules that protect correctness or compliance
+* user-visible error handling for critical paths
+
+### Refactoring rule
+
+Refactoring should not require rewriting behavior-level tests unless behavior changed.
+If tests break because code was reorganized but behavior stayed the same, the tests were probably too coupled to implementation.
+
+### PR rule
+
+Every pull request should answer one question clearly:
+**What new behavior or risk is being protected by these tests?**
+
+If the answer is unclear, the tests are probably not the right ones.
+
+### Operational rule
+
+When a bug reaches production, we add or strengthen the lowest-level test that would have caught it cheaply and reliably.
+Production incidents should improve the suite, not just patch the code.
+
+---
+
+## Compact version for an engineering handbook
+
+**We test what is costly to get wrong and hard to notice when broken.**
+Most of our tests should live at the logic layer: transformations, rules, permissions, normalization, and transitions. We use integration tests for behavior that depends on wiring or UI state, and a small number of E2E tests for critical workflows. We avoid brittle tests that verify internals rather than outcomes. Coverage is a signal, not a target. Every test must justify its maintenance cost by increasing confidence in meaningful behavior.
+
+## One-line doctrine
+
+**Test the logic that can fail silently, the workflows that matter commercially, and the boundaries where systems reinterpret data.**
+
+#SWE #SoftwareTesting #EngineeringDoctrine #UnitTesting #IntegrationTesting #E2E
+Estimated tokens used so far: ~900

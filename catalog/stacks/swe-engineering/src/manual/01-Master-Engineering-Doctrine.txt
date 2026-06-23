@@ -1,0 +1,1506 @@
+---
+title: Engineering Doctrine for Sound Practical Software Development
+canonical_filename: 01-Master-Engineering-Doctrine.txt
+role: canonical_master_doc
+status: active
+goal: >
+  Consolidate the full engineering doctrine, testing doctrine, and debugging
+  doctrine into a single reference document.
+source_docs_merged:
+  - original SWE doctrine content
+  - 03-Testing-Doctrine-Source.txt
+  - 04-Debugging-Doctrine-Source.txt
+supersedes:
+  - legacy summary master doctrine
+  - standalone testing doctrine as a canonical document
+  - standalone debugging doctrine as a canonical document
+contains:
+  - core_engineering_principles
+  - required_review_dimensions
+  - one_page_doctrine_statement
+  - pr_code_review_checklist
+  - engineering_review_questions
+  - scoring_rubric
+  - example_component_review
+  - short_form_pr_template
+  - incident_response_and_postmortem_framework
+  - appendix_a_database_engineering
+  - appendix_b_frontend_engineering
+  - appendix_c_software_testing
+  - appendix_d_debugging
+appendices:
+  A: Database Engineering Discipline
+  B: Frontend Engineering Discipline
+  C: Software Testing Discipline
+  D: Debugging Discipline
+primary_uses:
+  - architecture_and_design_review
+  - implementation_quality_bar
+  - pr_review
+  - testing_strategy
+  - debugging_protocol
+  - incident_learning
+quick_answer:
+  comprehensive: true
+  optimized_for_daily_scan: false
+  intended_shape: full_reference
+canonical_note: >
+  This is the single combined doctrine document for this directory. The
+  standalone testing and debugging files remain as archival source material,
+  but this file is the canonical source of truth.
+---
+
+Engineering Doctrine for Sound Practical Software Development
+Purpose
+We do not evaluate software solely by whether it appears to work in nominal conditions. We evaluate it by whether its behavior remains:
+	•	correct
+	•	legible
+	•	bounded
+	•	observable
+	•	recoverable
+under realistic operating conditions.
+Our engineering standard is therefore not just "working code," but reliable systems design: software that preserves integrity under change, concurrency, failure, scale, and imperfect inputs.
+
+I. Core Engineering Principles
+1. Correctness before cleverness
+Code must first be correct, understandable, and stable before it is optimized or abstracted.
+Engineering implication:
+	•	Prefer explicitness over magic
+	•	Prefer boring correctness over elegant fragility
+	•	Avoid introducing complexity unless it solves a demonstrated need
+Standard
+Every critical component should be explainable in plain English:
+	•	what it does
+	•	what assumptions it makes
+	•	what invariants it preserves
+	•	how it fails
+
+2. Invariants must be explicit
+Every non-trivial system has conditions that must always remain true. These are invariants, and they should be documented in code, comments, tests, or design docs.
+Examples
+	•	Every item in the cache map must exist in the linked list
+	•	A job cannot move from cancelled back to running
+	•	A request cannot be dequeued twice
+	•	A persisted record must have a unique id and valid status
+Standard
+For any stateful or concurrent component, ask:
+	•	What must always be true before mutation?
+	•	What must always be true after mutation?
+	•	Where is invariant preservation enforced?
+If invariants are unclear, the implementation is not sufficiently engineered.
+
+3. State transitions must be intentional
+Systems are not just collections of functions; they are machines that move through states.
+Standard
+Stateful components must have:
+	•	explicit state definitions
+	•	valid transition paths
+	•	rejection of illegal transitions
+	•	idempotent or safe handling of duplicate actions where relevant
+Example
+A task system may allow:
+	•	pending → running
+	•	running → completed
+	•	running → failed
+	•	pending → cancelled
+But not:
+	•	completed → running
+	•	failed → pending without an explicit retry policy
+
+4. Boundaries are where discipline begins
+All external inputs are untrusted until validated.
+This includes:
+	•	API requests
+	•	file contents
+	•	database reads
+	•	event payloads
+	•	CLI arguments
+	•	environment variables
+	•	outputs from other services
+	•	outputs from language models
+Standard
+Validation, normalization, and contract enforcement should occur at system boundaries, not deep inside business logic.
+Boundary discipline includes:
+	•	schema validation
+	•	type validation
+	•	normalization
+	•	null/empty handling
+	•	enum checking
+	•	range checking
+	•	malformed payload rejection
+
+5. Concurrency must be explicit, bounded, and safe
+Parallelism is not free. It creates coordination risk, state corruption risk, fairness issues, and failure complexity.
+Standard
+Where concurrency exists, the codebase must define:
+	•	what can run in parallel
+	•	what state is shared
+	•	how shared state is protected
+	•	whether concurrency is bounded
+	•	how timeouts and cancellation work
+	•	what retry semantics exist
+Engineering expectation
+A component is not concurrency-safe merely because failures are rare. It is concurrency-safe only when correctness is preserved under interleaving, retries, race-prone timing, and partial completion.
+
+6. Failure behavior must be designed, not discovered
+Every production system fails. Mature engineering assumes failure and shapes it.
+Standard
+Each critical component should have defined behavior for:
+	•	invalid input
+	•	dependency failure
+	•	timeout
+	•	partial completion
+	•	duplicate work
+	•	overload
+	•	unavailable resources
+	•	stale or conflicting state
+Engineering objective
+When failure occurs:
+	•	errors should be visible
+	•	state should remain consistent
+	•	blast radius should be limited
+	•	recovery should be possible
+	•	unrelated work should continue where feasible
+
+7. Backpressure is mandatory for load-bearing systems
+A system without backpressure is a system that converts load into collapse.
+Standard
+Any service with queues, async work, or external requests must define:
+	•	max concurrency
+	•	queue size or practical limits
+	•	rejection or shedding policy
+	•	timeout behavior
+	•	retry limits
+	•	degradation strategy
+Examples
+	•	stop accepting requests after queue threshold
+	•	downgrade optional processing
+	•	shed low-priority traffic
+	•	flush partial batch instead of holding indefinitely
+	•	reject work with a clear error rather than silently stalling
+
+8. Observability is part of the implementation
+If the system cannot explain itself in production, it is under-engineered.
+Standard
+Critical workflows must emit:
+	•	structured logs
+	•	meaningful metrics
+	•	request/task correlation ids
+	•	error context
+	•	latency measurements
+	•	resource pressure signals
+Engineering objective
+An engineer responding to production issues should be able to answer:
+	•	what happened
+	•	where it happened
+	•	how often it happens
+	•	what input or condition triggered it
+	•	what users were affected
+	•	whether the problem is transient, systemic, or load-related
+without code archaeology as the first move.
+
+9. Performance must be modeled realistically
+Performance work must reflect actual workload shape, not toy assumptions.
+Standard
+Components should be reviewed for:
+	•	true workload unit
+	•	bottleneck behavior
+	•	tail latency behavior
+	•	skewed inputs
+	•	queueing effects
+	•	pathological worst cases
+	•	throughput/latency tradeoffs
+Example
+In LLM systems, raw request count is often the wrong unit. Token count, context length, and active generation time are closer to the true cost model.
+
+10. Separation of concerns is a reliability tool
+Modularity is not just aesthetic. It is how complexity is contained.
+Standard
+Parsing, validation, orchestration, state mutation, policy, I/O, and rendering should not be unnecessarily tangled.
+A sound system separates:
+	•	what to do
+	•	when to do it
+	•	how to execute it
+	•	how to observe it
+	•	how to recover when it fails
+
+11. Tests must verify reality, not optimism
+Tests are not present to prove that demos work. They are present to verify the system's claims.
+Standard
+The test suite should cover:
+	•	happy paths
+	•	edge cases
+	•	negative paths
+	•	invariant preservation
+	•	failure and retry behavior
+	•	concurrency-sensitive logic where relevant
+	•	integration boundaries
+	•	regression cases from real failures
+
+12. Simplicity is an operational strategy
+The simplest system that meets current requirements is usually the most resilient one.
+Standard
+We do not add abstraction, extensibility, generality, or configurability without a concrete use case, clear ownership, and real expected value.
+Useful phrase: Flexibility we do not need yet is complexity we begin paying for immediately.
+
+13. Dependencies must be managed deliberately
+Every external dependency is a trust boundary, a versioning risk, and a potential supply chain vulnerability.
+Standard
+Dependency management requires:
+	•	pinned versions for all production dependencies
+	•	awareness of transitive dependency trees
+	•	regular vulnerability scanning and audit
+	•	a clear policy for when and why to take on new dependencies
+	•	documented upgrade paths for critical libraries
+	•	fallback or mitigation plans for abandoned or compromised packages
+Engineering expectation
+A dependency is not free just because it is open source. Every import is a commitment to track, update, audit, and potentially replace that code. The cost of a dependency includes not only its direct behavior but also its upgrade cadence, its own dependency tree, its maintainer health, and its attack surface.
+
+14. Configuration must be explicit and safe
+Configuration is code that changes without a deployment. It deserves the same rigor.
+Standard
+Configuration management requires:
+	•	clear separation of deploy-time config, runtime config, and feature flags
+	•	schema validation for all configuration values
+	•	safe defaults that fail closed, not open
+	•	secret rotation support without redeployment
+	•	config drift detection between environments
+	•	audit trails for configuration changes
+	•	feature flag hygiene: flags must have owners, expiration dates, and cleanup plans
+Engineering expectation
+An engineer should be able to determine the full effective configuration of any running instance without reading source code. Configuration that silently changes system behavior without visibility is a latent incident.
+
+15. Backward compatibility is a deployment constraint
+Systems do not upgrade atomically. During any rollout, old and new code coexist, old and new data coexist, and old and new clients coexist.
+Standard
+Changes to shared interfaces must account for:
+	•	API versioning strategy (URL path, header, or content negotiation)
+	•	schema evolution for persisted data (additive changes preferred, breaking changes gated)
+	•	wire format compatibility across service versions during rolling deploys
+	•	deprecation policy with timelines, migration guides, and sunset enforcement
+	•	consumer notification when interfaces change
+Engineering expectation
+A breaking change that lacks a migration path is not a feature — it is an incident waiting for a deploy. Every interface change should answer: what happens to the caller who hasn't upgraded yet?
+
+16. Distributed system behavior must be addressed explicitly
+When components communicate over a network, new failure modes emerge that do not exist in single-process systems. Ignoring them does not eliminate them.
+Standard
+Distributed components must account for:
+	•	network partitions and their effect on availability vs. consistency
+	•	consistency model choice (strong, eventual, causal) and its implications for correctness
+	•	idempotency keys for cross-service operations
+	•	clock skew and its impact on ordering, TTLs, and lease expiration
+	•	distributed tracing with propagated correlation ids across service boundaries
+	•	exactly-once vs. at-least-once vs. at-most-once delivery semantics, chosen intentionally
+	•	split-brain scenarios and how they are detected and resolved
+Engineering expectation
+"It works when everything is up" is not a design. The system's behavior during partial failure — when one service is slow, one replica is stale, or one network link is degraded — must be understood and documented before the component is considered production-ready.
+
+17. Data has a lifecycle
+Data that grows without bound eventually becomes the system's dominant cost, its primary operational risk, and its most difficult migration problem.
+Standard
+Every persisted data store must define:
+	•	retention policy: how long data lives and why
+	•	TTL or expiration strategy for ephemeral data
+	•	archival path for data that must be preserved but not actively served
+	•	cleanup mechanisms: automated deletion, compaction, or rollover
+	•	growth projections and storage cost modeling
+	•	hot/warm/cold tiering where access patterns justify it
+Engineering expectation
+"We keep everything forever" is not a strategy. It is deferred work with compounding cost. Data retention decisions should be made at design time, not after the disk fills up.
+
+18. Cost is an engineering constraint
+Infrastructure has a price. Ignoring it does not make it free — it makes it invisible until it is urgent.
+Standard
+Production systems should be reviewed for:
+	•	resource efficiency: CPU, memory, storage, and network relative to useful work performed
+	•	cost per unit of work (per request, per user, per job, per GB stored)
+	•	idle cost: what the system costs when it is doing nothing
+	•	scaling cost curve: whether costs grow linearly, super-linearly, or unpredictably with load
+	•	waste identification: over-provisioned resources, orphaned infrastructure, unused storage
+	•	cost attribution: ability to trace spend back to teams, features, or customers
+Engineering expectation
+An engineer should be able to explain, in approximate terms, what a component costs to run and what drives that cost. Cost surprises in production are engineering failures, not business problems.
+
+19. Privacy and data protection are engineering responsibilities
+User data is not just another input. It carries legal obligations, ethical expectations, and trust implications that constrain how it can be collected, stored, processed, and shared.
+Standard
+Systems that handle user data must address:
+	•	data minimization: collect only what is needed, retain only what is justified
+	•	PII identification and classification across all data stores
+	•	access control: who can read, write, and export user data, and under what conditions
+	•	audit trails for access to sensitive data
+	•	right-to-deletion support: ability to purge a user's data completely and verifiably
+	•	data residency and jurisdiction constraints where applicable
+	•	anonymization or pseudonymization for analytics and non-production environments
+	•	breach response: how data exposure is detected, contained, and communicated
+Engineering expectation
+Privacy compliance is not a legal team's problem bolted on after launch. It is a design constraint that affects schema design, access patterns, logging practices, and data flow architecture from the start.
+
+20. Incidents must feed back into engineering
+A system that fails the same way twice has an engineering process problem, not just a code problem.
+Standard
+The incident lifecycle must include:
+	•	clear escalation paths with defined severity levels
+	•	blameless postmortems for significant incidents
+	•	root cause analysis that distinguishes contributing factors from triggers
+	•	concrete action items with owners and deadlines
+	•	regression tests that encode each failure mode permanently
+	•	doctrine and checklist updates when incidents reveal gaps in standards
+	•	trend tracking to identify systemic patterns across incidents
+Engineering expectation
+Postmortems are not bureaucratic exercises. They are the mechanism by which the organization learns. An incident without a postmortem is an incident that will repeat. A postmortem without follow-through is theater.
+
+21. Developer experience is a productivity multiplier
+A codebase that is difficult to set up, slow to build, or painful to test imposes a hidden tax on every engineer, every day.
+Standard
+The development environment should provide:
+	•	a documented, reproducible local setup that works in under 30 minutes
+	•	fast feedback loops: builds, tests, and linters that run in seconds to low minutes
+	•	CI pipeline health as a tracked metric, not an afterthought
+	•	clear contribution guides for new engineers
+	•	self-service tooling for common tasks (creating services, running migrations, deploying to staging)
+	•	documentation standards that are enforced, not aspirational
+Engineering expectation
+If onboarding a new engineer takes days of tribal knowledge transfer, the codebase is under-documented. If the CI pipeline is routinely broken or slow, velocity is being taxed at the source. Developer experience is not a luxury — it is infrastructure.
+
+22. Accessibility and internationalization are design constraints
+If a system serves users, it must serve users as they are — not only users who share the developers' language, locale, and physical abilities.
+Standard
+User-facing systems must address:
+	•	accessibility (a11y): semantic HTML, keyboard navigation, screen reader support, sufficient color contrast, ARIA attributes where needed
+	•	internationalization (i18n): externalized strings, locale-aware formatting for dates/numbers/currency, RTL layout support where relevant
+	•	character encoding: UTF-8 as the default everywhere, with explicit handling of encoding boundaries
+	•	content localization workflow: how translations are produced, reviewed, and deployed
+	•	accessibility testing as part of the CI pipeline or QA process, not a one-time audit
+Engineering expectation
+Accessibility and internationalization are not features to be added later. They are architectural decisions that become exponentially more expensive to retrofit. A system that only works in one language or for sighted mouse users has an implicit, unexamined scope limitation.
+
+II. Required Review Dimensions for Any Critical Component
+Any non-trivial service, module, worker, scheduler, API handler, queue consumer, or stateful subsystem should be reviewable across these dimensions.
+A. Correctness
+	•	What problem does this component solve?
+	•	What are its invariants?
+	•	What assumptions does it make?
+	•	Are edge cases handled explicitly?
+	•	Is state mutation correct and atomic where needed?
+B. Interface and Boundary Discipline
+	•	What are the inputs and outputs?
+	•	Are contracts explicit?
+	•	Are inputs validated at the boundary?
+	•	Are types/schema/constraints enforced?
+	•	Are external dependencies treated as unreliable?
+C. Concurrency and Coordination
+	•	What runs concurrently?
+	•	What state is shared?
+	•	How is shared state synchronized?
+	•	Is fanout bounded?
+	•	What happens under duplicate, delayed, or retried execution?
+D. Failure Handling and Resilience
+	•	What are the known failure modes?
+	•	How does the component degrade?
+	•	Does partial failure corrupt state?
+	•	Does it retry? If so, how safely?
+	•	What is the timeout/cancellation behavior?
+E. Performance and Capacity
+	•	What is the cost model?
+	•	What is the bottleneck?
+	•	How does it behave under skewed or bursty load?
+	•	Is backpressure present?
+	•	Is performance measured with the right unit?
+F. Observability and Operability
+	•	What logs, metrics, and traces exist?
+	•	Can we diagnose slowdowns and failures?
+	•	Do signals reflect machine health or user pain?
+	•	Is context preserved across async boundaries?
+G. Design Quality and Maintainability
+	•	Are responsibilities separated?
+	•	Is the component understandable in isolation?
+	•	Are names and interfaces clear?
+	•	Does complexity feel justified?
+	•	Could another engineer safely modify this?
+H. Verification
+	•	What is tested?
+	•	Which invariants are verified?
+	•	Are negative paths covered?
+	•	Are integration boundaries exercised?
+	•	Are previous bug classes permanently guarded against?
+I. Dependency Health
+	•	Are dependencies pinned and audited?
+	•	Are transitive dependencies understood?
+	•	Is the upgrade path for critical dependencies documented?
+	•	Are there known vulnerabilities in the current dependency tree?
+J. Compatibility and Evolution
+	•	Does this change break any existing consumers?
+	•	Is there a migration path for affected data or interfaces?
+	•	Can old and new versions coexist during rollout?
+	•	Are deprecations communicated and scheduled?
+K. Data and Privacy
+	•	What user data does this component access or store?
+	•	Is data minimization applied?
+	•	Are access controls and audit trails in place?
+	•	Can user data be deleted on request?
+	•	Are non-production environments using anonymized data?
+L. Cost and Resource Efficiency
+	•	What does this component cost to run?
+	•	What drives the cost?
+	•	Are there obvious waste patterns?
+	•	Does cost scale acceptably with load?
+
+III. One-Page Engineering Doctrine Statement
+This is the concise version you could place in an internal handbook.
+Engineering Doctrine
+We build systems that remain correct, diagnosable, and recoverable under realistic operating conditions.
+This means:
+	•	We make invariants explicit
+	•	We validate inputs at boundaries
+	•	We design for concurrency, not around it
+	•	We treat failure paths as first-class design concerns
+	•	We bound work, queues, and resource use
+	•	We instrument systems so operators can understand them
+	•	We optimize using real cost models, not proxies that hide user pain
+	•	We separate concerns so complexity remains local
+	•	We test not just the happy path, but the edge, failure, and recovery paths
+	•	We prefer simple systems whose behavior we can explain, maintain, and trust
+	•	We manage dependencies deliberately and keep them audited
+	•	We treat configuration as code that requires validation and versioning
+	•	We design for backward compatibility across rollouts
+	•	We address distributed system failure modes explicitly
+	•	We define data lifecycles and enforce retention policies
+	•	We treat infrastructure cost as an engineering constraint
+	•	We build privacy and data protection into design, not after launch
+	•	We learn from incidents and encode that learning permanently
+	•	We invest in developer experience as core infrastructure
+	•	We design for all users from the start, not as a retrofit
+The standard for production code is not "it worked once." The standard is: it continues to behave coherently when load rises, timing shifts, inputs degrade, and dependencies fail.
+
+IV. Comprehensive PR / Code Review Checklist
+This is the practical checklist version. You could use this in pull requests, architecture reviews, or engineering QA.
+1. Problem Definition
+	•	Is the purpose of the change clear?
+	•	Is the problem being solved stated explicitly?
+	•	Does the implementation match the stated intent?
+	•	Is the scope controlled, or is unrelated complexity being introduced?
+2. Correctness
+	•	Are the core invariants of this component known?
+	•	Does the code preserve those invariants across all mutation paths?
+	•	Are edge cases explicitly handled?
+	•	Are assumptions documented or encoded?
+	•	Are state transitions legal, explicit, and enforced?
+	•	Is duplicate execution safe where relevant?
+	•	Are operations atomic where correctness depends on atomicity?
+3. Data Structures and Algorithmic Fit
+	•	Are the chosen data structures appropriate for expected usage?
+	•	Does the algorithm reflect the actual access/update pattern?
+	•	Are complexity characteristics understood and acceptable?
+	•	Are there hidden O(n) or worse paths in critical logic?
+	•	Does the implementation degrade acceptably under larger inputs?
+4. Input Validation and Boundary Safety
+	•	Are external inputs validated at the boundary?
+	•	Are null, empty, malformed, and out-of-range values handled?
+	•	Are schemas or contracts enforced?
+	•	Is normalization isolated from business logic?
+	•	Are calls to external systems guarded against bad assumptions?
+5. Concurrency and Coordination
+	•	Does this code run in parallel with anything else?
+	•	Is shared mutable state present?
+	•	If yes, is it synchronized explicitly and minimally?
+	•	Is concurrency bounded?
+	•	Are timeouts defined?
+	•	Is cancellation supported where necessary?
+	•	Are retries safe and idempotent?
+	•	Could race conditions cause duplicate work, corruption, or missed work?
+	•	Are critical sections small and comprehensible?
+6. Async / Queue / Worker Behavior
+	•	Are queue semantics clear?
+	•	Is there a maximum queue size or effective bound?
+	•	What prevents infinite buildup?
+	•	Is there a backpressure or shedding policy?
+	•	Are long-running jobs observable?
+	•	Can stuck work be detected and recovered?
+	•	Is ordering important, and if so is it guaranteed?
+	•	Does retry behavior preserve correctness?
+7. Failure Handling
+	•	What happens when dependencies fail?
+	•	What happens when input validation fails?
+	•	What happens on timeout?
+	•	What happens on partial completion?
+	•	What happens if cleanup also fails?
+	•	Does the system fail open or fail closed, and is that intentional?
+	•	Is user-visible impact acceptable and explicit?
+	•	Are error paths tested?
+8. State Management
+	•	Is state local, shared, persisted, cached, or derived?
+	•	Is the source of truth obvious?
+	•	Can state drift between layers or stores?
+	•	Are reads/writes coordinated safely?
+	•	Are stale reads acceptable or dangerous?
+	•	Is cache invalidation correct enough for the use case?
+	•	Are state transitions logged or traceable where needed?
+9. Observability
+	•	Are logs structured and useful?
+	•	Do logs include identifiers for tracing requests/tasks/jobs?
+	•	Are important events logged once, not noisily repeated?
+	•	Are error logs actionable?
+	•	Are critical metrics emitted?
+	•	Are latency and throughput instrumented?
+	•	Are failure rate and timeout rate visible?
+	•	Does the component expose enough context for on-call debugging?
+10. Performance and Capacity
+	•	What is the real workload unit here?
+	•	Are we measuring the right thing?
+	•	What is the bottleneck under load?
+	•	Are latency/throughput tradeoffs explicit?
+	•	Are large/skewed/pathological inputs considered?
+	•	Is batching used appropriately?
+	•	Could one slow request block many fast ones?
+	•	Is memory growth bounded?
+	•	Are resource limits enforced?
+	•	Are scale triggers based on meaningful signals?
+11. API / Interface Quality
+	•	Are function/module/service responsibilities clear?
+	•	Are interfaces too broad?
+	•	Are names precise?
+	•	Is the abstraction level consistent?
+	•	Are hidden side effects minimized?
+	•	Is policy separated from mechanism?
+	•	Is there unnecessary coupling across modules?
+12. Security / Access / Integrity
+	•	Are permissions/authorization checks present where needed?
+	•	Are secrets/config handled safely?
+	•	Are dangerous operations auditable?
+	•	Is untrusted input isolated before execution?
+	•	Could the change widen access or data exposure accidentally?
+	•	Are destructive operations guarded?
+13. Testing Depth
+	•	Are happy paths tested?
+	•	Are edge cases tested?
+	•	Are negative/failure paths tested?
+	•	Are invariants tested?
+	•	Are regressions from previous incidents encoded in tests?
+	•	Are integration tests present where boundary behavior matters?
+	•	Are concurrency-sensitive behaviors tested or reasoned about explicitly?
+	•	Are tests readable enough to explain intended behavior?
+14. Operational Readiness
+	•	Can this be rolled out safely?
+	•	Is there a migration plan if schema/state changes are involved?
+	•	Is rollback possible?
+	•	Are feature flags needed?
+	•	Is there a clear ownership path if this fails in production?
+	•	Are alert conditions known?
+	•	Is documentation updated?
+15. Complexity Audit
+	•	Is this the simplest design that satisfies the requirement?
+	•	Has speculative abstraction been introduced?
+	•	Are we paying for flexibility we do not yet need?
+	•	Can the design be explained simply?
+	•	Could a new engineer reason about this without tribal knowledge?
+	•	Is the complexity localized or leaking across the codebase?
+16. Dependency and Supply Chain Safety
+	•	Are new dependencies justified and reviewed?
+	•	Are all dependencies pinned to specific versions?
+	•	Has the transitive dependency tree been inspected?
+	•	Are there known vulnerabilities in any dependency?
+	•	Is there a plan if a critical dependency is abandoned or compromised?
+	•	Are license obligations satisfied?
+17. Configuration Safety
+	•	Are new configuration values validated against a schema?
+	•	Do configuration changes have safe defaults?
+	•	Are secrets rotatable without redeployment?
+	•	Are feature flags owned, documented, and scheduled for cleanup?
+	•	Can the effective configuration of a running instance be inspected?
+	•	Are configuration changes auditable?
+18. Backward Compatibility and Versioning
+	•	Does this change break any existing API consumers?
+	•	Is the data schema change additive or breaking?
+	•	Can old and new code coexist during rolling deployment?
+	•	Is there a migration path for affected consumers or data?
+	•	Are deprecated interfaces communicated with timelines?
+	•	Have wire format changes been tested across versions?
+19. Distributed System Concerns
+	•	Are network failure modes accounted for?
+	•	Is the consistency model appropriate and documented?
+	•	Are cross-service calls idempotent with idempotency keys?
+	•	Is distributed tracing propagated across boundaries?
+	•	Are delivery semantics chosen intentionally?
+	•	Is clock skew accounted for in any time-dependent logic?
+	•	Are split-brain or partition scenarios addressed?
+20. Data Lifecycle and Retention
+	•	Is there a defined retention policy for data this change creates or modifies?
+	•	Are TTLs or expiration mechanisms in place for ephemeral data?
+	•	Is there a cleanup or archival path?
+	•	Are storage growth projections understood?
+	•	Is old data distinguishable from current data?
+21. Cost and Resource Efficiency
+	•	What is the infrastructure cost implication of this change?
+	•	Does cost scale linearly with load?
+	•	Are there idle costs or over-provisioned resources?
+	•	Has resource consumption been profiled under realistic load?
+	•	Are expensive operations (network calls, large allocations, disk writes) minimized?
+22. Privacy and Data Protection
+	•	Does this change introduce or modify handling of user data?
+	•	Is data minimization applied — are we collecting only what is needed?
+	•	Are access controls in place for sensitive data?
+	•	Is there an audit trail for access to PII or sensitive records?
+	•	Can user data be deleted completely on request?
+	•	Are non-production environments using anonymized or synthetic data?
+	•	Does logging inadvertently capture PII?
+23. Accessibility and Internationalization
+	•	Are semantic HTML elements and ARIA attributes used correctly?
+	•	Is keyboard navigation supported?
+	•	Are color contrast ratios sufficient?
+	•	Are user-facing strings externalized for localization?
+	•	Are dates, numbers, and currency formatted locale-aware?
+	•	Is character encoding handled correctly at all boundaries?
+
+V. Engineering Review Questions by Category
+These are the strongest "engineer-language" prompts to use in live review.
+Correctness
+	•	What invariants does this component maintain?
+	•	What makes those invariants true after every mutation?
+	•	What input or timing condition breaks this first?
+State
+	•	What are the legal state transitions?
+	•	Can duplicate or out-of-order events violate them?
+	•	Where is the source of truth?
+Concurrency
+	•	What happens if this runs twice at the same time?
+	•	What happens if a retry overlaps with the original execution?
+	•	What shared state exists and who owns it?
+Failure
+	•	What are the top 3 failure modes here?
+	•	How does this fail under timeout, stale dependency, or partial write?
+	•	Does failure remain local or spread?
+Performance
+	•	What is the true cost unit in this system?
+	•	What happens under burst load?
+	•	Could one expensive request degrade many cheap ones?
+Operability
+	•	If this breaks at 2 AM, what evidence will we have?
+	•	What metric would show user pain first?
+	•	What signal distinguishes saturation from dependency failure?
+Design
+	•	Is complexity driven by current requirements or hypothetical future flexibility?
+	•	Are responsibilities separated enough to test independently?
+	•	Is policy embedded where mechanism should live?
+Dependencies
+	•	What breaks if this dependency releases a minor version bump?
+	•	Do we understand what our dependencies depend on?
+	•	How quickly could we replace this dependency if we had to?
+Compatibility
+	•	What happens to callers who haven't upgraded yet?
+	•	Can this deploy safely alongside the previous version?
+	•	Is there data in production that doesn't match the new schema?
+Distributed Behavior
+	•	What happens when the network between these two services degrades?
+	•	If this message is delivered twice, does the system remain correct?
+	•	What does "consistent" mean in this context, and are we achieving it?
+Data Lifecycle
+	•	How large will this data set be in a year? In three years?
+	•	When does this data stop being useful, and what happens to it then?
+	•	What is the cost of storing this data indefinitely?
+Cost
+	•	What does this cost per thousand requests?
+	•	Where is the money going — compute, storage, network, or third-party APIs?
+	•	What would we change if this needed to cost half as much?
+Privacy
+	•	What user data flows through this path?
+	•	If a user asks us to delete their data, can we?
+	•	Could a log or cache inadvertently retain PII?
+Incident Readiness
+	•	If this fails in production, what is the first thing we look at?
+	•	Is there a runbook or playbook for this failure mode?
+	•	Has this type of failure happened before, and is the fix encoded in a test?
+
+VI. Rubric for Scoring a Component
+If you want a structured evaluation model, use a 1–5 score on each category.
+Categories
+	•	Correctness
+	•	Boundary Discipline
+	•	Concurrency Safety
+	•	Failure Design
+	•	Observability
+	•	Performance Realism
+	•	Maintainability
+	•	Test Depth
+	•	Dependency Health
+	•	Compatibility and Evolution
+	•	Data Lifecycle Management
+	•	Cost Efficiency
+	•	Privacy and Data Protection
+	•	Incident Readiness
+Score meanings
+1 — Fragile
+Behavior is poorly defined, weakly tested, and likely to fail under normal variability.
+2 — Basic
+Works for intended demo path, but edge cases, failure paths, and operational behavior are underdeveloped.
+3 — Functional
+Reasonably sound for expected use, though important assumptions or failure behaviors remain implicit.
+4 — Strong
+Well-structured, observable, and safe under realistic conditions; major failure and concurrency concerns addressed.
+5 — Production-grade
+Explicit invariants, bounded behavior, high diagnosability, resilient failure handling, realistic performance modeling, strong verification.
+
+VII. Example of Applying the Doctrine to a Real Component
+Let's say the component is a job queue worker.
+What sound review language looks like
+Correctness
+	•	Are job states explicit?
+	•	Can the same job be claimed twice?
+	•	What guarantees completion is recorded exactly once?
+Concurrency
+	•	If two workers pick the same item, what prevents double execution?
+	•	Are leases/locks/time-based claims present?
+	•	What is the retry behavior after worker crash?
+Failure
+	•	What happens if external API succeeds but DB write fails?
+	•	Is work idempotent?
+	•	Is poison-job behavior defined?
+Operability
+	•	Can we see queue depth, age, retries, failure reasons?
+	•	Can we identify stuck jobs?
+Performance
+	•	Are jobs bounded in time and memory?
+	•	Is there a concurrency cap?
+	•	What happens during burst intake?
+Dependencies
+	•	What external services does job execution depend on?
+	•	What happens if a dependency's SDK introduces a breaking change?
+	•	Are dependency versions pinned in the worker's deployment artifact?
+Data Lifecycle
+	•	How long are completed job records retained?
+	•	Is there a TTL on job metadata, logs, and payloads?
+	•	What is the projected storage growth at current intake rate?
+Cost
+	•	What is the cost per job execution?
+	•	Does idle worker capacity represent significant waste?
+	•	Could batching reduce per-job overhead?
+Privacy
+	•	Do job payloads contain user PII?
+	•	Are job logs scrubbed of sensitive data?
+	•	Can all data associated with a user's jobs be purged on request?
+Incident Feedback
+	•	Has this worker experienced a repeated failure mode?
+	•	Is there a regression test for the last production incident?
+	•	Is the postmortem action item for the last outage closed?
+That is precisely how engineering doctrine becomes code review language.
+
+VIII. Short Form PR Template You Could Actually Use
+Here's a practical template.
+PR Engineering Review Template
+Purpose
+	•	What problem is this change solving?
+	•	Why is this implementation the right scope?
+Correctness
+	•	What invariants does this change introduce or rely on?
+	•	What edge cases were considered?
+	•	What state transitions are affected?
+Concurrency / Coordination
+	•	Does this introduce or modify concurrent behavior?
+	•	What shared state exists?
+	•	What prevents race conditions, duplicate work, or corruption?
+Failure Behavior
+	•	What are the primary failure modes?
+	•	How does the system degrade or recover?
+	•	Are timeout/retry/cancellation semantics defined?
+Observability
+	•	What logs, metrics, or traces were added or updated?
+	•	How will operators know this is healthy or failing?
+Performance
+	•	What cost model matters here?
+	•	Are there latency, memory, queue, or scaling implications?
+Compatibility
+	•	Does this break any existing consumers or data contracts?
+	•	Can old and new versions coexist during rollout?
+	•	Is there a migration plan for affected data or interfaces?
+Dependencies
+	•	Were any dependencies added, removed, or upgraded?
+	•	Are new dependencies justified and pinned?
+	•	Are there known vulnerabilities in the dependency tree?
+Data and Privacy
+	•	Does this change affect how user data is collected, stored, or accessed?
+	•	Is data minimization applied?
+	•	Are audit and deletion requirements met?
+Cost Impact
+	•	What is the expected infrastructure cost change?
+	•	Are there new resources provisioned, and are they sized appropriately?
+Testing
+	•	What tests were added?
+	•	Which edge and failure cases are covered?
+	•	What remains untested and why?
+Operational Notes
+	•	Rollout concerns?
+	•	Migration/rollback considerations?
+	•	Ownership or follow-up actions?
+	•	Are runbooks or alerts updated?
+
+IX. Incident Response and Postmortem Framework
+This section defines how incidents feed back into engineering practice.
+Severity Levels
+	•	SEV-1: User-facing outage or data loss affecting a significant portion of users. Immediate response required.
+	•	SEV-2: Degraded service or functionality affecting a subset of users. Response within the hour.
+	•	SEV-3: Minor issue with limited impact. Response within the business day.
+	•	SEV-4: Cosmetic or low-impact issue. Addressed in normal workflow.
+Incident Lifecycle
+	•	Detection: Alerts, user reports, or monitoring anomalies surface the issue.
+	•	Triage: Determine severity, assign an incident lead, and establish a communication channel.
+	•	Mitigation: Restore service by any safe means — rollback, feature flag, manual intervention.
+	•	Resolution: Apply the root fix once the immediate impact is contained.
+	•	Postmortem: Conduct within 5 business days of resolution.
+Postmortem Requirements
+Every SEV-1 and SEV-2 incident requires a written postmortem that includes:
+	•	timeline of events
+	•	root cause analysis distinguishing triggers from contributing factors
+	•	impact assessment (users affected, duration, data implications)
+	•	what went well during response
+	•	what could be improved
+	•	concrete action items with owners and deadlines
+Closing the Loop
+	•	Action items are tracked to completion.
+	•	Regression tests are added for every failure mode discovered.
+	•	Doctrine, checklists, and runbooks are updated when incidents reveal gaps.
+	•	Incident trends are reviewed quarterly to identify systemic patterns.
+
+X. Final Doctrine Statement
+If you want the most polished final formulation, here it is:
+Final Version
+Sound engineering means that system behavior is explicit, bounded, and diagnosable under realistic conditions.
+We therefore require that critical code:
+	•	defines and preserves invariants
+	•	validates external inputs at boundaries
+	•	handles concurrency intentionally
+	•	treats failure paths as first-class behavior
+	•	applies backpressure instead of allowing silent overload
+	•	exposes meaningful operational signals
+	•	models performance using real cost drivers
+	•	separates concerns so complexity remains local
+	•	verifies not only happy paths, but edge, failure, and recovery paths
+	•	manages dependencies deliberately and audits them continuously
+	•	treats configuration as validated, versioned, and observable
+	•	maintains backward compatibility across deployments
+	•	addresses distributed system failure modes explicitly
+	•	defines and enforces data retention and cleanup
+	•	accounts for infrastructure cost as an engineering variable
+	•	builds privacy and data protection into the architecture
+	•	feeds incident learnings back into code, tests, and standards
+	•	invests in developer experience as a force multiplier
+	•	designs for accessibility and internationalization from the start
+We do not measure engineering quality by whether code appears to work once. We measure it by whether the system remains coherent when timing shifts, dependencies fail, inputs degrade, and scale increases.
+
+
+
+# Appendix A: Database Engineering Discipline
+
+This appendix applies the core doctrine principles to database engineering. It covers schema design, query discipline, migration safety, operational health, and data integrity at the level of rigor the doctrine demands for any critical component.
+
+## A1. Schema Design Must Reflect Access Patterns
+
+Schema is not an abstract modeling exercise. It is the physical contract between the application and the storage engine. Schema decisions directly affect query performance, write amplification, consistency guarantees, and migration difficulty.
+
+### Standard
+
+- Every table or collection must have a documented purpose and primary access pattern
+- Normalization vs. denormalization decisions must be justified by read/write ratios and access patterns, not by convention alone
+- Denormalization must document which consistency guarantees are relaxed and how staleness is bounded
+- Column types, constraints, and defaults must be intentional — nullable columns require justification
+- Foreign key relationships and referential integrity constraints must be explicit, not enforced only by application code
+- Schema documentation must include entity relationships, cardinality assumptions, and growth expectations
+
+### Engineering expectation
+
+A schema that "works for now" without documented access patterns is a schema that will be redesigned under pressure later. Schema is infrastructure — it should be reviewed with the same rigor as API contracts.
+
+## A2. Indexing Is a Performance Contract
+
+An index is not free. Every index accelerates some reads and slows some writes. Indexing decisions must be treated as engineering tradeoffs, not afterthoughts.
+
+### Standard
+
+- Every query that appears in a critical path must have a supporting index
+- Index usage must be verified with query plans, not assumed from index existence
+- Composite index column order must match query filter and sort patterns
+- Unused indexes must be identified and removed — they consume write throughput and storage
+- Covering indexes should be considered for high-frequency read-only queries
+- Index bloat, fragmentation, and maintenance overhead must be monitored
+
+### Engineering expectation
+
+An engineer should be able to explain, for any critical query, which index it uses, why that index exists, and what the expected plan looks like. If the answer is unknown, the query is not sufficiently engineered.
+
+## A3. Queries Must Be Reviewed as Production Code
+
+SQL and query logic are production code. They run in production, consume production resources, and can cause production outages. They deserve the same review rigor as application code.
+
+### Standard
+
+- Queries must be reviewed for full table scans, missing indexes, implicit type conversions, and unbounded result sets
+- N+1 query patterns must be identified and eliminated
+- Query performance must be measured under realistic data volumes, not empty dev databases
+- Slow query logs must be monitored and reviewed regularly
+- ORM-generated queries must be inspected — the generated SQL is what runs, not the ORM call
+- Pagination must use keyset/cursor-based approaches for large datasets, not OFFSET
+
+### Engineering expectation
+
+A query that performs well against a thousand rows and collapses against a million is not a working query — it is a latent incident. Query review must consider production-scale data volumes as the baseline, not the exception.
+
+## A4. Migrations Must Be Safe and Reversible
+
+Schema migrations run against production data. A bad migration can cause outages, data loss, or corruption that is difficult or impossible to reverse.
+
+### Standard
+
+- Migrations must be backward-compatible: old application code must continue to function during and after migration rollout
+- Breaking changes must use the expand-contract pattern: add the new structure, migrate data, switch readers, remove the old structure
+- Every migration must have a documented rollback plan that has been tested
+- Large data migrations must be batched to avoid locking tables or overwhelming replication
+- Migration scripts must be idempotent where possible
+- Schema changes must be tested against production-scale data volumes before deployment
+
+### Engineering expectation
+
+A migration that cannot be rolled back without data loss is not ready for production. A migration that locks a critical table for minutes is not ready for production. Migration safety is not optional — it is a deployment constraint.
+
+## A5. Transaction Discipline
+
+Transactions are the mechanism by which databases maintain consistency. Misusing them — or ignoring them — produces subtle, hard-to-diagnose data corruption.
+
+### Standard
+
+- Transaction isolation levels must be chosen intentionally and documented — the default is not always correct
+- Transaction scope must be as small as possible — long-running transactions hold locks and degrade throughput
+- Distributed transactions across services must be avoided unless absolutely necessary; prefer saga patterns with compensating actions
+- Deadlock potential must be analyzed for any code that acquires multiple locks
+- Read-only operations should use appropriate isolation levels to avoid unnecessary locking
+- Optimistic concurrency control should be considered for low-contention write paths
+
+### Engineering expectation
+
+"We use the default isolation level" is not a transaction strategy. It is an implicit bet that the default is correct for every use case, which it rarely is.
+
+## A6. Connection Management
+
+Database connections are expensive resources. Mismanaging them is one of the most common causes of production database incidents.
+
+### Standard
+
+- Connection pools must be explicitly configured with minimum, maximum, and idle timeout settings
+- Pool size must be justified by workload analysis, not set to arbitrary large numbers
+- Connection leaks must be detectable through monitoring and health checks
+- Timeouts must be set for connection acquisition, query execution, and idle connections
+- Application behavior when the pool is exhausted must be defined: queue, reject, or degrade
+- Connection pool metrics (active, idle, waiting, timed out) must be observable
+
+### Engineering expectation
+
+A connection pool sized at "large enough that we never run out" is not configured — it is unbounded. And an unbounded pool against a database with a hard connection limit is a recipe for cascading failure.
+
+## A7. Replication and Consistency
+
+Replicated databases introduce eventual consistency, replication lag, and split-brain risks. These are not edge cases — they are normal operating conditions.
+
+### Standard
+
+- Read-after-write consistency requirements must be explicit — if a user writes data and immediately reads it, which replica serves the read?
+- Replication lag must be monitored and alerted on
+- Queries must be routed to the appropriate source (primary vs. replica) based on consistency requirements
+- Failover behavior must be tested, not assumed
+- Split-brain detection and resolution mechanisms must be in place for multi-primary configurations
+- Stale read tolerance must be documented per use case
+
+### Engineering expectation
+
+"It works when everything is up" is not a replication strategy. The system's behavior during lag spikes, failovers, and partial replica unavailability must be understood and documented before the component is considered production-ready.
+
+## A8. Backup, Recovery, and Disaster Preparedness
+
+A backup that has never been restored is not a backup. It is a hope.
+
+### Standard
+
+- Backup frequency and retention must be defined by recovery point objectives (RPO)
+- Recovery time objectives (RTO) must be documented and achievable
+- Backup restores must be tested regularly — at minimum quarterly
+- Point-in-time recovery capability must be verified, not assumed
+- Backup integrity must be validated automatically
+- Disaster recovery runbooks must exist and be practiced
+
+### Engineering expectation
+
+An engineer should be able to answer: if we lost this database right now, how long until we are back, how much data do we lose, and has anyone actually tested that? If the answer to the last question is no, the recovery plan is fiction.
+
+## A9. Database Observability
+
+Databases are often the first bottleneck and the last place engineers look. Observability must be proactive, not reactive.
+
+### Standard
+
+- Query latency (p50, p95, p99), throughput, and error rates must be tracked
+- Connection pool utilization, wait times, and exhaustion events must be monitored
+- Replication lag, lock contention, and deadlock frequency must be visible
+- Storage growth, table sizes, and index sizes must be tracked over time
+- Slow query logs must be reviewed regularly and integrated into alerting
+- Capacity planning must be informed by actual growth data, not estimates
+
+### Engineering expectation
+
+A database incident that begins with "we didn't realize the table had grown to 500 million rows" is a monitoring failure, not a scaling surprise. Growth is not surprising when it is observed.
+
+## A10. Data Integrity at Rest
+
+Data corruption that goes undetected is worse than data corruption that fails loudly. Integrity must be verified, not assumed.
+
+### Standard
+
+- Constraints (unique, not null, check, foreign key) must be enforced at the database level, not only in application code
+- Application-level invariants that cannot be expressed as database constraints must have periodic validation jobs
+- Data quality checks must run in production — orphaned records, constraint violations, and inconsistent states must be detected
+- Soft deletes, if used, must have clear lifecycle policies — data that is "deleted" but never purged is data that grows without bound
+- Enum values and status fields must be constrained at the database level where the engine supports it
+
+### Engineering expectation
+
+Application-only validation is a single point of failure. If a bug, migration, or manual intervention bypasses the application layer, only database-level constraints stand between the system and corrupted data.
+
+# Appendix B: Frontend Engineering Discipline
+
+This appendix applies the core doctrine principles to frontend and client-side engineering. It covers rendering performance, state management, error handling, accessibility, observability, and dependency discipline at production-grade rigor.
+
+## B1. Rendering Performance Is User-Facing Reliability
+
+Frontend performance is not a nice-to-have. It is the user's direct experience of system reliability. A page that takes five seconds to become interactive is, from the user's perspective, a five-second outage.
+
+### Standard
+
+- Core Web Vitals (LCP, INP, CLS) must be tracked as production metrics, not occasional audits
+- Performance budgets must be defined for bundle size, initial load time, and time to interactive
+- Bundle size impact must be evaluated for every new dependency — the cost is paid by every user on every load
+- Code splitting and lazy loading must be applied to routes and heavy components
+- Images, fonts, and media must be optimized and served in appropriate formats
+- Rendering bottlenecks (excessive re-renders, layout thrashing, main thread blocking) must be profiled and addressed
+
+### Engineering expectation
+
+An engineer should be able to explain what the page load performance looks like for a user on a median mobile device with a median network connection — not just on a developer's fast laptop on office Wi-Fi. Performance that only exists under ideal conditions is not performance.
+
+## B2. Client-Side State Must Be Managed Deliberately
+
+Frontend state management is where many of the doctrine's core principles — explicit invariants, intentional state transitions, source of truth — apply most directly and are most frequently violated.
+
+### Standard
+
+- The source of truth for each piece of state must be unambiguous: server, URL, local component, or global store
+- Server state and client state must be clearly separated — caching server data in client stores creates implicit consistency obligations
+- State synchronization between client and server must handle staleness, conflicts, and failed updates explicitly
+- Optimistic updates must define rollback behavior when the server rejects the mutation
+- Derived state must be computed, not stored redundantly
+- Global state must be justified — most state is local; hoisting it prematurely creates coupling and complexity
+
+### Engineering expectation
+
+If an engineer cannot draw a clear diagram of where each piece of state lives, how it gets updated, and what happens when the update fails, the state architecture is not sufficiently designed. State that "just works" without explicit design is state that breaks without explicit explanation.
+
+## B3. Error Boundaries and Client-Side Resilience
+
+Frontend applications fail. APIs return errors, network requests time out, third-party scripts throw exceptions, and users interact with the UI in unexpected ways. The question is whether the application degrades gracefully or crashes entirely.
+
+### Standard
+
+- Error boundaries must isolate failures to the affected component, not crash the entire application
+- API errors must be handled at the call site with appropriate user feedback — not silently swallowed or generically displayed
+- Network failures must be anticipated: timeouts, retries with backoff, and offline states must be designed
+- Third-party script failures must not break first-party functionality
+- Unhandled promise rejections and uncaught exceptions must be captured and reported
+- User-facing error messages must be actionable, not technical stack traces
+
+### Engineering expectation
+
+A blank white screen is the frontend equivalent of an unhandled exception in a backend service. It is a total failure with no diagnostic information. Every component tree must have error containment so that one broken widget does not take down the entire page.
+
+## B4. Client-Side Observability
+
+The doctrine requires that systems explain themselves in production. For frontend, production means the user's browser — an environment the team does not control and cannot SSH into.
+
+### Standard
+
+- Client-side errors must be captured and reported to a centralized error tracking service with session context
+- Real user monitoring (RUM) must track actual load times, interaction latency, and performance across devices and geographies
+- Critical user flows (sign-up, checkout, key interactions) must have client-side instrumentation
+- JavaScript bundle parse and execution times must be tracked
+- Failed API calls, timeout rates, and retry rates from the client perspective must be visible
+- Error rates must be segmented by browser, device type, and connection quality to identify environment-specific failures
+
+### Engineering expectation
+
+If a user reports that the application is slow or broken, the team should be able to investigate with data — session replay, error logs, performance traces — not by asking the user to open developer tools. Observability that requires user cooperation is not observability.
+
+## B5. Accessibility Is a Testable Requirement
+
+The core doctrine includes accessibility as Principle 22. This appendix elevates it to an enforceable engineering standard with concrete verification criteria.
+
+### Standard
+
+- Semantic HTML must be used: correct heading hierarchy, landmark regions, form labels, and button elements for interactive controls
+- All interactive elements must be keyboard accessible with visible focus indicators
+- Color must never be the sole means of conveying information
+- Color contrast ratios must meet WCAG AA standards (4.5:1 for normal text, 3:1 for large text)
+- Dynamic content updates must be announced to assistive technology via ARIA live regions
+- Automated accessibility testing (axe-core or equivalent) must be integrated into CI — regressions fail the build
+- Manual screen reader testing must be part of the QA process for new features
+
+### Engineering expectation
+
+Accessibility is not a separate checklist run before launch. It is a build-time constraint enforced the same way linting and type checking are enforced: automatically, continuously, and with a blocking threshold. A feature that ships without keyboard support is as incomplete as a feature that ships without error handling.
+
+## B6. Frontend Dependency Discipline
+
+The core doctrine's principle on dependency management applies with extra force on the frontend, where every dependency is shipped to the user's browser and executed on their device.
+
+### Standard
+
+- Every new frontend dependency must justify its bundle size cost against the alternative of a lighter solution or custom implementation
+- Bundle analysis must be part of the CI pipeline — size regressions must be flagged
+- Duplicate dependencies and version conflicts in the bundle must be detected and resolved
+- Tree-shaking effectiveness must be verified — importing one utility should not pull in an entire library
+- Third-party scripts (analytics, ads, widgets) must be loaded asynchronously and must not block rendering or interaction
+- Dependency update cadence must account for browser security vulnerabilities, not just functionality
+
+### Engineering expectation
+
+A frontend dependency is not just a development convenience. It is a runtime cost imposed on every user. The question is not just whether a library works, but whether its cost in bytes, parse time, and attack surface is justified by the value it provides.
+
+## B7. Component Design Quality
+
+The doctrine's separation of concerns principle applies to UI components. Well-designed components are testable, reusable, and comprehensible in isolation. Poorly designed components are where frontend complexity becomes unmanageable.
+
+### Standard
+
+- Components must have a single, clear responsibility
+- Presentational logic and business logic must be separated
+- Component APIs (props/interfaces) must be minimal, well-typed, and documented
+- Side effects must be isolated and explicit, not buried in rendering logic
+- Components must be testable in isolation without requiring the full application context
+- Shared components must have documented usage examples and visual regression tests
+
+### Engineering expectation
+
+A component that can only be understood by reading its parent, its children, and three global stores is not a component — it is an entangled fragment. Component boundaries must be real boundaries, not visual ones.
+
+## B8. Offline and Degraded Network Behavior
+
+Users do not always have fast, reliable connections. A frontend application that assumes constant connectivity is making an architectural bet that will fail for a meaningful percentage of users.
+
+### Standard
+
+- The application must define explicit behavior for offline, slow, and intermittent connectivity
+- Critical data must be cacheable for offline or degraded access where applicable
+- Network request timeouts must be configured and user-visible — infinite spinners are a failure mode, not a loading state
+- Failed requests must offer retry options or graceful degradation, not blank screens
+- The application must recover cleanly when connectivity is restored without requiring a full page reload
+- Service worker and caching strategies must be intentional and documented, not default boilerplate
+
+### Engineering expectation
+
+"It works on fast Wi-Fi" is the frontend equivalent of "it works on my machine." The network is a dependency, and like all dependencies, it must be treated as unreliable.
+
+## B9. Browser and Device Compatibility
+
+The frontend runs in an environment the team does not control. Browser versions, device capabilities, screen sizes, and input methods vary enormously.
+
+### Standard
+
+- Supported browsers and versions must be explicitly defined and tested against
+- Responsive design must be tested across representative screen sizes and orientations
+- Touch, keyboard, and mouse interactions must all function correctly
+- Progressive enhancement should be preferred over graceful degradation where feasible
+- Feature detection must be used rather than browser detection
+- CSS and JavaScript must be transpiled and polyfilled to match the defined support matrix
+
+### Engineering expectation
+
+An untested browser is not an unsupported browser — it is a browser where failures are invisible. The support matrix must be a deliberate decision, not an accident of what the developers happen to use.
+
+## B10. Frontend Testing Depth
+
+The core doctrine demands that tests verify reality, not optimism. On the frontend, this means testing what the user experiences, not just what the code does internally.
+
+### Standard
+
+- Unit tests must cover business logic, state transformations, and utility functions
+- Component tests must verify rendering output, interaction behavior, and edge states (loading, error, empty)
+- Integration tests must exercise critical user flows end-to-end through the actual UI
+- Visual regression tests must catch unintended layout and styling changes
+- Accessibility tests must run in CI and fail on regressions
+- Tests must run against realistic conditions: mocked API responses should include error cases, slow responses, and unexpected payloads
+
+### Engineering expectation
+
+A frontend test suite that only verifies that components render without crashing is testing the bare minimum. The test suite must verify that the application behaves correctly when APIs fail, when data is missing, when inputs are invalid, and when the user does something the developer did not anticipate. Tests must verify what the user sees and experiences, not just what the code does internally.
+
+# Appendix C: Software Testing Discipline
+
+Our testing strategy exists to maximize confidence per unit of engineering effort. We do not aim to test everything. We aim to test the parts of the system whose failure would be subtle, costly, or difficult to detect before reaching users.
+
+## C1. Core Testing Principles
+
+- Test behavior, not implementation. Tests should verify what the system does from the perspective of a caller, user, or dependent module. Tests that lock in internal structure create brittle suites and punish refactoring.
+- Favor deterministic, high-signal tests. The best tests are fast, stable, and specific about what broke. A small number of trustworthy tests is better than a large number of flaky or vague ones.
+- Put most tests where failures are silent and expensive. Wrong data, wrong permissions, wrong calculations, wrong state transitions, and wrong normalization are higher priority than failures that are visually obvious during development.
+- Choose the lowest test level that can prove the behavior. Use unit tests for pure logic. Use integration or component tests when correctness depends on wiring, state, side effects, or rendering behavior. Use end-to-end tests only for critical user journeys.
+- Every test must earn its maintenance cost. A test is valuable only if it materially improves confidence. Low-signal, redundant, or fragile tests should be avoided or removed.
+
+## C2. What to Unit Test
+
+We unit test code that is deterministic and logic-bearing, especially when defects are easy to miss in manual review.
+
+### Standard
+
+This includes:
+
+- pure functions and transformations
+- validation and parsing
+- calculations, formatting, and mapping
+- business rules
+- permission logic and eligibility checks
+- reducers, state machines, and transition guards
+- shared utilities used across the codebase
+- normalization and adapter boundaries
+- custom hooks that derive, transform, filter, or normalize data
+
+## C3. What Not to Unit Test
+
+We generally avoid unit tests for code that adds little independent value or mostly re-tests framework behavior.
+
+### Standard
+
+This includes:
+
+- framework internals
+- trivial pass-through wrappers
+- simple presentational components with no meaningful branching
+- implementation details that are invisible to callers
+
+### Engineering expectation
+
+UI behavior is not exempt from testing. Conditional rendering, disabled states, error states, role-based controls, and form interactions often deserve component or integration tests because they encode real product behavior.
+
+## C4. The Test Pyramid
+
+### Standard
+
+Unit tests protect logic. They should make up the majority of the suite.
+
+Integration/component tests protect wiring and behavior across boundaries. They should cover the interaction between UI, state, network boundaries, persistence layers, and domain rules.
+
+End-to-end tests protect a small number of mission-critical paths. They should verify that the system works in production-like conditions for the flows that matter most to the business.
+
+### Engineering expectation
+
+We do not use E2E tests as a substitute for missing unit and integration coverage.
+
+## C5. Test Prioritization
+
+When deciding whether something needs a test, ask:
+
+- If this breaks, will the failure be silent?
+- If this breaks, will the cost be high?
+- Is the logic likely to change?
+- Is the code reused in many places?
+- Is this a boundary where raw data becomes app semantics?
+- Would a bug here escape local manual testing?
+
+The more "yes" answers, the stronger the case for a test.
+
+## C6. Coverage Philosophy
+
+Coverage is a diagnostic, not a goal. A high percentage can hide weak tests, and a lower percentage can still represent strong protection if the highest-risk behavior is well covered.
+
+### Standard
+
+We do not optimize for arbitrary coverage targets alone. We optimize for meaningful risk reduction.
+
+## C7. Test Quality Standards
+
+### Standard
+
+A good test should be:
+
+- fast
+- deterministic
+- easy to understand
+- precise about failure
+- resilient to refactors
+- narrowly scoped to one behavior
+
+### Engineering expectation
+
+A bad test is one that is flaky, overly broad, tightly coupled to internals, or so opaque that engineers stop trusting it.
+
+## C7A. Agent-Assisted Red-Green-Refactor
+
+### Standard
+
+When an agent is implementing behavior and an automated test is practical, the default loop is red-green-refactor:
+
+1. Write one behavior-level test for the next observable behavior.
+2. Run it and verify that it fails for the expected reason.
+3. Implement the smallest change that can make that test pass.
+4. Rerun the test without weakening it. If the test is wrong, correct it deliberately and record why.
+5. Repeat one behavior at a time until the requested scope is complete.
+6. Refactor only after the relevant tests are green, then rerun the affected tests.
+
+### Engineering expectation
+
+This loop is backpressure for agent-generated code. Agents should not create broad horizontal batches of speculative tests and then one-shot an implementation across them. A visible red-to-green transition is evidence that the test guarded real behavior; it does not replace code review, QA, or judgment about test quality.
+
+### Reporting expectation
+
+For nontrivial agent-assisted changes, the final report should name the failing test command, the passing test command, any refactor verification, and known test gaps.
+
+### Exceptions
+
+Test-first development is not mandatory for pure documentation, trivial config or text changes, exploratory spikes, visual-only adjustments, or live-provider paths where a deterministic contract, mock, or smoke test is the first useful verification. If this loop is skipped for behavior-bearing work, the reason should be explicit.
+
+## C8. Business-Critical System Requirements
+
+The following behaviors must have explicit tests at an appropriate level:
+
+- authorization and permission checks
+- money movement, pricing, billing, and payment state
+- status transitions and workflow gates
+- data normalization and schema adaptation
+- validation rules that protect correctness or compliance
+- user-visible error handling for critical paths
+
+## C9. Refactoring, PR, and Operational Rules
+
+### Refactoring rule
+
+Refactoring should not require rewriting behavior-level tests unless behavior changed. If tests break because code was reorganized but behavior stayed the same, the tests were probably too coupled to implementation.
+
+### PR rule
+
+Every pull request should answer one question clearly: what new behavior or risk is being protected by these tests? If the answer is unclear, the tests are probably not the right ones.
+
+### Operational rule
+
+When a bug reaches production, we add or strengthen the lowest-level test that would have caught it cheaply and reliably. Production incidents should improve the suite, not just patch the code.
+
+## C10. One-Line Testing Doctrine
+
+Test the logic that can fail silently, the workflows that matter commercially, and the boundaries where systems reinterpret data.
+
+# Appendix D: Debugging Discipline
+
+Debugging is not coding — it is investigation. The task is not to create, but to explain a deviation. Every bug is observed behavior that differs from expected behavior. The job is to locate where and why that divergence occurs.
+
+## D1. Core Philosophy
+
+### The system is always right
+
+The program is doing exactly what it was told. Instead of asking "Why is this broken?", ask "Under what conditions would this output be correct?" This reframes debugging from frustration to reasoning.
+
+### State over code
+
+Code is static. Bugs live in state transitions over time. You are not debugging lines of code — you are debugging values, memory, timing, sequencing, and side effects.
+
+### Guessing is failure
+
+Every action must be tied to a testable hypothesis. Bad debugging says "Let me try changing this." Good debugging says "If X is true, then Y should happen. Let me check."
+
+## D2. The 6-Phase Debugging Loop
+
+### Phase 1 — Reproduce
+
+If you cannot reproduce it, you cannot debug it. Run the failing test or scenario, reduce to the smallest reproducible case, and remove noise (parallel tests, randomness, etc.). Goal: deterministic failure.
+
+### Phase 2 — Define the Delta
+
+What exactly is wrong? What is expected? What actually happened? What is the precise difference? Avoid vague statements like "It's not working." Replace with specifics: "Function returns nil when it should return a populated slice."
+
+### Phase 3 — Localize the Failure Boundary
+
+Where does the system go from correct to incorrect? This is the most important step. Start at the failure, move backward through execution, and find the first incorrect state. This is the bug — not where it crashes.
+
+### Phase 4 — Inspect State
+
+What is happening at that boundary? Examine variable values, inputs and outputs, data structures, and concurrency state. Use debuggers, logs, prints, and tracing.
+
+### Phase 5 — Form and Test Hypothesis
+
+Why is this state wrong? Propose an explanation and validate with breakpoints, logging, or targeted tests. Loop until confirmed.
+
+### Phase 6 — Apply Minimal Correction
+
+Fix the cause, not the symptom. Make the smallest possible change. No unnecessary refactors. Preserve system stability. Then rerun the failing test and all related tests.
+
+## D3. Core Debugging Primitives
+
+These are the atoms of debugging:
+
+- Reproduction: create a stable environment where the bug appears
+- Comparison: expected vs. actual behavior
+- Inspection: observe state at a moment in execution
+- Tracing: follow execution path (call stack, flow)
+- Isolation: reduce search space (binary search the system)
+- Invariants: check assumptions that must always hold
+- Hypothesis testing: the scientific method applied to software
+- Minimization: smallest fix that resolves root cause
+- Verification: ensure fix does not break adjacent behavior
+- Model building: continuously refine understanding of the system
+
+## D4. Common Bug Archetypes
+
+### State bugs
+
+Wrong variable value, mutation where immutability is expected, stale data.
+
+### Boundary bugs
+
+Off-by-one errors, empty or null cases, incorrect defaults.
+
+### Control flow bugs
+
+Wrong branch taken, missing return, incorrect loop condition.
+
+### Concurrency bugs
+
+Race conditions, deadlocks, goroutine or thread leaks, ordering issues.
+
+### Resource lifecycle bugs
+
+File not closed, connection leak, context not cancelled.
+
+### Integration bugs
+
+Wrong assumptions between components, API mismatch, serialization issues.
+
+### Test bugs
+
+Incorrect expectation, bad setup, flaky behavior.
+
+## D5. Debugging Heuristics
+
+### Standard
+
+- Start from the failure, not the system. Never read everything first — start where it breaks.
+- Move backward, not forward. Trace from effect to cause, not cause to effect.
+- Check edges first. Most bugs live in empty inputs, first/last elements, error paths, and concurrency boundaries.
+- Trust symptoms, not assumptions. If output is wrong, something upstream is wrong.
+- Prefer observation over modification. Do not change code until you understand it.
+
+## D6. Anti-Patterns
+
+### Standard
+
+The following practices must be avoided:
+
+- Random edits: changing code without understanding
+- Full rewrites: overcorrecting instead of isolating
+- Silent debugging: not explaining your reasoning
+- Over-scoping: trying to understand the entire system upfront
+- Ignoring the test: the test is your specification
+
+## D7. One-Line Debugging Doctrine
+
+Find the first point where reality diverges from expectation, and correct the cause of that divergence with the smallest possible change.

@@ -1,0 +1,477 @@
+---
+title: Engineering Quick Reference
+role: operational_handbook
+status: active
+goal: >
+  Condensed front-door version of the full Engineering Doctrine.
+  Short enough to use in daily work. Points back to source docs for depth.
+source: 01-Master-Engineering-Doctrine.txt
+---
+
+Engineering Quick Reference
+
+How to use this handbook
+
+- Read Sections I and II when designing or implementing work.
+- Use Section III when debugging.
+- Use Section IV when deciding what to test.
+- Use Section V when reviewing a PR or major change.
+- Use Section VI when you need deeper detail from the source files.
+
+I. Core Engineering Standard
+
+1. Correctness before cleverness
+
+Code must first be correct, understandable, and stable before it is optimized or abstracted.
+
+Engineering implications:
+
+- Prefer explicitness over magic.
+- Prefer boring correctness over elegant fragility.
+- Avoid complexity unless it solves a demonstrated need.
+- Every critical component should be explainable in plain English:
+  what it does, what it assumes, what invariants it preserves, and how it fails.
+
+2. Invariants, state, and transitions must be explicit
+
+Non-trivial systems are state machines whether we acknowledge it or not.
+
+Required discipline:
+
+- Define what must always be true before and after mutation.
+- Make legal state transitions explicit.
+- Reject illegal transitions.
+- Handle duplicate actions safely where relevant.
+- Keep the source of truth obvious.
+
+If the invariant is unclear, the implementation is not sufficiently engineered.
+
+3. Boundaries are where discipline begins
+
+All external inputs are untrusted until validated.
+
+This includes:
+
+- API requests
+- file contents
+- database reads
+- event payloads
+- CLI arguments
+- environment variables
+- third-party service responses
+- LLM outputs
+
+Validation belongs at the boundary, not deep inside business logic.
+
+Boundary discipline includes:
+
+- schema and type validation
+- normalization
+- enum and range checks
+- null and empty handling
+- malformed payload rejection
+
+4. Failure behavior must be designed, not discovered
+
+Every critical component should define behavior for:
+
+- invalid input
+- dependency failure
+- timeout
+- duplicate work
+- partial completion
+- overload
+- unavailable resources
+- stale or conflicting state
+
+The standard is not "what happens when everything goes right." The standard is whether failure remains visible, bounded, and recoverable.
+
+5. Concurrency must be intentional, bounded, and safe
+
+Parallelism introduces coordination risk, fairness issues, and failure complexity.
+
+Where concurrency exists, define:
+
+- what can run in parallel
+- what state is shared
+- how it is protected
+- whether concurrency is bounded
+- how timeout and cancellation work
+- how retries behave
+
+Load-bearing systems also need backpressure:
+
+- max concurrency
+- queue bounds or effective limits
+- rejection or shedding policy
+- retry limits
+- degradation strategy
+
+6. Observability is part of the implementation
+
+Critical workflows must emit enough information to explain themselves in production.
+
+Minimum expectation:
+
+- structured logs
+- meaningful metrics
+- correlation identifiers
+- error context
+- latency measurements
+- visibility into resource pressure and failure rate
+
+If a system cannot explain what happened, where it happened, and who was affected without code archaeology, it is under-instrumented.
+
+7. Performance and cost must be modeled realistically
+
+Performance work must reflect the true workload shape, not toy assumptions.
+
+Review for:
+
+- real workload unit
+- bottlenecks
+- tail latency
+- skewed or bursty inputs
+- queueing effects
+- worst-case behavior
+- throughput and latency tradeoffs
+- cost per unit of useful work
+
+Cost is an engineering constraint, not just a finance concern.
+
+8. Separation of concerns and simplicity are reliability tools
+
+Complexity should be local, justified, and explainable.
+
+Prefer systems where parsing, validation, orchestration, state mutation, policy, I/O, and rendering are not unnecessarily tangled.
+
+Useful rule:
+
+Flexibility we do not need yet is complexity we begin paying for immediately.
+
+9. Dependencies and configuration must be managed deliberately
+
+Every dependency is a trust boundary, versioning risk, and operational commitment.
+
+Dependency discipline requires:
+
+- clear justification
+- pinned versions for production dependencies
+- awareness of transitive dependencies
+- audit and upgrade posture
+- fallback thinking for critical libraries
+
+Configuration discipline requires:
+
+- schema validation
+- safe defaults
+- separation of config types
+- secret rotation support
+- visibility into effective runtime config
+- ownership and cleanup for feature flags
+
+10. Systems must evolve safely
+
+Production systems live through change, not static perfection.
+
+Engineering requirements:
+
+- backward compatibility during rollouts
+- safe schema and interface evolution
+- explicit data lifecycle and retention policy
+- privacy and data protection by design
+- incident feedback into tests, runbooks, and standards
+- accessibility and internationalization treated as real constraints
+- developer experience treated as infrastructure
+
+II. Default Design and Review Questions
+
+Use these questions for new work before writing code and again during review.
+
+1. Problem and scope
+
+- What problem is this change solving?
+- What is intentionally out of scope?
+- Is the implementation the simplest design that satisfies the requirement?
+
+2. Correctness and state
+
+- What invariants must remain true?
+- What are the legal state transitions?
+- Where is the source of truth?
+- What edge cases or duplicate actions can violate correctness?
+
+3. Inputs and contracts
+
+- What are the inputs and outputs?
+- Where are contracts enforced?
+- Are external dependencies treated as unreliable?
+
+4. Failure and recovery
+
+- What are the main failure modes?
+- What happens on timeout, dependency failure, partial completion, or retry?
+- Does failure stay local or spread?
+
+5. Concurrency and load
+
+- What runs concurrently?
+- What is shared?
+- What prevents races, duplicate work, or unbounded buildup?
+- What is the backpressure or shedding behavior?
+
+6. Operability
+
+- What logs, metrics, and traces exist?
+- If this breaks at 2 AM, what evidence will we have?
+- What signal distinguishes saturation from dependency failure?
+
+7. Performance, cost, and growth
+
+- What is the real cost unit here?
+- What happens under larger inputs or burst load?
+- How does cost scale with usage?
+- What data growth or storage retention does this create?
+
+8. Compatibility and evolution
+
+- Can old and new versions coexist during rollout?
+- Is there a migration path for data or interface changes?
+- What happens to callers that have not upgraded yet?
+
+9. Verification
+
+- What tests prove this behavior?
+- Which negative or failure paths are covered?
+- What regression should be added if this fails in production?
+
+III. Debugging Protocol
+
+Core model
+
+Debugging is investigation, not coding.
+
+Every bug can be framed as:
+
+Observed behavior != expected behavior
+
+The job is to find the first point where the system moves from correct state to incorrect state, then fix the cause with the smallest possible change.
+
+The 6-phase loop
+
+1. Reproduce
+
+- Create a deterministic failure.
+- Reduce to the smallest reproducible case.
+- Remove noise such as randomness, unrelated tests, or concurrency you do not need.
+
+2. Define the delta
+
+- State exactly what was expected.
+- State exactly what happened.
+- Describe the precise mismatch in concrete terms.
+
+3. Localize the failure boundary
+
+- Start at the failure.
+- Move backward through execution.
+- Find the first incorrect state, not merely the place where the system crashes.
+
+4. Inspect state
+
+- Check inputs, outputs, variables, data structures, timing, and side effects.
+- Use logs, breakpoints, traces, or targeted prints.
+
+5. Form and test a hypothesis
+
+- Every action should be tied to a testable explanation.
+- Replace guesswork with "If X is true, I should observe Y."
+
+6. Apply the minimal correction
+
+- Fix the cause, not the symptom.
+- Avoid opportunistic rewrites.
+- Re-run the failing case and nearby related coverage.
+
+Fast heuristics
+
+- Start from the failure, not the entire system.
+- Move backward from effect to cause.
+- Check edges first: empty input, first and last element, error path, concurrency boundary.
+- Prefer observation over modification.
+- Trust symptoms more than assumptions.
+
+Common bug archetypes
+
+- state bugs
+- boundary bugs
+- control-flow bugs
+- concurrency bugs
+- resource lifecycle bugs
+- integration bugs
+- test bugs
+
+Anti-patterns
+
+- random edits
+- full rewrites before understanding the bug
+- silent debugging with no explicit reasoning
+- over-scoping the investigation
+- ignoring the failing test or reproduction case
+
+IV. Testing Standard
+
+Purpose
+
+Testing exists to maximize confidence per unit of engineering effort. The goal is not to test everything. The goal is to test what is costly to get wrong and hard to notice when broken.
+
+Core rules
+
+1. Test behavior, not implementation.
+2. Favor deterministic, high-signal tests.
+3. Put most tests where failures are silent and expensive.
+4. Choose the lowest test level that can prove the behavior.
+5. Every test must earn its maintenance cost.
+
+What deserves tests first
+
+- business rules
+- validation and parsing
+- normalization and adapter boundaries
+- permission and eligibility logic
+- calculations, formatting, and mapping
+- reducers, state machines, and transition guards
+- shared utilities reused across the codebase
+- error handling in critical workflows
+- data integrity and schema adaptation
+
+What usually does not deserve unit tests
+
+- framework internals
+- trivial pass-through wrappers
+- simple presentational components with no meaningful branching
+- tests that only lock in internal structure
+
+Test pyramid
+
+- Unit tests protect deterministic logic.
+- Integration or component tests protect wiring, state, side effects, and rendered behavior.
+- End-to-end tests protect a small number of mission-critical user journeys.
+
+E2E tests are not a substitute for missing unit and integration coverage.
+
+Priority test questions
+
+- If this breaks, will the failure be silent?
+- If this breaks, will the cost be high?
+- Is the logic reused or likely to change?
+- Is this a boundary where raw data becomes application semantics?
+- Would a bug here escape local manual testing?
+
+Quality bar
+
+A good test is:
+
+- fast
+- deterministic
+- precise about failure
+- easy to understand
+- resilient to refactors
+- narrowly scoped to one behavior
+
+A bad test is:
+
+- flaky
+- vague
+- overly broad
+- tightly coupled to internals
+- not trusted by engineers
+
+Agent-assisted red-green-refactor
+
+When an agent is implementing behavior and an automated test is practical:
+
+1. Write one behavior-level test for the next observable behavior.
+2. Run it and verify the expected failure.
+3. Implement the smallest change that makes it pass.
+4. Refactor only after the relevant tests are green.
+5. Rerun the affected tests and report the red command, green command, refactor verification, and known gaps.
+
+Do not generate broad speculative test batches and then one-shot the implementation. The red-to-green transition is the feedback loop that keeps agent-generated code bounded.
+
+Production bug rule
+
+When a bug reaches production, add or strengthen the lowest-level test that would have caught it cheaply and reliably.
+
+V. Default PR and Change Checklist
+
+Use this checklist for any non-trivial change.
+
+- Is the purpose of the change explicit?
+- Are invariants or assumptions documented somewhere real?
+- Are all external inputs validated at the boundary?
+- Are illegal state transitions rejected?
+- Are retries, duplicate execution, and partial failure handled safely?
+- Is concurrency bounded where needed?
+- Is there enough logging, metrics, or tracing to debug this in production?
+- Are performance and cost implications understood?
+- Are new dependencies justified and configuration values validated?
+- Is rollout safe for existing callers and existing data?
+- Are privacy, access control, and data retention obligations addressed where relevant?
+- Are the right tests present for the behavior and risks introduced?
+- Is the design simpler than the alternatives that were available?
+
+VI. Source Map
+
+Use the source files when you need the full version or specialized appendices.
+
+01-Master-Engineering-Doctrine.txt
+
+The canonical master document. Use for:
+
+- the full statement of all 22 engineering principles
+- the extended review dimensions and scoring rubric (A-L)
+- the full 23-section PR review checklist
+- engineering review questions by category
+- incident response and postmortem framework
+- Appendix A: Database Engineering Discipline
+- Appendix B: Frontend Engineering Discipline
+- Appendix C: Software Testing Discipline (full version)
+- Appendix D: Debugging Discipline (full version)
+
+05-API-Engineering-Standard.md
+
+Extended appendix for API design and engineering.
+
+06-Security-Engineering-Standard.md
+
+Extended appendix for security engineering discipline.
+
+07-Backend-Application-Engineering-Standard.md
+
+Extended appendix for backend engineering discipline.
+
+08-Infrastructure-and-Deployment-Engineering-Standard.md
+
+Extended appendix for infrastructure and deployment discipline.
+
+09-Build-Order-and-Engineering-System.md
+
+Full engineering system reference.
+
+10-Engineering-Operating-Manual-Index.md
+
+Index and navigation for the operating manual.
+
+VII. Maintenance Rule
+
+If the source files change, update this document so the quick reference remains accurate.
+
+The intended relationship is:
+
+- source files hold the full theory and detailed appendices
+- this file holds the condensed daily operating standard
+
+One-line doctrine
+
+Build systems whose behavior stays correct, bounded, observable, and recoverable under real conditions; debug by locating the first incorrect state; test the logic and workflows that are costly to get wrong and easy to miss when broken.

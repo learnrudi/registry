@@ -1,0 +1,19 @@
+{
+  "name": "@rudi/swe-engineering-stack",
+  "version": "0.1.0",
+  "description": "RUDI MCP stack for the SWE Operating Manual and agent debt scanning.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.0",
+    "typescript": "5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

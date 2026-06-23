@@ -1,0 +1,412 @@
+ARCHIVAL NOTE
+
+This file is preserved as source material.
+
+The canonical combined doctrine document is `01-Master-Engineering-Doctrine.txt`, which now
+includes this debugging content in Appendix D.
+
+# **DEBUGGING DOCTRINE**
+
+### *A Systematic Approach to Diagnosing and Correcting Software Behavior*
+
+---
+
+## I. Core Philosophy
+
+### 1. Debugging is not coding — it is **investigation**
+
+You are not creating. You are **explaining a deviation**.
+
+> Every bug is:
+> **Observed Behavior ≠ Expected Behavior**
+
+Your job is to locate **where and why that divergence occurs**.
+
+---
+
+### 2. The System is Always Right (Even When It’s Wrong)
+
+The program is doing exactly what it was told.
+
+So instead of:
+
+> “Why is this broken?”
+
+Think:
+
+> “Under what conditions would this output be correct?”
+
+This reframes debugging from frustration → reasoning.
+
+---
+
+### 3. State > Code
+
+Code is static. Bugs live in **state transitions over time**.
+
+You are not debugging “lines of code.”
+You are debugging:
+
+* values
+* memory
+* timing
+* sequencing
+* side effects
+
+---
+
+### 4. Guessing is Failure
+
+Every action must be tied to a **testable hypothesis**.
+
+Bad debugging:
+
+> “Let me try changing this…”
+
+Good debugging:
+
+> “If X is true, then Y should happen. Let me check.”
+
+---
+
+## II. The 6-Phase Debugging Loop
+
+This is your **operating system**.
+
+---
+
+### Phase 1 — **Reproduce**
+
+> If you cannot reproduce it, you cannot debug it.
+
+* Run the failing test / scenario
+* Reduce to smallest reproducible case
+* Remove noise (parallel tests, randomness, etc.)
+
+**Goal:** Deterministic failure
+
+---
+
+### Phase 2 — **Define the Delta**
+
+> What exactly is wrong?
+
+* What is expected?
+* What actually happened?
+* What is the precise difference?
+
+Avoid vague statements like:
+
+> “It’s not working”
+
+Replace with:
+
+> “Function returns `nil` when it should return a populated slice”
+
+---
+
+### Phase 3 — **Localize the Failure Boundary**
+
+> Where does the system go from correct → incorrect?
+
+This is the **most important step**.
+
+* Start at failure
+* Move backward through execution
+* Find the **first incorrect state**
+
+**This is the bug. Not where it crashes.**
+
+---
+
+### Phase 4 — **Inspect State**
+
+> What is happening at that boundary?
+
+* Variable values
+* Inputs / outputs
+* Data structures
+* Concurrency state (locks, goroutines, etc.)
+
+Tools:
+
+* debugger
+* logs
+* prints
+* tracing
+
+---
+
+### Phase 5 — **Form & Test Hypothesis**
+
+> Why is this state wrong?
+
+* Propose explanation
+* Validate with:
+
+  * breakpoint
+  * logging
+  * targeted test
+
+Loop until confirmed.
+
+---
+
+### Phase 6 — **Apply Minimal Correction**
+
+> Fix the cause, not the symptom.
+
+* Smallest possible change
+* No unnecessary refactors
+* Preserve system stability
+
+Then:
+
+* rerun failing test
+* rerun related tests
+
+---
+
+## III. Core Debugging Primitives
+
+These are the **atoms** of debugging.
+
+---
+
+### 1. Reproduction
+
+Create a stable environment where the bug appears.
+
+---
+
+### 2. Comparison
+
+Expected vs actual behavior.
+
+---
+
+### 3. Inspection
+
+Observe state at a moment in execution.
+
+---
+
+### 4. Tracing
+
+Follow execution path (call stack, flow).
+
+---
+
+### 5. Isolation
+
+Reduce search space (binary search the system).
+
+---
+
+### 6. Invariants
+
+Check assumptions that must always hold.
+
+---
+
+### 7. Hypothesis Testing
+
+Scientific method applied to software.
+
+---
+
+### 8. Minimization
+
+Smallest fix that resolves root cause.
+
+---
+
+### 9. Verification
+
+Ensure fix doesn’t break adjacent behavior.
+
+---
+
+### 10. Model Building
+
+Continuously refine understanding of the system.
+
+---
+
+## IV. Common Bug Archetypes
+
+Across all languages (including Go), bugs usually fall into these categories:
+
+---
+
+### 1. **State Bugs**
+
+* wrong variable value
+* mutation where immutability expected
+* stale data
+
+---
+
+### 2. **Boundary Bugs**
+
+* off-by-one
+* empty/null cases
+* incorrect defaults
+
+---
+
+### 3. **Control Flow Bugs**
+
+* wrong branch taken
+* missing return
+* incorrect loop condition
+
+---
+
+### 4. **Concurrency Bugs**
+
+* race conditions
+* deadlocks
+* goroutine leaks
+* ordering issues
+
+---
+
+### 5. **Resource Lifecycle Bugs**
+
+* file not closed
+* connection leak
+* context not cancelled
+
+---
+
+### 6. **Integration Bugs**
+
+* wrong assumptions between components
+* API mismatch
+* serialization issues
+
+---
+
+### 7. **Test Bugs**
+
+* incorrect expectation
+* bad setup
+* flaky behavior
+
+---
+
+## V. Debugging Heuristics (Speed Layer)
+
+These accelerate the doctrine.
+
+---
+
+### Start from the failure, not the system
+
+Never read everything first.
+Start where it breaks.
+
+---
+
+### Move backward, not forward
+
+Trace from **effect → cause**, not cause → effect.
+
+---
+
+### Check edges first
+
+Most bugs live in:
+
+* empty inputs
+* first/last element
+* error paths
+* concurrency boundaries
+
+---
+
+### Trust symptoms, not assumptions
+
+If output is wrong, **something upstream is wrong**.
+
+---
+
+### Prefer observation over modification
+
+Don’t change code until you understand it.
+
+---
+
+## VI. Communication Protocol (For Interviews)
+
+Debugging interviews evaluate **thinking, not just fixing**.
+
+---
+
+### Narrate your loop:
+
+* “I’m reproducing the failure”
+* “I’m comparing expected vs actual”
+* “I’m tracing backward from the failure”
+* “I’m checking state at this boundary”
+* “I have a hypothesis… let me test it”
+
+---
+
+### Ask when blocked:
+
+* “How do I run a single test here?”
+* “Is concurrency expected in this function?”
+* “What is the intended behavior in this edge case?”
+
+---
+
+### Stay calm under uncertainty
+
+Confusion is expected.
+Panic is a negative signal.
+
+---
+
+## VII. Anti-Patterns
+
+Avoid these at all costs:
+
+---
+
+### Random edits
+
+Changing code without understanding
+
+---
+
+### Full rewrites
+
+Overcorrecting instead of isolating
+
+---
+
+### Silent debugging
+
+Not explaining your reasoning
+
+---
+
+### Over-scoping
+
+Trying to understand entire system upfront
+
+---
+
+### Ignoring the test
+
+The test is your specification
+
+---
+
+## VIII. The One-Line Doctrine
+
+If everything collapses under pressure, remember this:
+
+> **Find the first point where reality diverges from expectation, and correct the cause of that divergence with the smallest possible change.**

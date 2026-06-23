@@ -94,4 +94,91 @@ describe("validatePublicReadiness", () => {
     expect(codes).toContain("secret-like-file");
     expect(report.summary.errors).toBeGreaterThanOrEqual(4);
   });
+
+  it("reports stack binary requirements that cannot resolve to installable or detectable providers", async () => {
+    await writeJson(path.join(tmpDir, "index.json"), {
+      packages: {
+        stacks: {
+          official: [
+            {
+              id: "stack:media",
+              path: "catalog/stacks/media",
+            },
+          ],
+        },
+        binaries: {
+          official: [
+            {
+              id: "binary:ffmpeg",
+              path: "catalog/binaries/ffmpeg.json",
+            },
+            {
+              id: "binary:badtool",
+              path: "catalog/binaries/badtool.json",
+            },
+          ],
+        },
+      },
+    });
+    await writeJson(path.join(tmpDir, "catalog/stacks/media/manifest.json"), {
+      id: "stack:media",
+      name: "Media",
+      requires: {
+        binaries: ["ffmpeg", "ffprobe", "missing-tool", "badtool"],
+      },
+    });
+    await writeJson(path.join(tmpDir, "catalog/binaries/ffmpeg.json"), {
+      id: "binary:ffmpeg",
+      name: "FFmpeg",
+      downloads: {
+        "darwin-arm64": [
+          {
+            url: "https://example.com/ffmpeg.zip",
+            type: "zip",
+            binary: "ffmpeg",
+          },
+        ],
+      },
+      bins: ["ffmpeg", "ffprobe"],
+    });
+    await writeJson(path.join(tmpDir, "catalog/binaries/badtool.json"), {
+      id: "binary:badtool",
+      name: "Bad Tool",
+    });
+
+    const report = await validatePublicReadiness(tmpDir, {
+      trackedFiles: new Set([
+        "index.json",
+        "package.json",
+        "catalog/stacks/media/manifest.json",
+        "catalog/binaries/ffmpeg.json",
+        "catalog/binaries/badtool.json",
+      ]),
+    });
+    const codes = report.issues.map((item) => item.code);
+
+    expect(codes).toContain("stack-binary-requirement-unresolved");
+    expect(codes).toContain("stack-binary-provider-uninstallable");
+    expect(
+      report.issues.some(
+        (item) =>
+          item.code === "stack-binary-requirement-unresolved" &&
+          item.details?.binary === "missing-tool"
+      )
+    ).toBe(true);
+    expect(
+      report.issues.some(
+        (item) =>
+          item.code === "stack-binary-provider-uninstallable" &&
+          item.details?.providerId === "binary:badtool"
+      )
+    ).toBe(true);
+    expect(
+      report.issues.some(
+        (item) =>
+          item.code === "stack-binary-requirement-unresolved" &&
+          item.details?.binary === "ffprobe"
+      )
+    ).toBe(false);
+  });
 });

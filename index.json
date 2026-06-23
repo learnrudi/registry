@@ -54,6 +54,29 @@
           }
         },
         {
+          "id": "stack:swe-engineering",
+          "name": "SWE Engineering",
+          "version": "0.1.0",
+          "description": "Portable SWE Operating Manual reference and JS/TS agent debt scanning tools for engineering workflows",
+          "path": "catalog/stacks/swe-engineering",
+          "runtime": "runtime:node",
+          "category": "development",
+          "tags": [
+            "swe",
+            "engineering",
+            "manual",
+            "testing",
+            "debugging",
+            "debt-scan",
+            "code-quality"
+          ],
+          "related": {
+            "skills": [
+              "skill:swe-compliance-checklist"
+            ]
+          }
+        },
+        {
           "id": "stack:newsletter-extractor",
           "name": "Newsletter Extractor",
           "version": "0.1.0",
@@ -182,7 +205,7 @@
           "id": "stack:google-workspace",
           "name": "Google Workspace",
           "version": "1.0.0",
-          "description": "Gmail, Sheets, Docs, Drive, and Calendar integration",
+          "description": "Gmail, Sheets, Docs, Drive, Calendar, and Tasks integration",
           "path": "catalog/stacks/google-workspace",
           "runtime": "runtime:node",
           "category": "productivity",
@@ -193,7 +216,8 @@
             "docs",
             "drive",
             "calendar",
-            "email"
+            "email",
+            "tasks"
           ],
           "requires": {
             "secrets": [
@@ -684,6 +708,22 @@
           ]
         },
         {
+          "id": "skill:swe-compliance-checklist",
+          "name": "SWE Compliance Checklist",
+          "version": "1.0.0",
+          "description": "Create and execute phase-gated SWE Operating Manual compliance checklists for software changes",
+          "path": "catalog/skills/swe-compliance-checklist.md",
+          "category": "coding",
+          "tags": [
+            "swe",
+            "compliance",
+            "checklist",
+            "testing",
+            "verification",
+            "engineering"
+          ]
+        },
+        {
           "id": "skill:fix-error",
           "name": "Fix Error",
           "version": "1.0.0",
@@ -966,6 +1006,44 @@
               "video-editor"
             ]
           }
+        },
+        {
+          "id": "skill:shortform-publish-copy",
+          "name": "Shortform Publish Copy",
+          "version": "1.0.0",
+          "description": "Create platform-ready short-form video publish copy with titles, descriptions, CTAs, hashtags, and platform notes",
+          "path": "catalog/skills/shortform-publish-copy.md",
+          "category": "marketing",
+          "tags": [
+            "video",
+            "shortform",
+            "social-media",
+            "seo",
+            "captions",
+            "publishing"
+          ],
+          "requires": {
+            "stacks": [
+              "video-editor",
+              "social-media-publisher"
+            ]
+          }
+        },
+        {
+          "id": "skill:grill-with-docs",
+          "name": "Grill With Docs",
+          "version": "1.0.0",
+          "description": "Stress-test a plan against the existing domain model, sharpen terminology, and update CONTEXT.md or ADRs as decisions crystallize",
+          "path": "catalog/skills/grill-with-docs.md",
+          "category": "coding",
+          "tags": [
+            "architecture",
+            "domain-modeling",
+            "glossary",
+            "adr",
+            "documentation",
+            "grill-me"
+          ]
         }
       ],
       "community": []
@@ -1090,12 +1168,10 @@
           "id": "binary:whisper",
           "name": "Whisper",
           "version": "1.0.0",
-          "description": "OpenAI Whisper speech-to-text (local)",
+          "description": "OpenAI Whisper speech-to-text CLI",
           "path": "catalog/binaries/whisper.json",
-          "platforms": [
-            "darwin-arm64",
-            "darwin-x64"
-          ]
+          "installType": "system",
+          "managed": false
         },
         {
           "id": "binary:imagemagick",
@@ -1123,12 +1199,10 @@
           "id": "binary:chromium",
           "name": "Chromium",
           "version": "131",
-          "description": "Headless browser for automation and scraping",
+          "description": "Chromium browser for local rendering and automation",
           "path": "catalog/binaries/chromium.json",
-          "platforms": [
-            "darwin-arm64",
-            "darwin-x64"
-          ]
+          "installType": "system",
+          "managed": false
         },
         {
           "id": "binary:jq",
@@ -1164,14 +1238,15 @@
           ]
         },
         {
-          "id": "binary:ytdlp",
+          "id": "binary:yt-dlp",
           "name": "yt-dlp",
-          "version": "2024.01",
+          "version": "2024.12.23",
           "description": "Video downloader for YouTube and other sites",
-          "path": "catalog/binaries/ytdlp.json",
+          "path": "catalog/binaries/yt-dlp.json",
           "platforms": [
             "darwin-arm64",
-            "darwin-x64"
+            "darwin-x64",
+            "linux-x64"
           ]
         },
         {
@@ -1294,6 +1369,16 @@
           "version": "5.3",
           "description": "OCR text extraction from images",
           "path": "catalog/binaries/tesseract.json",
+          "installType": "system",
+          "managed": false
+        },
+        {
+          "id": "binary:pdftoppm",
+          "name": "pdftoppm",
+          "version": "system",
+          "description": "PDF page renderer from Poppler",
+          "path": "catalog/binaries/pdftoppm.json",
+          "installType": "system",
           "managed": false
         },
         {

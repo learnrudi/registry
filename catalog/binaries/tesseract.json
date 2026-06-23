@@ -1,8 +1,12 @@
 {
-  "id": "tesseract",
+  "id": "binary:tesseract",
   "name": "Tesseract OCR",
   "version": "5.3",
   "description": "OCR text extraction from images",
+  "category": "document-processing",
+  "installType": "system",
+  "binary": "tesseract",
+  "bins": ["tesseract"],
   "managed": false,
   "checkCommand": "tesseract --version",
   "instructions": "Install via Homebrew: brew install tesseract"

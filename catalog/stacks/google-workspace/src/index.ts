@@ -34,6 +34,17 @@ import {
   readJsonFile,
   writeJsonFile,
 } from "./state.js";
+import {
+  DEFAULT_TASKLIST_ID,
+  buildTaskComplete,
+  buildTaskDelete,
+  buildTaskInsert,
+  buildTaskList,
+  buildTaskListsList,
+  buildTaskPatch,
+  summarizeTask,
+  summarizeTaskList,
+} from "./tasks.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -422,6 +433,18 @@ const ATTACHMENTS_INPUT = {
   type: "array",
   items: { type: "string" },
   description: "Optional absolute local file paths to attach",
+};
+
+const TASKLIST_ID_INPUT = {
+  type: "string",
+  description: `Google Tasks task list ID (default: ${DEFAULT_TASKLIST_ID})`,
+};
+
+const TASK_ID_INPUT = { type: "string", description: "Google Tasks task ID" };
+
+const TASK_DUE_INPUT = {
+  type: "string",
+  description: "Optional RFC 3339 due datetime. Google Tasks stores date precision only.",
 };
 
 const server = new Server(
@@ -1159,6 +1182,100 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           account: ACCOUNT_INPUT,
         },
         required: ["event_id"],
+      },
+    },
+    // Tasks
+    {
+      name: "tasks_tasklists_list",
+      description: "List Google Tasks task lists",
+      inputSchema: {
+        type: "object",
+        properties: {
+          max_results: { type: "number", description: "Max task lists, 1-100" },
+          next_page_token: { type: "string", description: "Pagination token from a previous response" },
+          account: ACCOUNT_INPUT,
+        },
+      },
+    },
+    {
+      name: "tasks_list",
+      description: "List Google Tasks in a task list",
+      inputSchema: {
+        type: "object",
+        properties: {
+          tasklist_id: TASKLIST_ID_INPUT,
+          max_results: { type: "number", description: "Max tasks, 1-100" },
+          next_page_token: { type: "string", description: "Pagination token from a previous response" },
+          show_completed: { type: "boolean", description: "Whether completed tasks are returned" },
+          show_deleted: { type: "boolean", description: "Whether deleted tasks are returned" },
+          show_hidden: { type: "boolean", description: "Whether hidden tasks are returned" },
+          completed_min: { type: "string", description: "Lower RFC 3339 completion datetime filter" },
+          completed_max: { type: "string", description: "Upper RFC 3339 completion datetime filter" },
+          due_min: { type: "string", description: "Lower RFC 3339 due datetime filter" },
+          due_max: { type: "string", description: "Upper RFC 3339 due datetime filter" },
+          updated_min: { type: "string", description: "Lower RFC 3339 update datetime filter" },
+          account: ACCOUNT_INPUT,
+        },
+      },
+    },
+    {
+      name: "tasks_create",
+      description: "Create a Google Task",
+      inputSchema: {
+        type: "object",
+        properties: {
+          tasklist_id: TASKLIST_ID_INPUT,
+          title: { type: "string", description: "Task title" },
+          notes: { type: "string", description: "Optional task notes" },
+          due: TASK_DUE_INPUT,
+          parent: { type: "string", description: "Optional parent task ID for a subtask" },
+          previous: { type: "string", description: "Optional previous sibling task ID" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["title"],
+      },
+    },
+    {
+      name: "tasks_update",
+      description: "Update a Google Task title, notes, due date, or status",
+      inputSchema: {
+        type: "object",
+        properties: {
+          tasklist_id: TASKLIST_ID_INPUT,
+          task_id: TASK_ID_INPUT,
+          title: { type: "string", description: "Replacement task title" },
+          notes: { type: ["string", "null"], description: "Replacement task notes; pass null to clear" },
+          due: { ...TASK_DUE_INPUT, type: ["string", "null"], description: "Replacement RFC 3339 due datetime; pass null to clear" },
+          status: { type: "string", description: "Task status: needsAction or completed" },
+          account: ACCOUNT_INPUT,
+        },
+        required: ["task_id"],
+      },
+    },
+    {
+      name: "tasks_complete",
+      description: "Mark a Google Task completed",
+      inputSchema: {
+        type: "object",
+        properties: {
+          tasklist_id: TASKLIST_ID_INPUT,
+          task_id: TASK_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["task_id"],
+      },
+    },
+    {
+      name: "tasks_delete",
+      description: "Delete a Google Task",
+      inputSchema: {
+        type: "object",
+        properties: {
+          tasklist_id: TASKLIST_ID_INPUT,
+          task_id: TASK_ID_INPUT,
+          account: ACCOUNT_INPUT,
+        },
+        required: ["task_id"],
       },
     },
   ],
@@ -2486,6 +2603,105 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           sendUpdates: optionalToolString(args, "send_updates") as any,
         });
         return { content: [{ type: "text", text: "Event deleted successfully" }] };
+      }
+
+      // Tasks
+      case "tasks_tasklists_list": {
+        const auth = getAuthForArgs(args);
+        const tasks = google.tasks({ version: "v1", auth });
+        const params = buildTaskListsList(args || {});
+        const res = await tasks.tasklists.list(params);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              taskLists: (res.data.items || []).map((taskList) => summarizeTaskList(taskList as any)),
+              nextPageToken: res.data.nextPageToken,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "tasks_list": {
+        const auth = getAuthForArgs(args);
+        const tasks = google.tasks({ version: "v1", auth });
+        const params = buildTaskList(args || {});
+        const res = await tasks.tasks.list(params);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tasklistId: params.tasklist,
+              tasks: (res.data.items || []).map((task) => summarizeTask(task as any)),
+              nextPageToken: res.data.nextPageToken,
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "tasks_create": {
+        const auth = getAuthForArgs(args);
+        const tasks = google.tasks({ version: "v1", auth });
+        const insert = buildTaskInsert(args || {});
+        const task = await tasks.tasks.insert(insert);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tasklistId: insert.tasklist,
+              task: summarizeTask(task.data as any),
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "tasks_update": {
+        const auth = getAuthForArgs(args);
+        const tasks = google.tasks({ version: "v1", auth });
+        const patch = buildTaskPatch(args || {});
+        const task = await tasks.tasks.patch(patch);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tasklistId: patch.tasklist,
+              task: summarizeTask(task.data as any),
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "tasks_complete": {
+        const auth = getAuthForArgs(args);
+        const tasks = google.tasks({ version: "v1", auth });
+        const patch = buildTaskComplete(args || {});
+        const task = await tasks.tasks.patch(patch);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              tasklistId: patch.tasklist,
+              task: summarizeTask(task.data as any),
+            }, null, 2),
+          }],
+        };
+      }
+
+      case "tasks_delete": {
+        const auth = getAuthForArgs(args);
+        const tasks = google.tasks({ version: "v1", auth });
+        const deletion = buildTaskDelete(args || {});
+        await tasks.tasks.delete(deletion);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              deleted: true,
+              tasklistId: deletion.tasklist,
+              taskId: deletion.task,
+            }, null, 2),
+          }],
+        };
       }
 
       default:

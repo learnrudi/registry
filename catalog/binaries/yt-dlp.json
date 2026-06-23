@@ -5,6 +5,7 @@
   "description": "Video downloader for YouTube and other sites",
   "category": "media",
   "installType": "binary",
+  "bins": ["yt-dlp"],
   "binary": "yt-dlp",
   "upstream": {
     "darwin-arm64": "https://github.com/yt-dlp/yt-dlp/releases/download/2024.12.23/yt-dlp_macos",
@@ -14,6 +15,7 @@
   "extract": {
     "default": {
       "type": "raw",
+      "binary": "yt-dlp",
       "chmod": true
     }
   }

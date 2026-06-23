@@ -39,6 +39,15 @@ interface RegistryPackageRef {
   bucket: string;
 }
 
+interface BinaryProvider {
+  id: string;
+  packageName: string;
+  path?: string;
+  manifest?: Record<string, unknown>;
+  exposedBinaries: Set<string>;
+  installableOrDetectable: boolean;
+}
+
 const ZERO_SHA256 = /^0{64}$/;
 const REQUIRED_PUBLIC_CATALOG_DIRS = [
   "catalog/stacks",
@@ -154,6 +163,277 @@ function collectBucketRefs(
 
 function hasTrackedPayload(trackedFiles: Set<string>, registryPath: string): boolean {
   return trackedFiles.has(registryPath) || [...trackedFiles].some((file) => file.startsWith(`${registryPath}/`));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function normalizedPackageName(idOrName: string): string {
+  return idOrName.trim().replace(/^binary:/, "");
+}
+
+function executableName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const basename = path.posix.basename(trimmed.replaceAll("\\", "/"));
+  return basename || trimmed;
+}
+
+function addExecutableName(target: Set<string>, value: unknown): void {
+  if (typeof value !== "string") return;
+  const name = executableName(value);
+  if (name) target.add(name);
+}
+
+function addExecutableNamesFromValue(target: Set<string>, value: unknown): void {
+  if (typeof value === "string") {
+    addExecutableName(target, value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      addExecutableNamesFromValue(target, item);
+    }
+    return;
+  }
+
+  const record = asRecord(value);
+  if (!record) return;
+
+  for (const [key, child] of Object.entries(record)) {
+    addExecutableName(target, key);
+    addExecutableNamesFromValue(target, child);
+  }
+}
+
+function collectExposedBinaries(ref: RegistryPackageRef, manifest?: Record<string, unknown>): Set<string> {
+  const names = new Set<string>();
+  const packageName = normalizedPackageName(ref.id);
+  if (packageName) names.add(packageName);
+
+  if (!manifest) return names;
+
+  addExecutableNamesFromValue(names, manifest.bins);
+  addExecutableNamesFromValue(names, manifest.binaries);
+  addExecutableNamesFromValue(names, manifest.additionalBinaries);
+  addExecutableNamesFromValue(names, manifest.binary);
+
+  return names;
+}
+
+function objectHasEntries(value: unknown): value is Record<string, unknown> {
+  const record = asRecord(value);
+  return Boolean(record && Object.keys(record).length > 0);
+}
+
+function isSupportedDownloadType(value: unknown): boolean {
+  return typeof value === "string" && ["zip", "tar", "tar.gz", "tgz", "tar.xz", "raw"].includes(value);
+}
+
+function hasSupportedDownloads(downloads: unknown): boolean {
+  const record = asRecord(downloads);
+  if (!record) return false;
+
+  for (const entries of Object.values(record)) {
+    if (!Array.isArray(entries)) continue;
+    if (entries.some((entry) => {
+      const item = asRecord(entry);
+      return typeof item?.url === "string" && isSupportedDownloadType(item.type);
+    })) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasSupportedUpstreamExtract(manifest: Record<string, unknown>): boolean {
+  if (!objectHasEntries(manifest.upstream)) return false;
+
+  const extract = asRecord(manifest.extract);
+  if (!extract) return false;
+
+  const candidates = [
+    extract.default,
+    ...Object.values(extract),
+  ];
+
+  return candidates.some((candidate) => {
+    const config = asRecord(candidate);
+    return Boolean(config && isSupportedDownloadType(config.type));
+  });
+}
+
+function hasDetectMetadata(manifest: Record<string, unknown>): boolean {
+  if (manifest.managed === false && typeof manifest.checkCommand === "string") return true;
+  if (manifest.installType === "system" && typeof manifest.checkCommand === "string") return true;
+
+  const detect = asRecord(manifest.detect);
+  if (detect && typeof detect.command === "string") return true;
+
+  const install = asRecord(manifest.install);
+  if (install?.source === "system") return true;
+
+  return false;
+}
+
+function hasInstallOrDetectMetadata(manifest?: Record<string, unknown>): boolean {
+  if (!manifest) return false;
+  if (hasDetectMetadata(manifest)) return true;
+
+  if (typeof manifest.npmPackage === "string") return true;
+  if (typeof manifest.pipPackage === "string") return true;
+  if (typeof manifest.nativeInstaller === "string") return true;
+
+  if (hasSupportedDownloads(manifest.downloads)) return true;
+  if (hasSupportedUpstreamExtract(manifest)) return true;
+
+  return false;
+}
+
+async function readPackageManifest(root: string, registryPath?: string): Promise<Record<string, unknown> | undefined> {
+  if (!registryPath) return undefined;
+  const parsed = await readJsonFile(path.join(root, registryPath));
+  return asRecord(parsed);
+}
+
+function stackManifestPath(ref: RegistryPackageRef): string | undefined {
+  if (!ref.path) return undefined;
+  return `${ref.path.replace(/\/$/, "")}/manifest.json`;
+}
+
+function collectStackBinaryRequirements(stackManifest: Record<string, unknown>): string[] {
+  const requires = asRecord(stackManifest.requires);
+  if (!requires || !Array.isArray(requires.binaries)) return [];
+
+  return requires.binaries
+    .filter((item): item is string => typeof item === "string")
+    .map(normalizedPackageName)
+    .filter(Boolean);
+}
+
+async function buildBinaryProviders(
+  root: string,
+  refs: RegistryPackageRef[],
+  issues: PublicReadinessIssue[]
+): Promise<{
+  byId: Map<string, BinaryProvider>;
+  byExecutable: Map<string, BinaryProvider[]>;
+}> {
+  const byId = new Map<string, BinaryProvider>();
+  const byExecutable = new Map<string, BinaryProvider[]>();
+
+  for (const ref of refs.filter((item) => item.kind === "binary")) {
+    let manifest: Record<string, unknown> | undefined;
+
+    try {
+      manifest = await readPackageManifest(root, ref.path);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      issues.push(issue(
+        "error",
+        "binary-manifest-invalid",
+        `Binary manifest could not be parsed: ${message}`,
+        ref.path,
+        { id: ref.id }
+      ));
+    }
+
+    const provider: BinaryProvider = {
+      id: ref.id,
+      packageName: normalizedPackageName(ref.id),
+      path: ref.path,
+      manifest,
+      exposedBinaries: collectExposedBinaries(ref, manifest),
+      installableOrDetectable: hasInstallOrDetectMetadata(manifest),
+    };
+
+    byId.set(ref.id, provider);
+
+    for (const executable of provider.exposedBinaries) {
+      const current = byExecutable.get(executable) ?? [];
+      current.push(provider);
+      byExecutable.set(executable, current);
+    }
+  }
+
+  return { byId, byExecutable };
+}
+
+function resolveStackBinaryProvider(
+  requirement: string,
+  stackRequirements: Set<string>,
+  providers: {
+    byId: Map<string, BinaryProvider>;
+    byExecutable: Map<string, BinaryProvider[]>;
+  }
+): BinaryProvider | undefined {
+  const directProvider = providers.byId.get(`binary:${requirement}`);
+  if (directProvider) return directProvider;
+
+  const candidates = providers.byExecutable.get(requirement) ?? [];
+  return candidates.find((candidate) => stackRequirements.has(candidate.packageName));
+}
+
+async function validateStackBinaryRequirements(
+  root: string,
+  refs: RegistryPackageRef[],
+  issues: PublicReadinessIssue[]
+): Promise<void> {
+  const providers = await buildBinaryProviders(root, refs, issues);
+
+  for (const ref of refs.filter((item) => item.kind === "stack")) {
+    const manifestPath = stackManifestPath(ref);
+    if (!manifestPath) continue;
+
+    let stackManifest: Record<string, unknown> | undefined;
+    try {
+      stackManifest = await readPackageManifest(root, manifestPath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      issues.push(issue(
+        "error",
+        "stack-manifest-invalid",
+        `Stack manifest could not be parsed: ${message}`,
+        manifestPath,
+        { id: ref.id }
+      ));
+      continue;
+    }
+
+    if (!stackManifest) continue;
+
+    const requirements = collectStackBinaryRequirements(stackManifest);
+    const requirementSet = new Set(requirements);
+
+    for (const binary of requirements) {
+      const provider = resolveStackBinaryProvider(binary, requirementSet, providers);
+      if (!provider) {
+        issues.push(issue(
+          "error",
+          "stack-binary-requirement-unresolved",
+          `Stack ${ref.id} requires binary ${binary}, but no indexed binary package or explicitly required provider exposes it.`,
+          manifestPath,
+          { stackId: ref.id, binary }
+        ));
+        continue;
+      }
+
+      if (!provider.installableOrDetectable) {
+        issues.push(issue(
+          "error",
+          "stack-binary-provider-uninstallable",
+          `Stack ${ref.id} requires binary ${binary}, but provider ${provider.id} does not declare supported install or detection metadata.`,
+          provider.path ?? manifestPath,
+          { stackId: ref.id, binary, providerId: provider.id }
+        ));
+      }
+    }
+  }
 }
 
 async function validatePackageJson(root: string, issues: PublicReadinessIssue[]): Promise<void> {
@@ -366,6 +646,7 @@ export async function validatePublicReadiness(
     const index = await readJsonFile(indexPath);
     refs = collectPackageRefs(index);
     await validateIndexRefs(absoluteRoot, refs, trackedFiles, issues);
+    await validateStackBinaryRequirements(absoluteRoot, refs, issues);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     issues.push(issue(

@@ -13,7 +13,7 @@
 import { google } from "googleapis";
 import { createServer } from "http";
 import { parse } from "url";
-import { copyFileSync, existsSync, readdirSync } from "fs";
+import { existsSync, readdirSync } from "fs";
 import { join } from "path";
 import * as net from "net";
 import open from "open";
@@ -22,14 +22,12 @@ import {
   ensurePrivateDir,
   getWorkspacePaths,
   migrateLegacyStateIfNeeded,
-  setPrivateFileMode,
   writeJsonFile,
 } from "./state.js";
 
 const WORKSPACE_PATHS = getWorkspacePaths();
 migrateLegacyStateIfNeeded(WORKSPACE_PATHS);
 const ACCOUNTS_DIR = WORKSPACE_PATHS.accountsDir;
-const DEFAULT_CREDENTIALS = join(ACCOUNTS_DIR, "brandonzhoff@gmail.com", "credentials.json");
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -38,6 +36,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/tasks",
 ];
 
 /**
@@ -86,17 +85,10 @@ async function authenticate(accountEmail?: string) {
     if (!existsSync(accountDir)) {
       console.log(`Creating account folder: ${accountEmail}`);
       ensurePrivateDir(accountDir);
+    }
 
-      if (process.env.GOOGLE_CREDENTIALS?.trim()) {
-        console.log("Using OAuth credentials from RUDI secret GOOGLE_CREDENTIALS");
-      } else if (existsSync(DEFAULT_CREDENTIALS)) {
-        copyFileSync(DEFAULT_CREDENTIALS, credentialsPath);
-        setPrivateFileMode(credentialsPath);
-        console.log(`Copied credentials.json to ${accountDir}`);
-      } else {
-        console.error("No OAuth credentials found. Set GOOGLE_CREDENTIALS or add credentials.json to the account state folder.");
-        process.exit(1);
-      }
+    if (!existsSync(credentialsPath) && process.env.GOOGLE_CREDENTIALS?.trim()) {
+      console.log("Using OAuth credentials from RUDI secret GOOGLE_CREDENTIALS");
     }
   } else {
     // Find first account with credentials

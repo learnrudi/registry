@@ -40,6 +40,21 @@ async function callTool(client, name, args = {}) {
 async function main() {
   await testLegacyMigration();
   await testMcpUsesExternalState();
+  testAuthSourceDoesNotUsePackageLocalCredentialFallback();
+}
+
+function testAuthSourceDoesNotUsePackageLocalCredentialFallback() {
+  const authSource = readFileSync(path.join(process.cwd(), "src", "auth.ts"), "utf8");
+  assert.equal(
+    authSource.includes("brandonzhoff@gmail.com"),
+    false,
+    "auth must not use a personal default credentials path"
+  );
+  assert.equal(
+    authSource.includes("DEFAULT_CREDENTIALS"),
+    false,
+    "auth must not copy credentials from a default package-local account"
+  );
 }
 
 async function testLegacyMigration() {
