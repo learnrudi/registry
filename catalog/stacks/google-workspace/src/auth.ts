@@ -22,6 +22,7 @@ import { config } from "dotenv";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACCOUNTS_DIR = join(__dirname, "..", "accounts");
+const STATE_FILE = join(__dirname, "..", "state.json");
 config({ path: join(__dirname, "..", ".env") });
 
 const SCOPES = [
@@ -231,6 +232,7 @@ async function authenticate(accountEmail?: string) {
           };
 
           writeFileSync(tokenPath, JSON.stringify(tokenData, null, 2));
+          writeFileSync(STATE_FILE, JSON.stringify({ currentAccount: accountName }, null, 2));
 
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end(`
