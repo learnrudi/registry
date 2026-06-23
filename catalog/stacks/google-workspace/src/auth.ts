@@ -13,16 +13,17 @@
 import { google } from "googleapis";
 import { createServer } from "http";
 import { parse } from "url";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "fs";
-import { join, dirname } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, readdirSync } from "fs";
+import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
-import { promisify } from "util";
 import * as net from "net";
 import open from "open";
+import { config } from "dotenv";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACCOUNTS_DIR = join(__dirname, "..", "accounts");
-const DEFAULT_CREDENTIALS = join(__dirname, "..", "accounts", "brandonzhoff@gmail.com", "credentials.json");
+const STATE_FILE = join(__dirname, "..", "state.json");
+config({ path: join(__dirname, "..", ".env") });
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -65,43 +66,109 @@ async function findAvailablePort(basePort = 3456): Promise<number> {
   throw new Error(`No available ports found in range ${basePort}-${basePort + 10}`);
 }
 
+function expandHome(filePath: string): string {
+  if (filePath.startsWith("~/")) {
+    return join(process.env.HOME || process.env.USERPROFILE || "", filePath.slice(2));
+  }
+  return filePath;
+}
+
+function getAccounts(): string[] {
+  return existsSync(ACCOUNTS_DIR)
+    ? readdirSync(ACCOUNTS_DIR).filter((name: string) => !name.startsWith("."))
+    : [];
+}
+
+function findFirstCredentialsPath(): string | null {
+  for (const account of getAccounts()) {
+    const credentialsPath = join(ACCOUNTS_DIR, account, "credentials.json");
+    if (existsSync(credentialsPath)) return credentialsPath;
+  }
+  return null;
+}
+
+function materializeCredentialsFromEnv(credentialsPath: string): boolean {
+  const source = process.env.GOOGLE_CREDENTIALS?.trim();
+  if (!source) return false;
+
+  mkdirSync(dirname(credentialsPath), { recursive: true });
+
+  if (source.startsWith("{")) {
+    writeFileSync(credentialsPath, JSON.stringify(JSON.parse(source), null, 2));
+    console.log(`Wrote credentials from GOOGLE_CREDENTIALS to ${credentialsPath}`);
+    return true;
+  }
+
+  const sourcePath = expandHome(source);
+  if (existsSync(sourcePath)) {
+    copyFileSync(sourcePath, credentialsPath);
+    console.log(`Copied credentials from GOOGLE_CREDENTIALS path to ${credentialsPath}`);
+    return true;
+  }
+
+  try {
+    const decoded = Buffer.from(source, "base64").toString("utf-8");
+    writeFileSync(credentialsPath, JSON.stringify(JSON.parse(decoded), null, 2));
+    console.log(`Wrote base64 credentials from GOOGLE_CREDENTIALS to ${credentialsPath}`);
+    return true;
+  } catch {
+    throw new Error("GOOGLE_CREDENTIALS must be a path, JSON credentials content, or base64 JSON credentials content");
+  }
+}
+
+function ensureCredentials(accountDir: string, credentialsPath: string) {
+  if (existsSync(credentialsPath)) return;
+
+  if (materializeCredentialsFromEnv(credentialsPath)) return;
+
+  const existingCredentials = findFirstCredentialsPath();
+  if (existingCredentials) {
+    mkdirSync(accountDir, { recursive: true });
+    copyFileSync(existingCredentials, credentialsPath);
+    console.log(`Copied credentials.json to ${accountDir}`);
+    return;
+  }
+
+  console.error("No credentials.json found.");
+  console.error("Add one to the account folder or set GOOGLE_CREDENTIALS to a credentials file path or JSON value.");
+  process.exit(1);
+}
+
 async function authenticate(accountEmail?: string) {
   // Determine account directory
   let accountDir: string;
   let credentialsPath: string;
+  let accountName = accountEmail || process.env.GOOGLE_ACCOUNT || "";
 
-  if (accountEmail) {
-    accountDir = join(ACCOUNTS_DIR, accountEmail);
+  if (!accountName && process.env.GOOGLE_CREDENTIALS) {
+    accountName = "default";
+  }
+
+  if (accountName) {
+    accountDir = join(ACCOUNTS_DIR, accountName);
     credentialsPath = join(accountDir, "credentials.json");
 
     // Create account folder if it doesn't exist
     if (!existsSync(accountDir)) {
-      console.log(`Creating account folder: ${accountEmail}`);
+      console.log(`Creating account folder: ${accountName}`);
       mkdirSync(accountDir, { recursive: true });
-
-      // Copy credentials from existing account
-      if (existsSync(DEFAULT_CREDENTIALS)) {
-        copyFileSync(DEFAULT_CREDENTIALS, credentialsPath);
-        console.log(`Copied credentials.json to ${accountDir}`);
-      } else {
-        console.error("No credentials.json found. Please add one to the account folder.");
-        process.exit(1);
-      }
     }
+
+    ensureCredentials(accountDir, credentialsPath);
   } else {
     // Find first account with credentials
-    const accounts = existsSync(ACCOUNTS_DIR)
-      ? require("fs").readdirSync(ACCOUNTS_DIR).filter((f: string) => !f.startsWith("."))
-      : [];
+    const firstCredentialsPath = findFirstCredentialsPath();
 
-    if (accounts.length === 0) {
+    if (!firstCredentialsPath) {
       console.error("No accounts found. Run with email: npx tsx src/auth.ts user@gmail.com");
+      console.error("Or set GOOGLE_CREDENTIALS to a credentials file path or JSON value.");
       process.exit(1);
     }
 
-    accountDir = join(ACCOUNTS_DIR, accounts[0]);
-    credentialsPath = join(accountDir, "credentials.json");
-    console.log(`Using account: ${accounts[0]}`);
+    credentialsPath = firstCredentialsPath;
+    accountDir = dirname(credentialsPath);
+    accountName = basename(accountDir);
+    console.log(`Using account: ${accountName}`);
   }
 
   if (!existsSync(credentialsPath)) {
@@ -136,7 +203,7 @@ async function authenticate(accountEmail?: string) {
   console.log("\n========================================");
   console.log("Google Workspace OAuth Setup");
   console.log("========================================\n");
-  console.log(`Account: ${accountEmail || "default"}`);
+  console.log(`Account: ${accountName || "default"}`);
   console.log("\nOpening browser for authentication...\n");
 
   // Start local server to receive callback
@@ -160,11 +227,12 @@ async function authenticate(accountEmail?: string) {
             client_secret,
             scopes: SCOPES,
             universe_domain: "googleapis.com",
-            account: accountEmail || "",
+            account: accountName || "",
             expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
           };
 
           writeFileSync(tokenPath, JSON.stringify(tokenData, null, 2));
+          writeFileSync(STATE_FILE, JSON.stringify({ currentAccount: accountName }, null, 2));
 
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end(`
@@ -172,7 +240,7 @@ async function authenticate(accountEmail?: string) {
               <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
                 <div style="text-align: center;">
                   <h1 style="color: #22c55e;">✓ Authentication Successful!</h1>
-                  <p>Account: <strong>${accountEmail || "default"}</strong></p>
+                  <p>Account: <strong>${accountName || "default"}</strong></p>
                   <p>You can close this window.</p>
                 </div>
               </body>
