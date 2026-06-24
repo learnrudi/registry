@@ -158,30 +158,29 @@ Expected properties:
 
 - `Thread` title
 - `Company` rich text
-- `Engagement` rich text
 - `Contact` rich text
-- `Channel` select
 - `Category` select
 - `Priority` select
 - `Status` select
-- `Owner` people or text, optional for current automation
+- `Waiting On` select: `Me`, `Them`, `Calendar`, `Internal`, `None`, or `Review`
+- `Last Direction` select: `Inbound`, `Outbound`, `Calendar`, or `Manual`
+- `Last From` rich text
+- `Owner` people or text, optional
 - `Last Activity` date
 - `Due Date` date
 - `Last Inbound At` date
 - `Last Outbound At` date
 - `Last Calendar At` date
-- `Sender` rich text
 - `Last Message ID` rich text
 - `Thread ID` rich text
 - `Gmail Thread URL` url
 - `Summary` rich text
+- `Last Response Summary` rich text
 - `Next Action` rich text
 - `Sensitivity` select
-- `Source URL` url
 - `Drive URL` url
-- `Storage URL` url
-- `GitHub Path` rich text
-- `Reviewed` checkbox
+
+The recommended workflow shape is one active row per Gmail `Thread ID`. Message-level history belongs in the row page body and local audit log, not in duplicate database rows. Avoid carrying old inbox-style fields such as `Channel`, `Sender`, `Source URL`, `Storage URL`, `GitHub Path`, and `Reviewed` in the main database unless a specific deployment needs them.
 
 Recommended views:
 
