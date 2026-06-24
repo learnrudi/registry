@@ -157,15 +157,13 @@ Configured per-instance database ID:
 Expected properties:
 
 - `Thread` title
-- `Company` rich text
-- `Contact` rich text
 - `Category` select
-- `Priority` select
+- `Companies` rich text
+- `Contacts` rich text
 - `Status` select
-- `Waiting On` select: `Me`, `Them`, `Calendar`, `Internal`, `None`, or `Review`
+- `Waiting On` select: `Me`, `Them`, or `None`
 - `Last Direction` select: `Inbound`, `Outbound`, `Calendar`, or `Manual`
 - `Last From` rich text
-- `Owner` people or text, optional
 - `Last Activity` date
 - `Due Date` date
 - `Last Inbound At` date
@@ -174,11 +172,13 @@ Expected properties:
 - `Last Message ID` rich text
 - `Thread ID` rich text
 - `Gmail Thread URL` url
-- `Summary` rich text
+- `Thread Summary` rich text
 - `Last Response Summary` rich text
 - `Next Action` rich text
 - `Sensitivity` select
 - `Drive URL` url
+- `Priority` select, optional/hidden from main views
+- `Owner` people or text, optional/hidden from main views
 
 The recommended workflow shape is one active row per Gmail `Thread ID`. Message-level history belongs in the row page body and local audit log, not in duplicate database rows. Avoid carrying old inbox-style fields such as `Channel`, `Sender`, `Source URL`, `Storage URL`, `GitHub Path`, and `Reviewed` in the main database unless a specific deployment needs them.
 
@@ -187,6 +187,7 @@ Recommended views:
 - `Action View`: critical active queue columns only.
 - `Needs Reply`: filtered to `Needs Reply`.
 - `Waiting`: filtered to `Waiting`.
+- `Thread Review`: fuller row-review/audit layout.
 - `Status Board`: board grouped by `Status`.
 - `System Audit`: visible system fields for watcher debugging.
 - `Ignored / Duplicates`: rows intentionally retired to `Ignore`.
