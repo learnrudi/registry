@@ -39,11 +39,12 @@ The user works with an agent to instantiate the workflow. The agent should:
 7. Verify the Notion integration can read and write the database.
 8. Ask whether matching messages should auto-log or go through review first.
 9. Ask whether sent replies should update prior `Needs Reply` rows to `Waiting`.
-10. Ask for cadence, such as 15 minutes, hourly, or daily.
-11. Generate local config, rules, and scheduler files.
-12. Run a dry run and show sample classifications.
-13. Install the automation instance only after the dry run looks right.
-14. Record health checks, pause/resume commands, and output locations.
+10. Ask whether calendar events should update meeting rows.
+11. Ask for cadence, such as 15 minutes, hourly, or daily.
+12. Generate local config, rules, and scheduler files.
+13. Run a dry run and show sample classifications.
+14. Install the automation instance only after the dry run looks right.
+15. Record health checks, pause/resume commands, and output locations.
 
 ## Depends On
 
@@ -77,6 +78,8 @@ Suggested workflow config:
 - `gmail.sentQuery`: sent-mail query for correspondence reconciliation
 - `gmail.maxResults`: maximum messages to inspect per run
 - `gmail.accounts`: account selector, if multi-account support is enabled
+- `calendar.enabled`: whether to reconcile meeting rows against calendar events
+- `calendar.days`: number of upcoming days to inspect
 - `classification.mode`: `auto-log` or `review-first`
 - `classification.rulesPath`: local rules file
 - `classification.excludeCategories`: promotions, social, forums, spam, trash
