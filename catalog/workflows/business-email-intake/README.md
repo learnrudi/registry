@@ -40,11 +40,13 @@ The user works with an agent to instantiate the workflow. The agent should:
 8. Ask whether matching messages should auto-log or go through review first.
 9. Ask whether sent replies should update prior `Needs Reply` rows to `Waiting`.
 10. Ask whether calendar events should update meeting rows.
-11. Ask for cadence, such as 15 minutes, hourly, or daily.
-12. Generate local config, rules, and scheduler files.
-13. Run a dry run and show sample classifications.
-14. Install the automation instance only after the dry run looks right.
-15. Record health checks, pause/resume commands, and output locations.
+11. Ask whether multiple messages in one Gmail thread should update one action row.
+12. Ask whether the agent may prepare response drafts, and where draft text should live.
+13. Ask for cadence, such as 15 minutes, hourly, or daily.
+14. Generate local config, rules, and scheduler files.
+15. Run a dry run and show sample classifications.
+16. Install the automation instance only after the dry run looks right.
+17. Record health checks, pause/resume commands, and output locations.
 
 ## Depends On
 
@@ -83,7 +85,10 @@ Suggested workflow config:
 - `classification.mode`: `auto-log` or `review-first`
 - `classification.rulesPath`: local rules file
 - `classification.excludeCategories`: promotions, social, forums, spam, trash
+- `correspondence.threadUpsert`: whether one active row should represent a Gmail thread
 - `correspondence.updateNeedsReplyFromSent`: whether sent replies update prior rows to `Waiting`
+- `drafts.enabled`: whether the workflow can prepare response drafts
+- `drafts.destination`: `notion`, `gmail-draft`, `local-file`, or `manual`
 - `notion.databaseId`: target database ID
 - `notion.createDatabase`: whether the setup flow should provision a database
 - `outputs.localMarkdownLog`: local communication log path
