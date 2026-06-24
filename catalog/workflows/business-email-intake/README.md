@@ -14,17 +14,29 @@ Purpose: help a user and their agent configure an always-on email watcher that l
 
 This is not an MCP stack by itself. It composes MCP stacks, asks setup questions, creates or connects storage, performs dry runs, and can install a scheduler-backed automation instance. It should not be forced into `stack:*` unless it later exposes MCP tools of its own.
 
+Related skill:
+
+```text
+skill:business-communication-secretary
+```
+
+The workflow is the installable/configurable process. The related skill is the agent operating procedure for keeping the communication board accurate after the workflow is installed.
+
 ## Conceptual Model
 
 - Stack: reusable capability provider, such as `stack:google-workspace` or `stack:notion-workspace`.
 - Workflow: customizable business process that uses one or more stacks.
 - Automation instance: one installed, configured copy of a workflow running on a schedule or trigger.
+- Source connector: an MCP stack that contributes communication signals, such as Gmail, Calendar, meeting transcripts, or call notes.
 - Thread action row: one active Notion database row representing the current state of a Gmail thread, with message history logged inside the row page.
 
 For this package:
 
 - Workflow: `workflow:business-email-intake`
 - Instance: this Mac's hourly `launchd` watcher
+- Source connectors now: `stack:google-workspace`
+- System of record now: `stack:notion-workspace`
+- Likely future source connector: an Otter MCP stack for meeting transcript ingestion, once registered
 - Outputs: Notion Company Communications database, per-row thread logs, and local Markdown communication log
 
 ## Agent-Guided Setup
@@ -51,10 +63,19 @@ The user works with an agent to instantiate the workflow. The agent should:
 
 ## Depends On
 
-Stacks:
+Required stacks:
 
 - `stack:google-workspace`
 - `stack:notion-workspace`
+
+Related skill:
+
+- `skill:business-communication-secretary`
+
+Optional/future source stacks:
+
+- Otter transcript MCP stack, once it exists in the registry
+- Other communication-source stacks, such as Slack, phone/SMS, or CRM notes, if the workflow instance is configured to watch them
 
 Runtime:
 
@@ -72,6 +93,18 @@ Host capabilities:
 - Access to `~/.rudi/secrets.json`
 - Access to Google Workspace account state managed by `stack:google-workspace`
 - Notion integration access to the target database
+
+## Source And Destination Model
+
+The workflow should separate source systems from the operating board:
+
+- Gmail inbound threads provide external replies, new asks, and source-of-truth message context.
+- Gmail sent mail provides whether Brandon or the team has replied.
+- Google Calendar provides whether scheduling threads have become real meetings.
+- Otter or other transcript sources can later provide meeting notes, decisions, and follow-up items.
+- Notion is the business communication dashboard: current status, current owner, current next action, thread summary, and links back to source systems.
+
+Do not make GitHub or local Markdown the primary operating board. GitHub is for registry/workflow docs and reviewed source changes. Local Markdown is an audit/debug trail. Notion is the user-facing coordination surface.
 
 ## Configurable Fields
 
@@ -250,6 +283,11 @@ A workflow package needs fields that stacks do not currently model:
     "stack:google-workspace",
     "stack:notion-workspace"
   ],
+  "related": {
+    "skills": [
+      "skill:business-communication-secretary"
+    ]
+  },
   "requires": {
     "secrets": [
       "GOOGLE_CREDENTIALS",
