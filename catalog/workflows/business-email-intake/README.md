@@ -183,6 +183,17 @@ Expected properties:
 - `GitHub Path` rich text
 - `Reviewed` checkbox
 
+Recommended views:
+
+- `Action View`: critical active queue columns only.
+- `Needs Reply`: filtered to `Needs Reply`.
+- `Waiting`: filtered to `Waiting`.
+- `Status Board`: board grouped by `Status`.
+- `System Audit`: visible system fields for watcher debugging.
+- `Ignored / Duplicates`: rows intentionally retired to `Ignore`.
+
+Duplicate cleanup should be non-destructive. When multiple active rows share one `Thread ID`, the workflow should keep the newest row as canonical, append a consolidation note to that row page, and mark older rows `Ignore` rather than deleting them.
+
 ## Security Rules
 
 - Do not store secret values in registry files.
