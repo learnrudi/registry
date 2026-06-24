@@ -24,6 +24,7 @@ MCP (Model Context Protocol) servers that extend agents with tools for external 
 |-------|-------------|------------------|
 | `google-workspace` | Gmail, Sheets, Docs, Drive, Calendar | `GOOGLE_CREDENTIALS` |
 | `notion-workspace` | Pages, databases, search | `NOTION_API_KEY` |
+| `otter-mcp` | Search and fetch Otter meeting transcripts through Otter's hosted OAuth MCP server | - |
 | `airtable` | Query and manage Airtable bases and records | `AIRTABLE_API_KEY` |
 | `ms-office` | Read Word/Excel documents | - |
 
