@@ -25,7 +25,7 @@ For this package:
 
 - Workflow: `workflow:business-email-intake`
 - Instance: this Mac's hourly `launchd` watcher
-- Outputs: Notion Business Communications database, per-row thread logs, and local Markdown communication log
+- Outputs: Notion Company Communications database, per-row thread logs, and local Markdown communication log
 
 ## Agent-Guided Setup
 
@@ -145,7 +145,7 @@ LaunchAgent settings:
 Default database name:
 
 ```text
-Business Communications
+Company Communications
 ```
 
 Configured per-instance database ID:
@@ -156,22 +156,31 @@ Configured per-instance database ID:
 
 Expected properties:
 
-- `Subject` title
+- `Thread` title
 - `Company` rich text
+- `Engagement` rich text
 - `Contact` rich text
 - `Channel` select
 - `Category` select
+- `Priority` select
 - `Status` select
 - `Owner` people or text, optional for current automation
-- `Date` date
+- `Last Activity` date
 - `Due Date` date
+- `Last Inbound At` date
+- `Last Outbound At` date
+- `Last Calendar At` date
 - `Sender` rich text
-- `Message ID` rich text
+- `Last Message ID` rich text
 - `Thread ID` rich text
+- `Gmail Thread URL` url
 - `Summary` rich text
 - `Next Action` rich text
 - `Sensitivity` select
 - `Source URL` url
+- `Drive URL` url
+- `Storage URL` url
+- `GitHub Path` rich text
 - `Reviewed` checkbox
 
 ## Security Rules
