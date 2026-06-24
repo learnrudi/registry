@@ -38,11 +38,12 @@ The user works with an agent to instantiate the workflow. The agent should:
 6. Ask whether to create a new Notion database or use an existing one.
 7. Verify the Notion integration can read and write the database.
 8. Ask whether matching messages should auto-log or go through review first.
-9. Ask for cadence, such as 15 minutes, hourly, or daily.
-10. Generate local config, rules, and scheduler files.
-11. Run a dry run and show sample classifications.
-12. Install the automation instance only after the dry run looks right.
-13. Record health checks, pause/resume commands, and output locations.
+9. Ask whether sent replies should update prior `Needs Reply` rows to `Waiting`.
+10. Ask for cadence, such as 15 minutes, hourly, or daily.
+11. Generate local config, rules, and scheduler files.
+12. Run a dry run and show sample classifications.
+13. Install the automation instance only after the dry run looks right.
+14. Record health checks, pause/resume commands, and output locations.
 
 ## Depends On
 
@@ -73,11 +74,13 @@ Host capabilities:
 Suggested workflow config:
 
 - `gmail.query`: Gmail search query
+- `gmail.sentQuery`: sent-mail query for correspondence reconciliation
 - `gmail.maxResults`: maximum messages to inspect per run
 - `gmail.accounts`: account selector, if multi-account support is enabled
 - `classification.mode`: `auto-log` or `review-first`
 - `classification.rulesPath`: local rules file
 - `classification.excludeCategories`: promotions, social, forums, spam, trash
+- `correspondence.updateNeedsReplyFromSent`: whether sent replies update prior rows to `Waiting`
 - `notion.databaseId`: target database ID
 - `notion.createDatabase`: whether the setup flow should provision a database
 - `outputs.localMarkdownLog`: local communication log path
