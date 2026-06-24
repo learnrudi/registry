@@ -19,12 +19,13 @@ This is not an MCP stack by itself. It composes MCP stacks, asks setup questions
 - Stack: reusable capability provider, such as `stack:google-workspace` or `stack:notion-workspace`.
 - Workflow: customizable business process that uses one or more stacks.
 - Automation instance: one installed, configured copy of a workflow running on a schedule or trigger.
+- Thread action row: one active Notion database row representing the current state of a Gmail thread, with message history logged inside the row page.
 
 For this package:
 
 - Workflow: `workflow:business-email-intake`
 - Instance: this Mac's hourly `launchd` watcher
-- Outputs: Notion Business Communications database and local Markdown communication log
+- Outputs: Notion Business Communications database, per-row thread logs, and local Markdown communication log
 
 ## Agent-Guided Setup
 
@@ -86,6 +87,7 @@ Suggested workflow config:
 - `classification.rulesPath`: local rules file
 - `classification.excludeCategories`: promotions, social, forums, spam, trash
 - `correspondence.threadUpsert`: whether one active row should represent a Gmail thread
+- `correspondence.threadLog`: whether message history should append to the row page
 - `correspondence.updateNeedsReplyFromSent`: whether sent replies update prior rows to `Waiting`
 - `drafts.enabled`: whether the workflow can prepare response drafts
 - `drafts.destination`: `notion`, `gmail-draft`, `local-file`, or `manual`
