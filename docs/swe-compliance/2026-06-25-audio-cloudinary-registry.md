@@ -41,6 +41,7 @@
   - Made `audio-tools` config portable and env-overridable; removed copied local absolute defaults.
   - Added `yt-dlp` planning for supported video-page URLs and rejected non-http(s) URLs.
   - Sanitized base64 upload filenames into the stack temp directory.
+  - Kept `whisper-cli` as a documented transcription prerequisite rather than a registry binary dependency because the current installer attempts to install the system-only `binary:whisper` provider and fails on macOS.
   - Cleaned Cloudinary docs/tool text to generic public-registry wording and removed non-public related-skill references.
 - Exit criteria: red tests pass unchanged.
 

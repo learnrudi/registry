@@ -57,7 +57,7 @@ describe("audio-tools and cloudinary stack packages", () => {
         path: "catalog/stacks/audio-tools",
       },
       requires: {
-        binaries: ["ffmpeg", "ffprobe", "whisper", "yt-dlp"],
+        binaries: ["ffmpeg", "ffprobe", "yt-dlp"],
         secrets: [],
       },
       mcp: {
@@ -76,7 +76,7 @@ describe("audio-tools and cloudinary stack packages", () => {
         path: "catalog/stacks/audio-tools",
         runtime: "runtime:node",
         requires: {
-          binaries: ["ffmpeg", "ffprobe", "whisper", "yt-dlp"],
+          binaries: ["ffmpeg", "ffprobe", "yt-dlp"],
         },
       })
     );

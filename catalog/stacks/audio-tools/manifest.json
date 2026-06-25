@@ -22,7 +22,6 @@
     "binaries": [
       "ffmpeg",
       "ffprobe",
-      "whisper",
       "yt-dlp"
     ],
     "secrets": []
