@@ -28,6 +28,55 @@
           ]
         },
         {
+          "id": "stack:audio-tools",
+          "name": "Audio Tools",
+          "version": "1.0.0",
+          "description": "Transcribe, enrich, sync, and query local audio or video-linked speech with local Whisper and yt-dlp",
+          "path": "catalog/stacks/audio-tools",
+          "runtime": "runtime:node",
+          "category": "audio-processing",
+          "tags": [
+            "audio",
+            "transcription",
+            "whisper",
+            "yt-dlp",
+            "speech-to-text",
+            "sqlite"
+          ],
+          "requires": {
+            "binaries": [
+              "ffmpeg",
+              "ffprobe",
+              "whisper",
+              "yt-dlp"
+            ]
+          }
+        },
+        {
+          "id": "stack:cloudinary",
+          "name": "Cloudinary",
+          "version": "0.1.0",
+          "description": "Upload local media to Cloudinary and return public HTTPS delivery URLs",
+          "path": "catalog/stacks/cloudinary",
+          "runtime": "runtime:node",
+          "category": "media",
+          "tags": [
+            "cloudinary",
+            "video",
+            "media",
+            "upload",
+            "social-media"
+          ],
+          "requires": {
+            "secrets": [
+              "CLOUDINARY_CLOUD_NAME",
+              "CLOUDINARY_API_KEY",
+              "CLOUDINARY_API_SECRET",
+              "CLOUDINARY_URL"
+            ]
+          }
+        },
+        {
           "id": "stack:creator-intelligence",
           "name": "Creator Intelligence",
           "version": "0.1.0",
