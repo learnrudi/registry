@@ -20,7 +20,7 @@ This is the related operating skill for `workflow:business-email-intake`. The wo
 1. Treat Gmail as the source of truth for full correspondence.
 2. Treat sent mail as the source of truth for whether Brandon or the team has replied.
 3. Treat Google Calendar as the source of truth for scheduled meetings.
-4. Treat Otter or other transcript connectors as optional sources for meeting decisions and follow-up items once those stacks exist.
+4. Treat `stack:otter-mcp` or other transcript connectors as optional sources for meeting decisions and follow-up items when the workflow instance enables them.
 5. Treat Notion as the thread-level operating board.
 6. Keep one active Notion row per source thread or conversation key, using Gmail `Thread ID` for email.
 7. Keep detailed message history in the row page body or local audit log, not duplicate database rows.
@@ -32,12 +32,12 @@ Current required source and destination stacks:
 - `stack:google-workspace`: Gmail inbound, Gmail sent mail, Google Calendar.
 - `stack:notion-workspace`: Company Communications action board.
 
-Planned optional source stacks:
+Optional source stacks:
 
-- Otter MCP stack for meeting transcripts and notes.
+- `stack:otter-mcp`: Otter meeting transcripts and notes. Call `get_user_info` first to verify the authenticated Otter account and current time context, then use `search` for meeting metadata and `fetch` only for specific meeting IDs that need full transcript context.
 - Other communication sources such as Slack, SMS, CRM, or call notes when the workflow instance is configured to watch them.
 
-Do not add an optional source as a required stack until it is registered and the workflow instance actually depends on it.
+Do not add an optional source as a required stack until the workflow instance actually depends on it.
 
 ## Notion Briefing Fields
 

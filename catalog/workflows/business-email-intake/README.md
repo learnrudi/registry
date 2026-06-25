@@ -35,8 +35,8 @@ For this package:
 - Workflow: `workflow:business-email-intake`
 - Instance: this Mac's hourly `launchd` watcher
 - Source connectors now: `stack:google-workspace`
+- Optional transcript source now: `stack:otter-mcp`
 - System of record now: `stack:notion-workspace`
-- Likely future source connector: an Otter MCP stack for meeting transcript ingestion, once registered
 - Outputs: Notion Company Communications database, per-row thread logs, and local Markdown communication log
 
 ## Agent-Guided Setup
@@ -72,9 +72,9 @@ Related skill:
 
 - `skill:business-communication-secretary`
 
-Optional/future source stacks:
+Optional source stacks:
 
-- Otter transcript MCP stack, once it exists in the registry
+- `stack:otter-mcp`, for Otter meeting transcripts and notes
 - Other communication-source stacks, such as Slack, phone/SMS, or CRM notes, if the workflow instance is configured to watch them
 
 Runtime:
@@ -101,7 +101,7 @@ The workflow should separate source systems from the operating board:
 - Gmail inbound threads provide external replies, new asks, and source-of-truth message context.
 - Gmail sent mail provides whether Brandon or the team has replied.
 - Google Calendar provides whether scheduling threads have become real meetings.
-- Otter or other transcript sources can later provide meeting notes, decisions, and follow-up items.
+- Otter or other transcript sources provide meeting notes, decisions, and follow-up items when configured.
 - Notion is the business communication dashboard: current status, current owner, current next action, thread summary, and links back to source systems.
 
 Do not make GitHub or local Markdown the primary operating board. GitHub is for registry/workflow docs and reviewed source changes. Local Markdown is an audit/debug trail. Notion is the user-facing coordination surface.
@@ -262,6 +262,14 @@ State file:
 cat ~/.rudi/automations/business-email-intake/state/business-email-intake-state.json
 ```
 
+Otter MCP verification:
+
+```bash
+~/.rudi/bins/rudi-router
+```
+
+Then call `stack:otter-mcp.get_user_info` through the router. On June 24, 2026, the installed stack was verified through the RUDI router with tools `search`, `fetch`, and `get_user_info`. The direct command `rudi run stack:otter-mcp` currently fails before OAuth because the hosted MCP URL is resolved as a local path; the router path works and should be used by agents and automation.
+
 ## Proposed Registry Schema Extension
 
 A workflow package needs fields that stacks do not currently model:
@@ -282,6 +290,9 @@ A workflow package needs fields that stacks do not currently model:
     "runtime:node",
     "stack:google-workspace",
     "stack:notion-workspace"
+  ],
+  "optionalDependsOn": [
+    "stack:otter-mcp"
   ],
   "related": {
     "skills": [
