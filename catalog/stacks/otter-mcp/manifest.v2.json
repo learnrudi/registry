@@ -24,11 +24,9 @@
   },
   "mcp": {
     "transport": "stdio",
-    "command": "npx",
+    "command": "node",
     "args": [
-      "-y",
-      "mcp-remote@0.1.38",
-      "https://mcp.otter.ai/mcp"
+      "src/index.js"
     ],
     "cwd": "."
   },

@@ -164,3 +164,16 @@ This checklist governs adding Otter's hosted OAuth MCP server to the RUDI public
   - [x] Otter is installable from the public registry metadata.
   - [x] Tests and validations prove manifest/index consistency.
   - [x] Changes are committed, pushed, and represented on GitHub.
+
+## Follow-Up: Current CLI Install Compatibility
+
+- Status: complete.
+- Finding:
+  - [x] After PR #3 merged, `rudi install stack:otter-mcp --force` on RUDI CLI v1.10.9 resolved the package but failed validation because the installer treated `https://mcp.otter.ai/mcp` in the command array as a local file entrypoint.
+- Fix:
+  - [x] Added `catalog/stacks/otter-mcp/src/index.js` as a local Node entrypoint.
+  - [x] Updated both manifests to launch `node src/index.js`.
+  - [x] Kept the pinned `mcp-remote@0.1.38` bridge and Otter remote URL inside the wrapper.
+  - [x] The wrapper uses `process.execPath` so it runs with RUDI's bundled Node instead of relying on a possibly stale system `npx` shim.
+- Verification:
+  - [x] Focused Otter package test covers the local entrypoint and pinned remote bridge.
