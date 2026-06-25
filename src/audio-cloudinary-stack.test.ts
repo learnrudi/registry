@@ -113,6 +113,11 @@ describe("audio-tools and cloudinary stack packages", () => {
       },
     });
     expect(manifest.provides.tools).toEqual(cloudinaryTools);
+    expect(legacyManifest).toMatchObject({
+      id: "stack:cloudinary",
+      runtime: "node",
+      command: ["npx", "tsx", "src/index.ts"],
+    });
     expect(legacyManifest.provides.tools).toEqual(cloudinaryTools);
     expect(manifest).not.toHaveProperty("related");
 

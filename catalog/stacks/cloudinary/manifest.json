@@ -1,5 +1,5 @@
 {
-  "id": "cloudinary",
+  "id": "stack:cloudinary",
   "name": "Cloudinary",
   "version": "0.1.0",
   "description": "Upload local media to Cloudinary and return public HTTPS URLs for social publishing workflows.",
