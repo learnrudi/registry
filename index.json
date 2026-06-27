@@ -484,6 +484,39 @@
           }
         },
         {
+          "id": "stack:neon",
+          "name": "Neon",
+          "version": "0.1.0",
+          "description": "Guarded Neon platform operations for projects, branches, connection URI retrieval, and MCP config generation",
+          "path": "catalog/stacks/neon",
+          "runtime": "runtime:node",
+          "category": "data",
+          "tags": [
+            "neon",
+            "postgres",
+            "database",
+            "branching",
+            "mcp",
+            "platform"
+          ],
+          "requires": {
+            "binaries": [
+              "neonctl"
+            ],
+            "secrets": [
+              "NEON_API_KEY"
+            ]
+          },
+          "related": {
+            "stacks": [
+              "stack:postgres"
+            ],
+            "binaries": [
+              "binary:neonctl"
+            ]
+          }
+        },
+        {
           "id": "stack:sqlite",
           "name": "SQLite",
           "version": "1.0.0",
@@ -1301,6 +1334,21 @@
           "description": "Deploy to Netlify",
           "path": "catalog/binaries/netlify.json",
           "installType": "npm",
+          "platforms": [
+            "darwin-arm64",
+            "darwin-x64",
+            "linux-x64"
+          ]
+        },
+        {
+          "id": "binary:neonctl",
+          "name": "Neon CLI",
+          "version": "latest",
+          "description": "Manage Neon projects, branches, auth, and MCP setup from the terminal",
+          "path": "catalog/binaries/neonctl.json",
+          "installType": "npm",
+          "npmPackage": "neonctl",
+          "bins": ["neonctl", "neon"],
           "platforms": [
             "darwin-arm64",
             "darwin-x64",
