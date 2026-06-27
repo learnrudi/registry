@@ -558,6 +558,26 @@
           }
         },
         {
+          "id": "stack:supabase-mcp",
+          "name": "Supabase MCP",
+          "version": "0.1.0",
+          "description": "Connect agents to Supabase's hosted OAuth MCP server for database, project, Edge Functions, docs, and development tools",
+          "path": "catalog/stacks/supabase-mcp",
+          "runtime": "runtime:node",
+          "category": "data",
+          "tags": [
+            "supabase",
+            "postgres",
+            "database",
+            "mcp",
+            "oauth",
+            "remote"
+          ],
+          "requires": {
+            "secrets": []
+          }
+        },
+        {
           "id": "stack:sqlite",
           "name": "SQLite",
           "version": "1.0.0",
