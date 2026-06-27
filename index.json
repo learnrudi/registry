@@ -284,6 +284,25 @@
           }
         },
         {
+          "id": "stack:otter-mcp",
+          "name": "Otter MCP",
+          "version": "0.1.0",
+          "description": "Search and fetch Otter meeting transcripts through Otter's hosted OAuth MCP server",
+          "path": "catalog/stacks/otter-mcp",
+          "runtime": "runtime:node",
+          "category": "productivity",
+          "tags": [
+            "otter",
+            "meetings",
+            "transcripts",
+            "mcp",
+            "oauth"
+          ],
+          "requires": {
+            "secrets": []
+          }
+        },
+        {
           "id": "stack:openai",
           "name": "OpenAI Suite",
           "version": "1.0.0",

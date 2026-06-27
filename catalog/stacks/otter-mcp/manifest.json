@@ -1,0 +1,35 @@
+{
+  "id": "otter-mcp",
+  "name": "Otter MCP",
+  "version": "0.1.0",
+  "description": "Search and fetch Otter meeting transcripts through Otter's hosted OAuth MCP server.",
+  "runtime": "node",
+  "command": [
+    "node",
+    "src/index.js"
+  ],
+  "provides": {
+    "tools": [
+      "get_user_info",
+      "search",
+      "fetch"
+    ]
+  },
+  "requires": {
+    "binaries": [],
+    "secrets": []
+  },
+  "meta": {
+    "author": "RUDI",
+    "license": "MIT",
+    "category": "productivity",
+    "tags": [
+      "otter",
+      "meetings",
+      "transcripts",
+      "mcp",
+      "oauth"
+    ],
+    "icon": "otter"
+  }
+}
