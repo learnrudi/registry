@@ -32,10 +32,24 @@ Events access.
 - `macos_create_reminder`
 - `macos_get_selected_finder_items`
 - `macos_reveal_in_finder`
+- `macos_install_launch_agent`
+- `macos_list_launch_agents`
+- `macos_remove_launch_agent`
+- `macos_run_launch_agent_now`
 
 `macos_run_shortcut` and `macos_create_reminder` default to dry-run mode.
 Pass `confirm_run: true` or `confirm_create: true` only after reviewing the
 planned action.
+
+LaunchAgent tools create persistent local background behavior and are also
+guarded. Labels must stay under the `dev.rudi.*` namespace, commands are passed
+as arrays without a shell, and install/remove/run-now actions default to dry-run.
+
+Supported schedules:
+
+- Daily timer: `{ "type": "daily", "hour": 8, "minute": 30 }`
+- Interval timer: `{ "type": "interval", "seconds": 3600 }`
+- Folder/file trigger: `{ "type": "watch_paths", "paths": ["/absolute/path"] }`
 
 ## Development
 
@@ -43,3 +57,6 @@ planned action.
 npm install
 npm test
 ```
+
+See `examples/content-workspace-demo/` for a concrete sample folder showing how
+these primitives can support a local content workspace.

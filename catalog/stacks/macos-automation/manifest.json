@@ -23,7 +23,11 @@
       "macos_run_shortcut",
       "macos_create_reminder",
       "macos_get_selected_finder_items",
-      "macos_reveal_in_finder"
+      "macos_reveal_in_finder",
+      "macos_install_launch_agent",
+      "macos_list_launch_agents",
+      "macos_remove_launch_agent",
+      "macos_run_launch_agent_now"
     ]
   },
   "requires": {
@@ -40,6 +44,7 @@
       "shortcuts",
       "reminders",
       "finder",
+      "launchd",
       "productivity",
       "automation",
       "mcp"

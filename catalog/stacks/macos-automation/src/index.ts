@@ -15,11 +15,15 @@ import {
   getFrontmostApp,
   getSelectedFinderItems,
   getStatus,
+  installLaunchAgent,
+  listLaunchAgents,
   listShortcuts,
   listWindows,
   openApp,
   openUrl,
   parseAppArgs,
+  parseInstallLaunchAgentArgs,
+  parseLaunchAgentLabelArgs,
   parseListWindowsArgs,
   parseNotificationArgs,
   parseOpenUrlArgs,
@@ -27,6 +31,8 @@ import {
   parseReminderArgs,
   parseShortcutArgs,
   revealInFinder,
+  removeLaunchAgent,
+  runLaunchAgentNow,
   runShortcut,
   showNotification,
 } from "./core.js";
@@ -270,6 +276,105 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["path"],
       },
     },
+    {
+      name: "macos_install_launch_agent",
+      description:
+        "Install a scoped user LaunchAgent for timers or folder triggers. Dry-run unless confirm_install is true. Labels must start with dev.rudi.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          label: {
+            type: "string",
+            description: "LaunchAgent label under the dev.rudi namespace, e.g. dev.rudi.daily-brief.",
+          },
+          command: {
+            type: "array",
+            items: { type: "string" },
+            description: "ProgramArguments array. command[0] must be an absolute executable path. No shell is used.",
+          },
+          schedule: {
+            type: "object",
+            description:
+              "Schedule object: {type:'daily',hour,minute}, {type:'interval',seconds}, or {type:'watch_paths',paths:[absolute paths]}.",
+          },
+          run_at_load: {
+            type: "boolean",
+            description: "Set LaunchAgent RunAtLoad.",
+          },
+          working_directory: {
+            type: "string",
+            description: "Optional absolute working directory.",
+          },
+          environment: {
+            type: "object",
+            description: "Optional uppercase environment variables for the job.",
+          },
+          stdout_path: {
+            type: "string",
+            description: "Optional absolute StandardOutPath. Defaults under ~/.rudi/state.",
+          },
+          stderr_path: {
+            type: "string",
+            description: "Optional absolute StandardErrorPath. Defaults under ~/.rudi/state.",
+          },
+          load_now: {
+            type: "boolean",
+            description: "After writing, run launchctl bootstrap immediately.",
+          },
+          confirm_install: {
+            type: "boolean",
+            description: "Must be true to write a plist. Omit or false for dry-run.",
+          },
+        },
+        required: ["label", "command", "schedule"],
+      },
+    },
+    {
+      name: "macos_list_launch_agents",
+      description: "List scoped user LaunchAgents managed by this stack under ~/Library/LaunchAgents/dev.rudi.*.plist.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "macos_remove_launch_agent",
+      description:
+        "Unload and remove a scoped dev.rudi LaunchAgent. Dry-run unless confirm_remove is true.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          label: {
+            type: "string",
+            description: "LaunchAgent label under the dev.rudi namespace.",
+          },
+          confirm_remove: {
+            type: "boolean",
+            description: "Must be true to unload and delete the plist.",
+          },
+        },
+        required: ["label"],
+      },
+    },
+    {
+      name: "macos_run_launch_agent_now",
+      description:
+        "Kickstart a scoped dev.rudi LaunchAgent immediately. Dry-run unless confirm_run is true.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          label: {
+            type: "string",
+            description: "LaunchAgent label under the dev.rudi namespace.",
+          },
+          confirm_run: {
+            type: "boolean",
+            description: "Must be true to run the LaunchAgent now.",
+          },
+        },
+        required: ["label"],
+      },
+    },
   ],
 }));
 
@@ -302,6 +407,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     if (name === "macos_reveal_in_finder") {
       return asText(await revealInFinder(parsePathArgs(toolArgs)));
+    }
+    if (name === "macos_install_launch_agent") {
+      return asText(await installLaunchAgent(parseInstallLaunchAgentArgs(toolArgs)));
+    }
+    if (name === "macos_list_launch_agents") {
+      return asText(await listLaunchAgents());
+    }
+    if (name === "macos_remove_launch_agent") {
+      return asText(await removeLaunchAgent(parseLaunchAgentLabelArgs(toolArgs)));
+    }
+    if (name === "macos_run_launch_agent_now") {
+      return asText(await runLaunchAgentNow(parseLaunchAgentLabelArgs(toolArgs)));
     }
 
     return asText({ kind: "unknown_tool", message: `Unknown tool: ${name}` }, true);

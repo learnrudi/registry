@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 
 export const MAX_TITLE_LENGTH = 160;
@@ -7,6 +8,10 @@ export const MAX_MESSAGE_LENGTH = 4000;
 export const MAX_SHORTCUT_NAME_LENGTH = 160;
 export const DEFAULT_COMMAND_TIMEOUT_MS = 15000;
 export const MAX_WINDOW_LIMIT = 50;
+export const LAUNCH_AGENT_LABEL_PREFIX = "dev.rudi.";
+export const MAX_LAUNCH_AGENT_COMMAND_ARGS = 40;
+export const MAX_LAUNCH_AGENT_ENV_VARS = 20;
+export const MAX_WATCH_PATHS = 20;
 
 export type ToolArgs = Record<string, unknown> | undefined;
 
@@ -29,6 +34,8 @@ export interface CommandRunner {
 export interface MacosAutomationDependencies {
   runner?: CommandRunner;
   platform?: NodeJS.Platform | string;
+  homeDir?: string;
+  uid?: number;
 }
 
 export interface OpenUrlInput {
@@ -77,6 +84,30 @@ export interface PathInput {
 export interface ListWindowsInput {
   app_name?: string;
   limit: number;
+}
+
+export type LaunchAgentSchedule =
+  | { type: "daily"; hour: number; minute: number }
+  | { type: "interval"; seconds: number }
+  | { type: "watch_paths"; paths: string[] };
+
+export interface InstallLaunchAgentInput {
+  label: string;
+  command: string[];
+  schedule: LaunchAgentSchedule;
+  run_at_load: boolean;
+  working_directory?: string;
+  environment?: Record<string, string>;
+  stdout_path?: string;
+  stderr_path?: string;
+  load_now: boolean;
+  confirm_install: boolean;
+}
+
+export interface LaunchAgentLabelInput {
+  label: string;
+  confirm_remove: boolean;
+  confirm_run: boolean;
 }
 
 export interface ClassifiedMacosError {
@@ -141,6 +172,16 @@ const defaultRunner: CommandRunner = {
 
 function getRunner(deps: MacosAutomationDependencies = {}): CommandRunner {
   return deps.runner ?? defaultRunner;
+}
+
+function getHomeDir(deps: MacosAutomationDependencies = {}): string {
+  return deps.homeDir ?? os.homedir();
+}
+
+function getUid(deps: MacosAutomationDependencies = {}): number {
+  if (typeof deps.uid === "number") return deps.uid;
+  if (typeof process.getuid === "function") return process.getuid();
+  throw new Error("A numeric uid is required for launchctl on this platform");
 }
 
 function ensureMacos(deps: MacosAutomationDependencies = {}): void {
@@ -228,6 +269,14 @@ function requireAbsolutePath(args: Record<string, unknown>, name: string): strin
   return value;
 }
 
+function validateAbsolutePathValue(value: string, name: string): string {
+  const trimmed = validateText(value.trim(), name, { maxLength: 2048 });
+  if (!path.isAbsolute(trimmed)) {
+    throw new Error(`${name} must be an absolute path`);
+  }
+  return trimmed;
+}
+
 function parseLimit(value: unknown): number {
   if (value === undefined || value === null) return 20;
   if (typeof value !== "number" || !Number.isInteger(value)) {
@@ -235,6 +284,13 @@ function parseLimit(value: unknown): number {
   }
   if (value < 1 || value > MAX_WINDOW_LIMIT) {
     throw new Error(`limit must be between 1 and ${MAX_WINDOW_LIMIT}`);
+  }
+  return value;
+}
+
+function parseInteger(value: unknown, name: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${name} must be an integer`);
   }
   return value;
 }
@@ -255,6 +311,155 @@ function parseDueDateParts(dueAt: string): ReminderDateParts {
 
 function osascriptArgs(lines: string[], argv: string[] = []): string[] {
   return lines.flatMap((line) => ["-e", line]).concat(argv);
+}
+
+function launchAgentsDir(deps: MacosAutomationDependencies = {}): string {
+  return path.join(getHomeDir(deps), "Library", "LaunchAgents");
+}
+
+function launchAgentPath(label: string, deps: MacosAutomationDependencies = {}): string {
+  return path.join(launchAgentsDir(deps), `${label}.plist`);
+}
+
+function launchctlTarget(label: string, deps: MacosAutomationDependencies = {}): string {
+  return `gui/${getUid(deps)}/${label}`;
+}
+
+function launchctlDomain(deps: MacosAutomationDependencies = {}): string {
+  return `gui/${getUid(deps)}`;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function plistString(value: string): string {
+  return `<string>${escapeXml(value)}</string>`;
+}
+
+function plistStringArray(values: string[]): string {
+  return [
+    "<array>",
+    ...values.map((value) => `  ${plistString(value)}`),
+    "</array>",
+  ].join("\n");
+}
+
+function plistStringDict(values: Record<string, string>): string {
+  const lines = ["<dict>"];
+  for (const key of Object.keys(values).sort()) {
+    lines.push(`  <key>${escapeXml(key)}</key>`);
+    lines.push(`  ${plistString(values[key])}`);
+  }
+  lines.push("</dict>");
+  return lines.join("\n");
+}
+
+function parseLaunchAgentLabel(value: unknown): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("label must be a non-empty string");
+  }
+  const label = value.trim();
+  if (
+    !label.startsWith(LAUNCH_AGENT_LABEL_PREFIX) ||
+    !/^dev\.rudi\.[a-z0-9][a-z0-9.-]{0,120}$/.test(label) ||
+    label.includes("..") ||
+    label.endsWith(".")
+  ) {
+    throw new Error(`label must start with ${LAUNCH_AGENT_LABEL_PREFIX} and contain only lowercase letters, numbers, dots, and hyphens`);
+  }
+  return label;
+}
+
+function parseCommand(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("command must be a non-empty array of strings");
+  }
+  if (value.length > MAX_LAUNCH_AGENT_COMMAND_ARGS) {
+    throw new Error(`command must include ${MAX_LAUNCH_AGENT_COMMAND_ARGS} arguments or fewer`);
+  }
+  const command = value.map((item, index) => {
+    if (typeof item !== "string" || item.trim().length === 0) {
+      throw new Error(`command[${index}] must be a non-empty string`);
+    }
+    return validateText(item.trim(), `command[${index}]`, {
+      maxLength: 2048,
+      allowNewline: false,
+    });
+  });
+  if (!path.isAbsolute(command[0])) {
+    throw new Error("command[0] must be an absolute path");
+  }
+  return command;
+}
+
+function parseEnvironment(value: unknown): Record<string, string> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("environment must be an object");
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > MAX_LAUNCH_AGENT_ENV_VARS) {
+    throw new Error(`environment must include ${MAX_LAUNCH_AGENT_ENV_VARS} variables or fewer`);
+  }
+  const out: Record<string, string> = {};
+  for (const [key, rawValue] of entries) {
+    if (!/^[A-Z_][A-Z0-9_]{0,80}$/.test(key)) {
+      throw new Error("environment keys must be uppercase shell-style names");
+    }
+    if (typeof rawValue !== "string") {
+      throw new Error(`environment.${key} must be a string`);
+    }
+    out[key] = validateText(rawValue, `environment.${key}`, {
+      maxLength: 2048,
+      allowNewline: false,
+    });
+  }
+  return out;
+}
+
+function parseLaunchAgentSchedule(value: unknown): LaunchAgentSchedule {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("schedule must be an object");
+  }
+  const schedule = value as Record<string, unknown>;
+  if (schedule.type === "daily") {
+    const hour = parseInteger(schedule.hour, "schedule.hour");
+    const minute = parseInteger(schedule.minute, "schedule.minute");
+    if (hour < 0 || hour > 23) throw new Error("schedule.hour must be between 0 and 23");
+    if (minute < 0 || minute > 59) throw new Error("schedule.minute must be between 0 and 59");
+    return { type: "daily", hour, minute };
+  }
+  if (schedule.type === "interval") {
+    const seconds = parseInteger(schedule.seconds, "schedule.seconds");
+    if (seconds < 60 || seconds > 86400) {
+      throw new Error("schedule.seconds must be between 60 and 86400");
+    }
+    return { type: "interval", seconds };
+  }
+  if (schedule.type === "watch_paths") {
+    if (!Array.isArray(schedule.paths) || schedule.paths.length === 0) {
+      throw new Error("schedule.paths must be a non-empty array");
+    }
+    if (schedule.paths.length > MAX_WATCH_PATHS) {
+      throw new Error(`schedule.paths must include ${MAX_WATCH_PATHS} paths or fewer`);
+    }
+    return {
+      type: "watch_paths",
+      paths: schedule.paths.map((item, index) => {
+        if (typeof item !== "string") {
+          throw new Error(`schedule.paths[${index}] must be a string`);
+        }
+        return validateAbsolutePathValue(item, `schedule.paths[${index}]`);
+      }),
+    };
+  }
+  throw new Error("schedule.type must be daily, interval, or watch_paths");
 }
 
 function checkCommand(result: CommandResult): CommandResult {
@@ -352,6 +557,87 @@ export function parseListWindowsArgs(args: ToolArgs): ListWindowsInput {
     app_name: optionalString(parsedArgs, "app_name", { maxLength: MAX_TITLE_LENGTH }),
     limit: parseLimit(parsedArgs.limit),
   };
+}
+
+export function parseInstallLaunchAgentArgs(args: ToolArgs): InstallLaunchAgentInput {
+  const parsedArgs = requireArgs(args);
+  return {
+    label: parseLaunchAgentLabel(parsedArgs.label),
+    command: parseCommand(parsedArgs.command),
+    schedule: parseLaunchAgentSchedule(parsedArgs.schedule),
+    run_at_load: parsedArgs.run_at_load === true,
+    working_directory: optionalAbsolutePath(parsedArgs, "working_directory"),
+    environment: parseEnvironment(parsedArgs.environment),
+    stdout_path: optionalAbsolutePath(parsedArgs, "stdout_path"),
+    stderr_path: optionalAbsolutePath(parsedArgs, "stderr_path"),
+    load_now: parsedArgs.load_now === true,
+    confirm_install: parsedArgs.confirm_install === true,
+  };
+}
+
+export function parseLaunchAgentLabelArgs(args: ToolArgs): LaunchAgentLabelInput {
+  const parsedArgs = requireArgs(args);
+  return {
+    label: parseLaunchAgentLabel(parsedArgs.label),
+    confirm_remove: parsedArgs.confirm_remove === true,
+    confirm_run: parsedArgs.confirm_run === true,
+  };
+}
+
+export function buildLaunchAgentPlist(input: InstallLaunchAgentInput): string {
+  const lines = [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">",
+    "<plist version=\"1.0\">",
+    "<dict>",
+    "  <key>Label</key>",
+    `  ${plistString(input.label)}`,
+    "  <key>ProgramArguments</key>",
+    plistStringArray(input.command).split("\n").map((line) => `  ${line}`).join("\n"),
+  ];
+
+  if (input.run_at_load) {
+    lines.push("  <key>RunAtLoad</key>");
+    lines.push("  <true/>");
+  }
+
+  if (input.schedule.type === "daily") {
+    lines.push("  <key>StartCalendarInterval</key>");
+    lines.push("  <dict>");
+    lines.push("    <key>Hour</key>");
+    lines.push(`    <integer>${input.schedule.hour}</integer>`);
+    lines.push("    <key>Minute</key>");
+    lines.push(`    <integer>${input.schedule.minute}</integer>`);
+    lines.push("  </dict>");
+  } else if (input.schedule.type === "interval") {
+    lines.push("  <key>StartInterval</key>");
+    lines.push(`  <integer>${input.schedule.seconds}</integer>`);
+  } else {
+    lines.push("  <key>WatchPaths</key>");
+    lines.push(plistStringArray(input.schedule.paths).split("\n").map((line) => `  ${line}`).join("\n"));
+  }
+
+  if (input.working_directory) {
+    lines.push("  <key>WorkingDirectory</key>");
+    lines.push(`  ${plistString(input.working_directory)}`);
+  }
+  if (input.environment && Object.keys(input.environment).length > 0) {
+    lines.push("  <key>EnvironmentVariables</key>");
+    lines.push(plistStringDict(input.environment).split("\n").map((line) => `  ${line}`).join("\n"));
+  }
+  if (input.stdout_path) {
+    lines.push("  <key>StandardOutPath</key>");
+    lines.push(`  ${plistString(input.stdout_path)}`);
+  }
+  if (input.stderr_path) {
+    lines.push("  <key>StandardErrorPath</key>");
+    lines.push(`  ${plistString(input.stderr_path)}`);
+  }
+
+  lines.push("</dict>");
+  lines.push("</plist>");
+  lines.push("");
+  return lines.join("\n");
 }
 
 export function classifyMacosError(error: unknown): ClassifiedMacosError {
@@ -727,5 +1013,189 @@ export async function revealInFinder(
   return {
     revealed: true,
     path: input.path,
+  };
+}
+
+function defaultLaunchAgentLogPaths(
+  label: string,
+  deps: MacosAutomationDependencies
+): { stdout_path: string; stderr_path: string } {
+  const logDir = path.join(getHomeDir(deps), ".rudi", "state", "macos-automation", "launchd");
+  return {
+    stdout_path: path.join(logDir, `${label}.out.log`),
+    stderr_path: path.join(logDir, `${label}.err.log`),
+  };
+}
+
+function withDefaultLaunchAgentPaths(
+  input: InstallLaunchAgentInput,
+  deps: MacosAutomationDependencies
+): InstallLaunchAgentInput {
+  const defaults = defaultLaunchAgentLogPaths(input.label, deps);
+  return {
+    ...input,
+    stdout_path: input.stdout_path ?? defaults.stdout_path,
+    stderr_path: input.stderr_path ?? defaults.stderr_path,
+  };
+}
+
+export async function installLaunchAgent(
+  input: InstallLaunchAgentInput,
+  deps: MacosAutomationDependencies = {}
+): Promise<Record<string, unknown>> {
+  ensureMacos(deps);
+  const pathToPlist = launchAgentPath(input.label, deps);
+  const effectiveInput = withDefaultLaunchAgentPaths(input, deps);
+  const plist = buildLaunchAgentPlist(effectiveInput);
+
+  if (!input.confirm_install) {
+    return {
+      installed: false,
+      loaded: false,
+      dry_run: true,
+      label: input.label,
+      path: pathToPlist,
+      plist,
+      rollback: {
+        tool: "macos_remove_launch_agent",
+        arguments: {
+          label: input.label,
+          confirm_remove: true,
+        },
+      },
+    };
+  }
+
+  await fs.mkdir(path.dirname(pathToPlist), { recursive: true });
+  if (effectiveInput.stdout_path) await fs.mkdir(path.dirname(effectiveInput.stdout_path), { recursive: true });
+  if (effectiveInput.stderr_path) await fs.mkdir(path.dirname(effectiveInput.stderr_path), { recursive: true });
+  await fs.writeFile(pathToPlist, plist, { mode: 0o644 });
+  await fs.chmod(pathToPlist, 0o644);
+
+  let loaded = false;
+  if (input.load_now) {
+    await runCommand(
+      "/bin/launchctl",
+      ["bootstrap", launchctlDomain(deps), pathToPlist],
+      deps
+    );
+    loaded = true;
+  }
+
+  return {
+    installed: true,
+    loaded,
+    dry_run: false,
+    label: input.label,
+    path: pathToPlist,
+    rollback: {
+      tool: "macos_remove_launch_agent",
+      arguments: {
+        label: input.label,
+        confirm_remove: true,
+      },
+    },
+  };
+}
+
+export async function removeLaunchAgent(
+  input: LaunchAgentLabelInput,
+  deps: MacosAutomationDependencies = {}
+): Promise<Record<string, unknown>> {
+  ensureMacos(deps);
+  const pathToPlist = launchAgentPath(input.label, deps);
+
+  if (!input.confirm_remove) {
+    return {
+      removed: false,
+      dry_run: true,
+      label: input.label,
+      path: pathToPlist,
+      command: ["/bin/launchctl", "bootout", launchctlDomain(deps), pathToPlist],
+    };
+  }
+
+  try {
+    await fs.access(pathToPlist);
+  } catch {
+    return {
+      removed: false,
+      dry_run: false,
+      label: input.label,
+      path: pathToPlist,
+      existed: false,
+    };
+  }
+
+  try {
+    await runCommand(
+      "/bin/launchctl",
+      ["bootout", launchctlDomain(deps), pathToPlist],
+      deps
+    );
+  } catch (error) {
+    const details = error instanceof MacosAutomationError ? error.details : undefined;
+    if (!details?.message.toLowerCase().includes("not bootstrapped")) {
+      throw error;
+    }
+  }
+  await fs.rm(pathToPlist, { force: true });
+
+  return {
+    removed: true,
+    dry_run: false,
+    label: input.label,
+    path: pathToPlist,
+  };
+}
+
+export async function runLaunchAgentNow(
+  input: LaunchAgentLabelInput,
+  deps: MacosAutomationDependencies = {}
+): Promise<Record<string, unknown>> {
+  ensureMacos(deps);
+  const target = launchctlTarget(input.label, deps);
+  if (!input.confirm_run) {
+    return {
+      started: false,
+      dry_run: true,
+      label: input.label,
+      command: ["/bin/launchctl", "kickstart", "-k", target],
+    };
+  }
+
+  await runCommand("/bin/launchctl", ["kickstart", "-k", target], deps);
+  return {
+    started: true,
+    dry_run: false,
+    label: input.label,
+  };
+}
+
+export async function listLaunchAgents(
+  deps: MacosAutomationDependencies = {}
+): Promise<Record<string, unknown>> {
+  const dir = launchAgentsDir(deps);
+  let names: string[];
+  try {
+    names = await fs.readdir(dir);
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return { agents: [] };
+    }
+    throw error;
+  }
+
+  return {
+    agents: names
+      .filter((name) => name.startsWith(LAUNCH_AGENT_LABEL_PREFIX) && name.endsWith(".plist"))
+      .sort()
+      .map((name) => {
+        const label = name.slice(0, -".plist".length);
+        return {
+          label,
+          path: path.join(dir, name),
+        };
+      }),
   };
 }
