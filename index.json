@@ -394,6 +394,28 @@
           ]
         },
         {
+          "id": "stack:rudi-crm",
+          "name": "RUDI CRM",
+          "version": "0.1.0",
+          "description": "Controlled MCP interface for RUDI CRM engagement memory, discovery, triage, validators, and correspondence context",
+          "path": "catalog/stacks/rudi-crm",
+          "runtime": "runtime:node",
+          "category": "business",
+          "tags": [
+            "crm",
+            "engagements",
+            "postgres",
+            "supabase",
+            "mcp",
+            "audit"
+          ],
+          "requires": {
+            "secrets": [
+              "RUDI_CRM_DATABASE_URL"
+            ]
+          }
+        },
+        {
           "id": "stack:video-editor",
           "name": "Video Editor",
           "version": "1.0.0",
