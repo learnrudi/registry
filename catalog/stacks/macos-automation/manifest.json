@@ -1,0 +1,56 @@
+{
+  "id": "macos-automation",
+  "name": "macOS Automation",
+  "version": "0.1.0",
+  "description": "Guarded macOS automation tools for apps, Finder, Reminders, Shortcuts, notifications, and System Events permission checks.",
+  "runtime": "node",
+  "command": [
+    "npx",
+    "tsx",
+    "src/index.ts"
+  ],
+  "provides": {
+    "tools": [
+      "macos_status",
+      "macos_check_accessibility",
+      "macos_get_frontmost_app",
+      "macos_list_windows",
+      "macos_open_url",
+      "macos_open_app",
+      "macos_focus_app",
+      "macos_show_notification",
+      "macos_list_shortcuts",
+      "macos_run_shortcut",
+      "macos_create_reminder",
+      "macos_get_selected_finder_items",
+      "macos_reveal_in_finder"
+    ]
+  },
+  "requires": {
+    "binaries": [],
+    "secrets": []
+  },
+  "meta": {
+    "author": "RUDI",
+    "license": "MIT",
+    "category": "local-automation",
+    "tags": [
+      "macos",
+      "apple-script",
+      "shortcuts",
+      "reminders",
+      "finder",
+      "productivity",
+      "automation",
+      "mcp"
+    ],
+    "platforms": [
+      "darwin"
+    ],
+    "permissions": [
+      "Accessibility for System Events tools",
+      "Automation for Finder, Reminders, and target app control"
+    ],
+    "icon": "command"
+  }
+}

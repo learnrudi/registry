@@ -226,6 +226,25 @@
           }
         },
         {
+          "id": "stack:macos-automation",
+          "name": "macOS Automation",
+          "version": "0.1.0",
+          "description": "Guarded macOS automation tools for apps, Finder, Reminders, Shortcuts, notifications, and System Events permission checks",
+          "path": "catalog/stacks/macos-automation",
+          "runtime": "runtime:node",
+          "category": "local-automation",
+          "tags": [
+            "macos",
+            "apple-script",
+            "shortcuts",
+            "reminders",
+            "finder",
+            "productivity",
+            "automation",
+            "mcp"
+          ]
+        },
+        {
           "id": "stack:ms-office",
           "name": "MS Office",
           "version": "1.0.0",
