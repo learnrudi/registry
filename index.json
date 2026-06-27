@@ -602,7 +602,7 @@
           "id": "stack:github",
           "name": "GitHub",
           "version": "1.0.0",
-          "description": "Manage GitHub repos, PRs, issues, and code search",
+          "description": "Manage GitHub repositories, branches, contents, collaborators, issues, pull requests, releases, Actions, artifacts, and direct REST API calls",
           "path": "catalog/stacks/github",
           "runtime": "runtime:node",
           "category": "development",
@@ -612,7 +612,9 @@
             "repos",
             "prs",
             "issues",
-            "code"
+            "code",
+            "releases",
+            "actions"
           ],
           "requires": {
             "secrets": [
