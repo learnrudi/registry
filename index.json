@@ -1,14 +1,14 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-09-06T00:59:31.000Z",
+  "generatedAt": "2026-09-06T16:17:44.000Z",
   "stats": {
-    "total": 173,
+    "total": 174,
     "byKind": {
       "agent": 4,
       "binary": 28,
       "runtime": 6,
-      "skill": 84,
+      "skill": 85,
       "stack": 51
     }
   },
@@ -2423,6 +2423,28 @@
           "planning",
           "verification",
           "capability:review"
+        ]
+      }
+    },
+    "skill:map-my-work": {
+      "id": "skill:map-my-work",
+      "kind": "skill",
+      "name": "map-my-work",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/map-my-work"
+      },
+      "meta": {
+        "description": "Interview someone one focused question at a time to turn recurring work into a confirmed task and microstep map, matching Mermaid workflow, and one small reversible AI-assisted test. Use when a person wants to explain, document, hand off, or find responsible AI support for how work actually gets done; do not use it to execute the mapped workflow.",
+        "category": "documents",
+        "tags": [
+          "workflow-mapping",
+          "task-decomposition",
+          "process-documentation",
+          "human-in-the-loop",
+          "capability:plan"
         ]
       }
     },

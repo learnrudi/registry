@@ -1,0 +1,4 @@
+interface:
+  display_name: "Map My Work"
+  short_description: "Turn recurring work into a confirmed task map"
+  default_prompt: "Use $map-my-work to interview me one question at a time and map a recurring workflow."
