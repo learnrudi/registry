@@ -45,6 +45,7 @@ test("MCP exposes the complete Repo Steward surface and executes preflight", asy
   assert.deepEqual(tools.tools.map((tool) => tool.name), [
     "repo_steward_preflight",
     "repo_steward_enroll_root",
+    "repo_steward_update_root_policy",
     "repo_steward_discover_repositories",
     "repo_steward_scan_fleet",
     "repo_steward_get_status",
@@ -144,4 +145,36 @@ test("MCP exposes the complete Repo Steward surface and executes preflight", asy
   const closeoutList = JSON.parse(closeoutListResult.content[0].text);
   assert.equal(closeoutList.receipts.length, 1);
   assert.equal(closeoutList.receipts[0].receipt_id, "mcp-closeout-001");
+});
+
+test("MCP first-commit action accepts explicit null and preserves lease and version gates", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "repo-steward-unborn-mcp-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const repo = join(root, "repo");
+  execFileSync("git", ["init", "-b", "main", repo], { stdio: "ignore" });
+  const configPath = join(root, "config.json");
+  await writeFile(configPath, JSON.stringify({ schemaVersion: 1,
+    repositories: [{ id: "fixture", path: repo, fetchAllowed: false }] }));
+  const server = createServer({ configPath, stateRoot: join(root, "state") });
+  const client = new Client({ name: "unborn-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  t.after(async () => { await client.close(); await server.close(); });
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  const listed = await client.listTools();
+  const schema = listed.tools.find((tool) => tool.name === "repo_steward_record_action").inputSchema;
+  assert.deepEqual(schema.properties.source_head.type, ["string", "null"]);
+  const lease = JSON.parse((await client.callTool({ name: "repo_steward_acquire_lease",
+    arguments: { repo_id: "fixture", owner: "test" } })).content[0].text);
+  const args = { repo_id: "fixture", owner: "test", lease_id: lease.lease_id,
+    action_id: "first", kind: "checkpoint", status: "proposed", expected_version: 0,
+    source_head: null, summary: "Reviewed initial source" };
+  const result = await client.callTool({ name: "repo_steward_record_action", arguments: args });
+  assert.equal(result.isError, undefined);
+  assert.equal(JSON.parse(result.content[0].text).source_head, null);
+  const denied = await client.callTool({ name: "repo_steward_record_action",
+    arguments: { ...args, owner: "different-owner", action_id: "denied" } });
+  assert.equal(denied.isError, true);
+  const conflict = await client.callTool({ name: "repo_steward_record_action",
+    arguments: { ...args, status: "approved", expected_version: 99 } });
+  assert.equal(conflict.isError, true);
 });

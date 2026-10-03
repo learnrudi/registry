@@ -24,7 +24,7 @@ function git(repo, ...args) {
   }).trim();
 }
 
-async function createFixture(t) {
+async function createFixture(t, { unborn = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), "repo-steward-core-"));
   const repo = join(root, "repo");
   const configPath = join(root, "config.json");
@@ -36,7 +36,7 @@ async function createFixture(t) {
   git(repo, "config", "user.email", "repo-steward@example.invalid");
   await writeFile(join(repo, "tracked.txt"), "committed\n");
   git(repo, "add", "tracked.txt");
-  git(repo, "commit", "-m", "test: initialize fixture");
+  if (!unborn) git(repo, "commit", "-m", "test: initialize fixture");
 
   await writeFile(configPath, JSON.stringify({
     schemaVersion: 1,
@@ -165,6 +165,7 @@ test("fleet scan summarizes configured repositories without changing them", asyn
     total: 1,
     scanned: 1,
     failed: 0,
+    awaiting_first_commit: 0,
     dirty: 1,
     needs_push: 0,
     needs_pull: 0,
@@ -1146,4 +1147,68 @@ test("worktree closeout pins a symbolic base to its creation commit", async (t) 
     }, options),
     /local_commits_are_ahead_of_base/i
   );
+});
+
+
+test("fleet scan includes unborn repositories with truthful state", async (t) => {
+  const fixture = await createFixture(t, { unborn: true });
+  await writeFile(join(fixture.repo, "untracked.txt"), "new\n");
+  const committed = await createFixture(t);
+  await writeFile(fixture.configPath, JSON.stringify({ schemaVersion: 1, repositories: [
+    { id: "fixture", path: fixture.repo, fetchAllowed: false },
+    { id: "committed", path: committed.repo, fetchAllowed: false },
+  ] }));
+  const result = await scanFleet({ repo_ids: ["fixture", "committed"], fetch: false }, fixture);
+  assert.equal(result.summary.scanned, 2);
+  assert.equal(result.repositories[1].head_state, "committed");
+  assert.equal(result.repositories[1].head, git(committed.repo, "rev-parse", "HEAD"));
+  assert.equal(result.summary.failed, 0);
+  assert.equal(result.summary.awaiting_first_commit, 1);
+  const status = result.repositories[0];
+  assert.equal(status.head, null);
+  assert.equal(status.head_state, "unborn");
+  assert.equal(status.branch, "main");
+  assert.equal(status.upstream, null);
+  assert.equal(status.ahead, null);
+  assert.equal(status.behind, null);
+  assert.deepEqual(status.dirty, { total: 2, staged: 1, unstaged: 0, untracked: 1, conflicted: 0 });
+  assert.equal(status.fetch.performed, false);
+});
+
+test("unborn action records an explicit null source and remains idempotent after first commit", async (t) => {
+  const fixture = await createFixture(t, { unborn: true });
+  const lease = await acquireRepositoryLease({ repo_id: "fixture", owner: "test" }, fixture);
+  const input = { repo_id: "fixture", owner: "test", lease_id: lease.lease_id,
+    action_id: "first-commit", kind: "checkpoint", status: "proposed",
+    summary: "Prepare reviewed initial source", source_head: null, expected_version: 0 };
+  const action = await recordRepositoryAction(input, fixture);
+  assert.equal(action.source_head, null);
+  git(fixture.repo, "commit", "-m", "test: first commit");
+  assert.equal((await recordRepositoryAction(input, fixture)).idempotent, true);
+  await assert.rejects(() => recordRepositoryAction({ ...input, action_id: "invalid-null" }, fixture), /unborn/);
+  await assert.rejects(() => recordRepositoryAction({ ...input, action_id: "missing-head", source_head: undefined }, fixture), /source_head/);
+  const listed = await listRepositoryActions({ repo_id: "fixture" }, fixture);
+  assert.equal(listed.actions[0].source_head, null);
+});
+
+test("corrupt committed HEAD and detached missing objects are not unborn", async (t) => {
+  const fixture = await createFixture(t);
+  const missing = "1".repeat(40);
+  await writeFile(join(fixture.repo, ".git", "refs", "heads", "main"), missing + "\n");
+  const fleet = await scanFleet({}, fixture);
+  assert.equal(fleet.summary.failed, 1);
+  assert.equal(fleet.summary.awaiting_first_commit, 0);
+  await writeFile(join(fixture.repo, ".git", "HEAD"), missing + "\n");
+  await assert.rejects(() => getRepositoryStatus({ repo_id: "fixture" }, fixture), /Read HEAD/);
+});
+
+test("unborn closeout fails before persisting a receipt", async (t) => {
+  const fixture = await createFixture(t, { unborn: true });
+  const lease = await acquireRepositoryLease({ repo_id: "fixture", owner: "test" }, fixture);
+  await assert.rejects(() => recordRepositoryCloseout({ repo_id: "fixture", owner: "test",
+    lease_id: lease.lease_id, receipt_id: "initial", state: "observed", expected_version: 0,
+    base_ref: "HEAD", task_lineage: { task_id: "first-commit" },
+    agent_lineage: { agent_id: "test", host: "test" }, validation_evidence: [{ command: "git status", outcome: "passed", exit_code: 0, summary: "Observed work", at: new Date().toISOString() }],
+    preservation_requirements: ["Awaiting first commit"], summary: "Retain initial work" }, fixture), /Closeout requires a committed HEAD/);
+  assert.equal((await listRepositoryCloseouts({ repo_id: "fixture" }, fixture)).receipts.length, 0);
 });

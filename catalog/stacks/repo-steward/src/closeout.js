@@ -563,6 +563,7 @@ export function createCloseoutOperations(dependencies) {
           : null;
 
         const status = await getResolvedRepositoryStatus(repository);
+        if (status.head === null) throw new Error("Closeout requires a committed HEAD; preserve work awaiting its first commit.");
         const base = await resolveBase(
           repository,
           existing.git.base.ref,
@@ -631,6 +632,7 @@ export function createCloseoutOperations(dependencies) {
       assertCreationShape(args, state);
       const normalized = normalizeCreation(args);
       const status = await getResolvedRepositoryStatus(repository);
+      if (status.head === null) throw new Error("Closeout requires a committed HEAD; preserve work awaiting its first commit.");
       const base = await resolveBase(repository, normalized.base_ref);
       const now = new Date(
         typeof options.now === "function" ? options.now() : Date.now()
