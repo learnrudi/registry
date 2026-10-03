@@ -45,6 +45,7 @@ test("MCP exposes the complete Repo Steward surface and executes preflight", asy
   assert.deepEqual(tools.tools.map((tool) => tool.name), [
     "repo_steward_preflight",
     "repo_steward_enroll_root",
+    "repo_steward_update_root_policy",
     "repo_steward_discover_repositories",
     "repo_steward_scan_fleet",
     "repo_steward_get_status",

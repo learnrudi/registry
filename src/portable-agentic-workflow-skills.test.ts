@@ -325,7 +325,7 @@ describe("portable skill contracts", () => {
       });
     }
     expect(index.packages["skill:rudi-repo-steward"]).toMatchObject({
-      version: "0.3.1",
+      version: "0.3.2",
       install: {
         source: "catalog",
         path: "catalog/skills/rudi-repo-steward",

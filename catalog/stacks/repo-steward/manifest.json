@@ -2,7 +2,7 @@
   "id": "stack:repo-steward",
   "kind": "stack",
   "name": "Repo Steward",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "delivery": "remote",
   "install": {
     "source": "catalog",
@@ -19,6 +19,7 @@
     "tools": [
       "repo_steward_preflight",
       "repo_steward_enroll_root",
+      "repo_steward_update_root_policy",
       "repo_steward_discover_repositories",
       "repo_steward_scan_fleet",
       "repo_steward_get_status",

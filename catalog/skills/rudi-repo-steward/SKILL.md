@@ -1,7 +1,7 @@
 ---
 name: RUDI Repo Steward
 description: Enroll a user-provided folder, discover all nested Git worktrees, and coordinate continuous improvement across that dynamic repository fleet using safe status scans, bounded leases, targeted commits, and an evidence-backed action ledger. Use when a user asks to steward every repo below a path, catch repositories up, review agent work, plan targeted commits, monitor divergence, or maintain repositories continuously without blindly mutating them.
-version: 0.3.1
+version: 0.3.2
 category: code
 tags:
   - git
@@ -110,6 +110,14 @@ requests.
 5. If fresher remote metadata is required, request fetch only for repositories
    whose policy permits it. A policy rejection is a boundary, not a reason to
    bypass the stack with a shell command.
+   If the owner explicitly authorizes changing an enrolled root's fetch policy,
+   read its current identity and enrollment version from preflight and use
+   `repo_steward_update_root_policy` with that exact `root_id`/`root_path`,
+   `expected_version`, explicit `fetch_allowed`, `owner`, `approval_reference`
+   and `confirm_update: true`. This changes local configuration only; it grants
+   no commit, push, merge or scheduling authority. Preserve observation jobs'
+   explicit `fetch: false`. External configuration requires its owning workflow;
+   never edit enrollment JSON or silently reenroll with a wider scope.
 6. Propose the next bounded action. Prefer one repository and one concern at a
    time. Distinguish completed work awaiting a checkpoint from incomplete,
    generated, sensitive, or unrelated changes.

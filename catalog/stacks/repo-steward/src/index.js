@@ -22,6 +22,7 @@ import {
   recordRepositoryVerification,
   releaseRepositoryLease,
   scanFleet,
+  updateRootPolicy,
 } from "./core.js";
 
 const CLOSEOUT_STATES = [
@@ -76,6 +77,24 @@ const TOOL_DEFINITIONS = [
         owner: { type: "string", minLength: 1, maxLength: 128 },
         fetch_allowed: { type: "boolean", default: false },
         max_depth: { type: "integer", minimum: 0, maximum: 32, default: 12 },
+      },
+    },
+  },
+  {
+    name: "repo_steward_update_root_policy",
+    description: "Explicitly change only fetch permission for one locally enrolled root under a versioned enrollment lock. Requires owner approval evidence; never fetches or changes a repository.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["root_id", "root_path", "owner", "fetch_allowed", "expected_version", "approval_reference", "confirm_update"],
+      properties: {
+        root_id: { type: "string", minLength: 1, maxLength: 128 },
+        root_path: { type: "string", minLength: 1, maxLength: 4096 },
+        owner: { type: "string", minLength: 1, maxLength: 128 },
+        fetch_allowed: { type: "boolean" },
+        expected_version: { type: "integer", minimum: 1 },
+        approval_reference: { type: "string", minLength: 1, maxLength: 1000 },
+        confirm_update: { type: "boolean", const: true },
       },
     },
   },
@@ -359,6 +378,8 @@ export function createServer(coreOptions = {}) {
           return jsonResponse(await preflightRepoSteward(args, coreOptions));
         case "repo_steward_enroll_root":
           return jsonResponse(await enrollRepositoryRoot(args, coreOptions));
+        case "repo_steward_update_root_policy":
+          return jsonResponse(await updateRootPolicy(args, coreOptions));
         case "repo_steward_discover_repositories":
           return jsonResponse(await discoverRepositories(args, coreOptions));
         case "repo_steward_scan_fleet":
