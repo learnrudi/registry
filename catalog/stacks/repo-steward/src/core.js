@@ -1,3 +1,4 @@
+import { repositoryHead, requireSourceHead } from "./git-head.js";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -181,7 +182,7 @@ async function runGit(repositoryPath, args, options = {}) {
       stderr: result.stderr,
     };
   } catch (error) {
-    throw new Error(gitFailureMessage(error, options.operation || "Git command"));
+    throw new Error(gitFailureMessage(error, options.operation || "Git command"), { cause: { code: error?.code } });
   }
 }
 
@@ -1149,12 +1150,8 @@ async function getResolvedRepositoryStatus(repository, args = {}) {
   const startedAt = Date.now();
   const fetch = await maybeFetch(args, repository);
   const branch = await tryGit(repository.path, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-  const head = (
-    await runGit(repository.path, ["rev-parse", "HEAD"], {
-      operation: `Read HEAD for ${repository.id}`,
-    })
-  ).stdout.trim();
-  const upstream = await tryGit(repository.path, [
+  const head = await repositoryHead(repository, runGit);
+  const upstream = head === null ? null : await tryGit(repository.path, [
     "rev-parse",
     "--abbrev-ref",
     "--symbolic-full-name",
@@ -1190,6 +1187,7 @@ async function getResolvedRepositoryStatus(repository, args = {}) {
     relative_path: repository.relativePath,
     branch: branch || null,
     head,
+    head_state: head === null ? "unborn" : "committed",
     upstream: upstream || null,
     ahead,
     behind,
@@ -1253,6 +1251,7 @@ export async function scanFleet(args = {}, options = {}) {
       total: repositories.length,
       scanned: scanned.length,
       failed: repositories.length - scanned.length,
+      awaiting_first_commit: scanned.filter((repository) => repository.head_state === "unborn").length,
       dirty: scanned.filter((repository) => repository.dirty.total > 0).length,
       needs_push: scanned.filter((repository) => (repository.ahead ?? 0) > 0).length,
       needs_pull: scanned.filter((repository) => (repository.behind ?? 0) > 0).length,
@@ -1368,9 +1367,9 @@ export async function recordRepositoryAction(args = {}, options = {}) {
       }
       const kind = requireEnum(args.kind, "kind", ACTION_KINDS);
       const summary = boundedSafeText(args.summary, "summary", 2000);
-      const sourceHead = nonEmptyString(args.source_head, "source_head", 40).toLowerCase();
-      if (!/^[0-9a-f]{40}$/.test(sourceHead)) {
-        throw new Error("source_head must be a 40-character Git object ID.");
+      const sourceHead = requireSourceHead(args.source_head);
+      if (sourceHead === null && await repositoryHead(repository, runGit) !== null) {
+        throw new Error("source_head may be null only for a verified unborn repository.");
       }
       const action = {
         schema_version: 1,
@@ -1400,7 +1399,7 @@ export async function recordRepositoryAction(args = {}, options = {}) {
     if (expectedVersion === 0) {
       const kind = requireEnum(args.kind, "kind", ACTION_KINDS);
       const summary = boundedSafeText(args.summary, "summary", 2000);
-      const sourceHead = nonEmptyString(args.source_head, "source_head", 40).toLowerCase();
+      const sourceHead = requireSourceHead(args.source_head);
       const sameCreation =
         existing.version === 1 &&
         existing.status === "proposed" &&

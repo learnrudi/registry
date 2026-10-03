@@ -36,7 +36,7 @@ test("package contract keeps Repo Steward portable and non-mutating", async () =
   const closeoutContract = await fs.readFile(closeoutContractPath, "utf8");
 
   assert.equal(manifest.id, "stack:repo-steward");
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.3.1");
   assert.deepEqual(manifest.requires, { binaries: ["git"], secrets: [] });
   assert.equal(manifest.related.operatorSkill, "skill:rudi-repo-steward");
   assert.ok(manifest.related.skills.includes("skill:rudi-worktree-closeout"));
@@ -60,7 +60,7 @@ test("package contract keeps Repo Steward portable and non-mutating", async () =
     false
   );
   assert.equal(packageJson.scripts.verify, "npm test");
-  assert.equal(packageJson.version, "0.3.0");
+  assert.equal(packageJson.version, "0.3.1");
   assert.match(skill, /- stack:repo-steward/);
   assert.match(skill, /- stack:github/);
   assert.match(readme, /REPO_STEWARD_CONFIG_PATH/);

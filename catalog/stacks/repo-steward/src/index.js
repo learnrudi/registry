@@ -216,7 +216,11 @@ const TOOL_DEFINITIONS = [
           enum: ["proposed", "approved", "running", "completed", "blocked", "cancelled"],
         },
         summary: { type: "string", minLength: 1, maxLength: 2000 },
-        source_head: { type: "string", pattern: "^[0-9a-fA-F]{40}$" },
+        source_head: {
+          type: ["string", "null"],
+          pattern: "^[0-9a-fA-F]{40}$",
+          description: "Required for creation: a commit SHA, or explicit null only for a verified unborn repository.",
+        },
         expected_version: { type: "integer", minimum: 0 },
       },
     },

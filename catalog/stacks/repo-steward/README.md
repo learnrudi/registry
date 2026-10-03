@@ -101,6 +101,23 @@ without embedded credentials, and token-like text in summaries is redacted.
 - `repo_steward_record_verification` appends test or inspection evidence while
   the caller holds the repository lease.
 
+## Repositories awaiting their first commit
+
+Status distinguishes committed history (`head_state: "committed"`) from an
+unborn branch (`head_state: "unborn"`, `head: null`). Unborn observations include
+the intended branch and staged, unstaged and untracked counts. Their upstream
+and ahead/behind counts are null, never evidence of alignment. Fleet summaries
+count them in `awaiting_first_commit` and in successful observations. Invalid
+HEADs and unreadable or corrupt references remain failures.
+
+For a new first-commit action, explicitly pass `source_head: null`. The stack
+checks that the repository is unborn while holding the action record lock. An
+omitted source is still invalid; committed repositories still require a SHA.
+A retry of the same initial action remains idempotent after the first commit,
+and later transitions retain the original null source. Existing lease, version
+and verification gates still apply. This records intent, not authority to commit
+or publish. Closeout receipts require a committed HEAD and reject unborn work.
+
 ## Action lifecycle
 
 Actions begin as `proposed`, then move through explicit states such as

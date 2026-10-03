@@ -115,7 +115,12 @@ requests.
    generated, sensitive, or unrelated changes.
 7. Acquire the repository lease before recording or executing an action. Keep
    the lease token private and release it when the bounded action ends.
-8. Record the action as `proposed`. Transition it with the current version as
+8. For `head_state: unborn`, preserve `head: null` and classify the repository
+   as awaiting its first commit. A first-commit action must explicitly use
+   `source_head: null`; never invent a SHA. An initial commit still requires a
+   reviewed source allowlist and the applicable authority. Closeout receipts
+   require committed history.
+   Record the action as `proposed`. Transition it with the current version as
    authorization and execution state change. Record `blocked` rather than
    inventing missing authority or repository intent.
 9. Before touching files, read the repository's `AGENTS.md` hierarchy, its
