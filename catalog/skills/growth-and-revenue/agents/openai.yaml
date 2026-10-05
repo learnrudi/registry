@@ -1,0 +1,4 @@
+interface:
+  display_name: "Growth And Revenue"
+  short_description: "Review organization context and source evidence"
+  default_prompt: "Use $growth-and-revenue to review the selected organization's sources and documented next steps."
