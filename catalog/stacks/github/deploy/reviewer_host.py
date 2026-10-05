@@ -279,7 +279,7 @@ def drain(process):
         return False
 
 
-GITHUB_MODULES = ["core", "deadline", "merge-readiness", "native-acceptance", "publication-journal",
+GITHUB_MODULES = ["core", "request-config", "deadline", "merge-readiness", "native-acceptance", "publication-journal",
                   "review-authority-store", "review-controller", "review-evidence", "review-publisher",
                   "review-request", "reviewer-auth", "reviewer-transport", "reviewer-source", "reviewer-service"]
 NATIVE_MODULES = ["codex-review", "codex-review-rpc", "codex-review-supervised"]

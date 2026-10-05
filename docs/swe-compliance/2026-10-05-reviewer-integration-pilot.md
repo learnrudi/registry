@@ -104,3 +104,15 @@ before bounded drain, and separate revocation custody from readiness. New reds
 reproduced each defect, including a signal during child creation; focused greens
 retain zero-write vetoes, both child-group absence and degraded-runtime disable.
 A fresh exact-snapshot acceptance review is required after these corrections.
+
+The first full CI run exposed a missed architecture gate: `core.ts` exceeded its
+committed no-growth baseline. Scoped debt warnings did not substitute for
+`npm run stacks:verify -- --changed-from <base> --prepare`. Request environment,
+token resolution and timeout configuration now have a focused module, retaining
+the public core exports and existing behavior. The protected package explicitly
+includes that runtime dependency. No baseline or test assertion was relaxed.
+The original architecture command and an isolated package-import check reproduced
+the failures before correction; existing authentication/deadline suites and the
+same checks provide regression and integration proof. The complete CI command set,
+including release provenance, public readiness, changed stacks and repository
+debt, is required before the revised owner installation checkpoint.
