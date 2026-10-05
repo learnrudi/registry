@@ -1,14 +1,14 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-03T22:39:12.000Z",
+  "generatedAt": "2026-10-05T17:41:17.000Z",
   "stats": {
-    "total": 173,
+    "total": 183,
     "byKind": {
       "agent": 4,
       "binary": 28,
       "runtime": 6,
-      "skill": 84,
+      "skill": 94,
       "stack": 51
     }
   },
@@ -1800,6 +1800,27 @@
         ]
       }
     },
+    "skill:business": {
+      "id": "skill:business",
+      "kind": "skill",
+      "name": "business",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/business"
+      },
+      "meta": {
+        "description": "Navigate an organization's business context, map its authoritative sources, or prepare a source-linked review across business areas. Use for organization setup, business briefs, or requests spanning several domains.",
+        "category": "agents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
     "skill:business-communication-secretary": {
       "id": "skill:business-communication-secretary",
       "kind": "skill",
@@ -1928,6 +1949,48 @@
         "tags": [
           "capability:manage",
           "provider:openai"
+        ]
+      }
+    },
+    "skill:company": {
+      "id": "skill:company",
+      "kind": "skill",
+      "name": "company",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/company"
+      },
+      "meta": {
+        "description": "Navigate an organization's company context, governance routes, and reusable templates. Use for company-level briefs or routing finance, legal and corporate, and operations work.",
+        "category": "agents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
+    "skill:content-and-brand": {
+      "id": "skill:content-and-brand",
+      "kind": "skill",
+      "name": "content-and-brand",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/content-and-brand"
+      },
+      "meta": {
+        "description": "Navigate an organization's brand authority, story source, and content production workflow. Use for brand or editorial briefs and work on an existing content item.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
         ]
       }
     },
@@ -2107,6 +2170,48 @@
         ]
       }
     },
+    "skill:education-and-programs": {
+      "id": "skill:education-and-programs",
+      "kind": "skill",
+      "name": "education-and-programs",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/education-and-programs"
+      },
+      "meta": {
+        "description": "Find, review, or draft an organization's reusable curriculum, programs, and facilitator source. Use for teaching-material discovery or work on a selected course or program.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
+    "skill:finance": {
+      "id": "skill:finance",
+      "kind": "skill",
+      "name": "finance",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/finance"
+      },
+      "meta": {
+        "description": "Review an organization's financial questions using its declared ledger, agreement, invoice, and settlement evidence. Use for financial source discovery or a scoped evidence-backed finance review.",
+        "category": "data",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
     "skill:github": {
       "id": "skill:github",
       "kind": "skill",
@@ -2237,6 +2342,27 @@
         ]
       }
     },
+    "skill:growth-and-revenue": {
+      "id": "skill:growth-and-revenue",
+      "kind": "skill",
+      "name": "growth-and-revenue",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/growth-and-revenue"
+      },
+      "meta": {
+        "description": "Find, brief, or draft an organization's offers, sales, partnership, and commercial strategy source. Use for growth context or documented opportunity follow-through; financial verification uses Finance.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
     "skill:hamilton-county-auditor": {
       "id": "skill:hamilton-county-auditor",
       "kind": "skill",
@@ -2345,6 +2471,27 @@
           "html",
           "transcripts",
           "capability:edit"
+        ]
+      }
+    },
+    "skill:legal-and-corporate": {
+      "id": "skill:legal-and-corporate",
+      "kind": "skill",
+      "name": "legal-and-corporate",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/legal-and-corporate"
+      },
+      "meta": {
+        "description": "Find, brief, or draft an organization's agreement, corporate, and policy source using its adopted forms and approval rules. Use for legal-workspace context and documented obligations.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
         ]
       }
     },
@@ -2615,6 +2762,27 @@
         ]
       }
     },
+    "skill:operations": {
+      "id": "skill:operations",
+      "kind": "skill",
+      "name": "operations",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/operations"
+      },
+      "meta": {
+        "description": "Find, review, or draft an organization's internal procedures, process ownership, and operational follow-through. Use for documented company operations rather than direct runtime administration.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
     "skill:otter-mcp": {
       "id": "skill:otter-mcp",
       "kind": "skill",
@@ -2714,6 +2882,27 @@
         ]
       }
     },
+    "skill:product-and-technology": {
+      "id": "skill:product-and-technology",
+      "kind": "skill",
+      "name": "product-and-technology",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/product-and-technology"
+      },
+      "meta": {
+        "description": "Find and review an organization's product plans, specifications, and implementation ownership. Use for product context or routing a feature to its authoritative technical repository.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
+        ]
+      }
+    },
     "skill:publish-task-changes": {
       "id": "skill:publish-task-changes",
       "kind": "skill",
@@ -2785,6 +2974,27 @@
           "webhooks",
           "llm-tools",
           "capability:review"
+        ]
+      }
+    },
+    "skill:research-and-intelligence": {
+      "id": "skill:research-and-intelligence",
+      "kind": "skill",
+      "name": "research-and-intelligence",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/research-and-intelligence"
+      },
+      "meta": {
+        "description": "Find, brief, or extend an organization's reusable market, platform, audience, and tooling research. Use for saved research or explicitly requested source refreshes with citations and dates.",
+        "category": "documents",
+        "tags": [
+          "organizational-context",
+          "capability:retrieve",
+          "capability:review",
+          "domain:organizational-context"
         ]
       }
     },

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Business"
+  short_description: "Review organization context and source evidence"
+  default_prompt: "Use $business to review the selected organization's sources and documented next steps."
