@@ -109,7 +109,9 @@ class CustodyTests(unittest.TestCase):
             scratch = root / "scratch"
             scratch.mkdir()
             program = str(Path(sys.executable).resolve())
-            profile = host.sandbox_profile(program, [str(Path(program).parents[1]), str(root)], [str(scratch)])
+            # Framework interpreters keep their library and stdlib outside the
+            # executable's directory. Production proof also permits CLT runtime reads.
+            profile = host.sandbox_profile(program, [str(Path(program).parents[1]), sys.base_prefix, str(root)], [str(scratch)])
             script = '''import os,sys,json
 result={}
 try:
