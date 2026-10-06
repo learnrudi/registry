@@ -29,6 +29,16 @@ attestation. Missing configuration fields,
 unknown versions, reroutes, tool activity, malformed streams, deadlines and
 unconfirmed termination reject. A future protocol needs its own reviewed support.
 
+Codex 0.160.1 emits one asynchronous initial `account/updated` after workspace
+routing discovery. Before starting a thread, the observer waits for that notice
+when account/read includes routing, requires ChatGPT authentication and a matching
+plan, closes startup notification admission, then confirms the complete account
+and routing snapshot with a second account/read. Account identity stays in memory
+and is never returned. Missing or duplicate notices, malformed routing, changed
+snapshots, and all account updates during confirmation, review or drain reject.
+The existing deadline and cancellation cover this handshake. No-routing sessions
+still require a stable second account read and cannot admit a startup notice.
+
 The integration contract, proof/source importer requirements, custody gates and
 recovery procedure are in the GitHub stack's `REVIEWER.md`. Focused tests are
 `node --test test/codex-review*.test.js`; full package regression is `npm test`.

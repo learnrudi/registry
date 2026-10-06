@@ -8,6 +8,10 @@ const request = () => ({
   packetDigest: createHash("sha256").update("Private review contract and source fixture").digest("hex"), cwd: "/review/empty", timeoutMs: 1000,
 });
 const passing = JSON.stringify({ verdicts: { standards: "pass", spec: "pass", proof: "pass", overall: "pass" }, findings: [] });
+const routedAccount = () => ({
+  account: { type: "chatgpt", email: "fixture@example.invalid", planType: "pro" }, requiresOpenaiAuth: true,
+  workspaceRouting: { chatgptAccountId: "fixture-workspace", backendOrigin: "https://chatgpt.com", accountRoutingOverride: "NO_CONSTRAINT" },
+});
 class NativeFixture {
   calls = []; listeners = new Set(); stops = 0;
   overrides = {};
@@ -65,6 +69,137 @@ test("native review rejects cancellation before touching the host", async () => 
   const signal = AbortSignal.abort();
   await assert.rejects(observeCodexReview(rpc, request(), { signal }), /rejected/);
   assert.equal(rpc.calls.length, 0);
+});
+
+test("native review admits one stable startup account routing snapshot before private source", async () => {
+  const rpc = new NativeFixture();
+  let reads = 0;
+  rpc.overrides["account/read"] = () => {
+    if (++reads === 1) rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+    return routedAccount();
+  };
+  const result = await observeCodexReview(rpc, request());
+  assert.equal(result.outputText, passing);
+  assert.deepEqual(rpc.calls.slice(0, 5).map(call => call.method), ["initialize", "initialized", "account/read", "account/read", "thread/start"]);
+  assert.equal(rpc.calls.filter(call => call.method === "turn/start").length, 1);
+  assert.equal(JSON.stringify(result).includes("fixture-workspace"), false);
+  assert.equal(JSON.stringify(result).includes("fixture@example.invalid"), false);
+  assert.equal(rpc.stops, 1);
+});
+
+test("native review waits for delayed startup routing before account confirmation", async () => {
+  const rpc = new NativeFixture();
+  let deliver;
+  let reads = 0;
+  rpc.overrides["account/read"] = () => {
+    if (++reads === 1) deliver = () => rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+    return routedAccount();
+  };
+  const review = observeCodexReview(rpc, request());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  assert.equal(rpc.calls.some(call => call.method === "thread/start"), false);
+  deliver();
+  assert.equal((await review).outputText, passing);
+  assert.equal(reads, 2);
+});
+
+for (const planType of ["ent26", "invalid_plan"]) test(`native review validates pinned startup plan type ${planType}`, async () => {
+  const rpc = new NativeFixture();
+  let reads = 0;
+  rpc.overrides["account/read"] = () => {
+    const value = routedAccount(); value.account.planType = planType;
+    if (++reads === 1) rpc.emit("account/updated", { authMode: "chatgpt", planType });
+    return value;
+  };
+  if (planType === "ent26") assert.equal((await observeCodexReview(rpc, request())).outputText, passing);
+  else {
+    await assert.rejects(observeCodexReview(rpc, request()), /rejected/);
+    assert.equal(rpc.calls.some(call => call.method === "thread/start"), false);
+  }
+});
+
+for (const [name, change] of [
+  ["duplicate notification", (rpc) => rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" })],
+  ["plan mismatch", (_rpc, value) => { value.account.planType = "business"; }],
+  ["notification without routing", (_rpc, value) => { value.workspaceRouting = null; }],
+  ["malformed routing", (_rpc, value) => { delete value.workspaceRouting.chatgptAccountId; }],
+  ["non-origin routing", (_rpc, value) => { value.workspaceRouting.backendOrigin = "https://chatgpt.com/private"; }],
+]) test(`native review rejects startup ${name} before private source`, async () => {
+  const rpc = new NativeFixture();
+  rpc.overrides["account/read"] = () => {
+    const value = routedAccount();
+    rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+    change(rpc, value);
+    return value;
+  };
+  await assert.rejects(observeCodexReview(rpc, request()), /rejected/);
+  assert.equal(rpc.calls.some(call => call.method === "thread/start"), false);
+  assert.equal(rpc.stops, 1);
+});
+
+for (const params of [{}, { authMode: "apiKey", planType: "pro" }, { authMode: null, planType: null },
+  { authMode: "chatgpt", planType: null }, { authMode: "chatgpt", planType: "pro", extra: true }]) {
+  test(`native review rejects malformed startup account notice ${JSON.stringify(params)}`, async () => {
+    const rpc = new NativeFixture();
+    rpc.overrides["account/read"] = () => { rpc.emit("account/updated", params); return routedAccount(); };
+    await assert.rejects(observeCodexReview(rpc, request()), /rejected/);
+    assert.equal(rpc.calls.some(call => call.method === "thread/start"), false);
+  });
+}
+
+for (const [name, change] of [
+  ["identity", value => { value.account.email = "changed@example.invalid"; }],
+  ["workspace", value => { value.workspaceRouting.chatgptAccountId = "changed-workspace"; }],
+  ["backend", value => { value.workspaceRouting.backendOrigin = "https://changed.example.invalid"; }],
+  ["authentication", value => { value.requiresOpenaiAuth = false; }],
+]) test(`native review rejects a changed ${name} during account confirmation`, async () => {
+  const rpc = new NativeFixture();
+  const shared = routedAccount();
+  let reads = 0;
+  rpc.overrides["account/read"] = () => {
+    if (++reads === 1) rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+    else change(shared);
+    return shared;
+  };
+  await assert.rejects(observeCodexReview(rpc, request()), /rejected/);
+  assert.equal(rpc.calls.some(call => call.method === "thread/start"), false);
+});
+
+for (const stage of ["confirmation", "thread/start", "turn/start", "drain"]) {
+  test(`native review rejects a valid account update during ${stage}`, async () => {
+    const rpc = new NativeFixture();
+    let reads = 0;
+    const original = rpc.request.bind(rpc);
+    rpc.request = async (method, params) => {
+      if (method === "account/read") {
+        if (++reads === 1 || stage === "confirmation") rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+        rpc.calls.push({ method, params });
+        return routedAccount();
+      }
+      if (method === stage) rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+      return original(method, params);
+    };
+    if (stage === "drain") rpc.stop = async () => {
+      rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+      return { terminationConfirmed: true };
+    };
+    await assert.rejects(observeCodexReview(rpc, request()), /rejected/);
+    if (["confirmation", "thread/start"].includes(stage)) assert.equal(rpc.calls.some(call => call.method === "turn/start"), false);
+  });
+}
+
+for (const cancel of [false, true]) test(`native review bounds missing startup routing notification with ${cancel ? "cancellation" : "deadline"}`, async () => {
+  const rpc = new NativeFixture();
+  const abort = new AbortController();
+  rpc.overrides["account/read"] = () => routedAccount();
+  const review = observeCodexReview(rpc, { ...request(), timeoutMs: 100 }, { signal: abort.signal });
+  if (cancel) setImmediate(() => abort.abort());
+  await assert.rejects(review, /rejected/);
+  rpc.emit("account/updated", { authMode: "chatgpt", planType: "pro" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(rpc.calls.some(call => call.method === "thread/start"), false);
+  assert.equal(rpc.stops, 1);
 });
 
 for (const [name, change] of [

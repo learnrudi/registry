@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 export const CODEX_REVIEW_PROFILE = Object.freeze({ model: "gpt-6-astra", effort: "xhigh" });
 export const CODEX_REVIEW_RUNTIME = "0.160.1";
+// rust-v0.160.1 app-server-protocol/schema/typescript/PlanType.ts.
+const PLAN_TYPES = new Set(["free", "go", "plus", "pro", "prolite", "promax", "team",
+  "self_serve_business_prolite", "self_serve_business_usage_based", "business", "ent26",
+  "enterprise_cbp_automation", "enterprise_cbp_usage_based", "enterprise", "edu", "edu_plus", "edu_pro", "unknown"]);
 const failure = () => new Error("Native review rejected");
 
 /**
@@ -39,8 +44,7 @@ export async function observeCodexReview(connection, input, options = {}) {
       };
       await call("initialize", { clientInfo: { name: "rudi_reviewer", title: "RUDI Reviewer", version: "1" }, capabilities: { experimentalApi: true } });
       connection.notify("initialized", {});
-      const account = await call("account/read", { refreshToken: false });
-      if (account.account?.type !== "chatgpt" || account.requiresOpenaiAuth !== true) throw failure();
+      await verifyStartupAccount(state, call, deadline);
       const started = await call("thread/start", threadParams(request.cwd));
       validateThread(started, request.cwd);
       state.threadId = started.thread.id;
@@ -68,6 +72,7 @@ export async function observeCodexReview(connection, input, options = {}) {
   finally {
     // Poison callbacks BEFORE stop: a late RPC response cannot start a turn.
     state?.terminal.reject(failure());
+    if (state) state.startupOpen = false;
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);
   }
@@ -76,6 +81,30 @@ export async function observeCodexReview(connection, input, options = {}) {
   if (!stopped) throw new Error("Native review termination unconfirmed");
   if (rejected || state?.invalid || options.signal?.aborted) throw failure();
   return { ...result, terminationConfirmed: true };
+}
+
+async function verifyStartupAccount(state, call, deadline) {
+  // Keep the identity/routing snapshot private and independent of transport data.
+  const account = structuredClone(await call("account/read", { refreshToken: false }));
+  if (account.account?.type !== "chatgpt" || account.requiresOpenaiAuth !== true) throw failure();
+  if (account.workspaceRouting != null) {
+    validateRouting(account.workspaceRouting);
+    const notice = await Promise.race([state.startup.completed, deadline, state.terminal.failed]);
+    if (notice.planType !== account.account.planType) throw failure();
+  } else if (state.startupSeen) throw failure();
+  // No account update is permissible during confirmation, thread, turn or drain.
+  state.startupOpen = false;
+  if (!isDeepStrictEqual(account, await call("account/read", { refreshToken: false }))) throw failure();
+}
+
+function validateRouting(value) {
+  const keys = ["chatgptAccountId", "backendOrigin", "accountRoutingOverride"];
+  if (!value || Object.keys(value).length !== keys.length || keys.some(key => !Object.hasOwn(value, key))
+    || typeof value.chatgptAccountId !== "string" || !value.chatgptAccountId.trim() || value.chatgptAccountId.length > 200
+    || typeof value.backendOrigin !== "string" || value.backendOrigin.length > 2048
+    || !["NO_CONSTRAINT", "us", "us_cr"].includes(value.accountRoutingOverride)) throw failure();
+  const origin = new URL(value.backendOrigin);
+  if (origin.protocol !== "https:" || origin.origin !== value.backendOrigin) throw failure();
 }
 
 function threadParams(cwd) {
@@ -103,14 +132,23 @@ function validateThread(value, cwd) {
 
 class ReviewEvents {
   threadId; turnId; pending = []; answer; completed = false; invalid = false;
+  startup = deferred(); startupOpen = true; startupSeen = false;
   constructor(terminal) { this.terminal = terminal; }
   reject() { this.invalid = true; this.terminal.reject(failure()); }
   setTurn(id) { this.turnId = id; for (const event of this.pending) this.consume(event); this.pending = []; }
   receive(event) {
     try {
       if (!event || typeof event.method !== "string" || Object.hasOwn(event, "id")) throw failure();
+      if (event.method === "account/updated") {
+        const p = event.params;
+        if (!this.startupOpen || this.startupSeen || !p || Object.keys(p).length !== 2
+          || p.authMode !== "chatgpt" || !PLAN_TYPES.has(p.planType)) throw failure();
+        this.startupSeen = true;
+        this.startup.resolve({ authMode: p.authMode, planType: p.planType });
+        return;
+      }
       if (["error", "model/rerouted", "model/verification", "configWarning", "warning",
-        "hook/started", "hook/completed", "account/updated", "thread/settings/updated"].includes(event.method)) throw failure();
+        "hook/started", "hook/completed", "thread/settings/updated"].includes(event.method)) throw failure();
       if (!["item/started", "item/completed", "turn/started", "turn/completed"].includes(event.method)) return;
       if (!this.turnId) {
         if (this.pending.length >= 256) throw failure();
