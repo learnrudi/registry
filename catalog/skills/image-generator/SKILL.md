@@ -1,7 +1,7 @@
 ---
 name: "Image Generator Operator"
 description: "Agent-safe API and bounded Midjourney browser image generation for content creation workflows."
-version: 1.0.1
+version: 1.0.2
 category: "media"
 tags:
   - rudi
@@ -26,6 +26,10 @@ Agent-safe API and bounded Midjourney browser image generation for content creat
 Use the stack when the request needs these capabilities. Do not substitute
 invented results when the stack, a required secret, or a supporting service is
 unavailable.
+
+## Routing
+
+Use this entrypoint for an image request without an explicit provider. Discover supported models; honor provider and runtime requirements. For an explicit Midjourney request, use the `midjourney` skill for its session, reference, submission and export safeguards. For explicit OpenAI or Google requests, use the matching provider operator only when that route is available. Do not silently switch a chosen provider or duplicate a paid generation.
 
 ## Workflow
 

@@ -1,7 +1,7 @@
 ---
 name: "Video Generator Operator"
 description: "Agent-safe multi-provider video generation for content creation workflows."
-version: 1.0.1
+version: 1.0.2
 category: "media"
 tags:
   - rudi
@@ -36,6 +36,10 @@ accepted prompt before `generate_video`. Reuse the returned job ID for bounded
 On timeout preserve the job ID for resumption. Verify the resulting artifact’s
 playback, duration and dimensions before reporting success; record failed or partial
 jobs without automatically submitting another paid generation.
+
+## Routing
+
+Use this entrypoint for a video-generation request without an explicit provider. Honor a named provider and use the compatible live schema; the `openai` or `google-ai` operator may provide that selected route. Video editing belongs to `rudi-video-editor`. Assign one submission/job owner and resume its returned job instead of submitting through a second provider skill.
 
 ## Workflow
 

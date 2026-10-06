@@ -1,7 +1,7 @@
 ---
 name: Client Engagement Intake
-description: Create RUDI client engagement workspaces and private GitHub repos from client conversations, transcripts, and pipeline discussions
-version: 1.0.1
+description: "Portable client-intake fallback when no workspace-specific client skill exists; prefer that canonical client operator for managed workspaces."
+version: 1.0.2
 category: documents
 icon: 🧾
 tags:
@@ -14,125 +14,66 @@ tags:
   - domain:client-services
 ---
 
-You are a client engagement intake assistant for RUDI. Turn a real client or pipeline conversation into an organized engagement workspace, client-facing handoff docs, and an optional private GitHub repo.
+# Portable Client Intake
 
-## Trigger Signals
+This public package retains its ID for compatibility. When the workspace has a
+maintained `client` skill, use that single entrypoint and its selected intake
+procedure instead of running a second workflow. Do not install this fallback over
+private client instructions or bring private adapters into the public catalog.
 
-Use this workflow when the user says a conversation is:
+Use the fallback below only when no workspace-specific client operator exists.
 
-- a new client or prospect
-- a paid engagement
-- an exchange of funds
-- a pipeline opportunity
-- a client project
-- something that should become a private GitHub repo or client workspace
+## Resolve the request and authority
 
-Do not create files when the user is only asking an architecture or strategy question.
+- Distinguish a local brief, selected-meeting intake, new-workspace creation, and
+  Git publication. An architecture question or discussion of a prospect does not
+  authorize a new workspace, repository, application or paid engagement.
+- Resolve the approved client root and layout from the user's request and current
+  workspace governance. Do not default client records into business source or
+  machine-local RUDI runtime folders. If no approved destination is known, ask
+  for that destination before writing.
+- Resolve exact organization identity, direct versus downstream relationships,
+  nested chapters and existing folders/repositories. Preserve existing roots and
+  unrelated work. Inspect applicable instructions and Git state before mutation.
 
-## Required Discovery
+## Selected meeting
 
-1. Resolve the local engagement root from the user-provided path,
-   `$RUDI_ENGAGEMENTS_ROOT`, `$RUDI_BUSINESS_ROOT/engagements`, or
-   `~/.rudi/engagements`; then check for an existing local engagement:
-   `find <engagements-root> -maxdepth 2 -iname '*<org-fragment>*'`
-2. If working in a git repo, run `git status -sb`.
-3. If GitHub is requested, check the repo first:
-   `gh repo view <approved-owner>/<repo-slug> --json nameWithOwner,visibility,url,defaultBranchRef`
-4. If the existing repo is public, keep client material local and report the
-   visibility mismatch. Change repository visibility only when the user has
-   explicitly authorized that change for the exact repository; otherwise use
-   an approved private destination.
+1. Retrieve or receive the selected source and verify its identity, date,
+   participants and completeness. A provider summary is not a raw transcript.
+2. Use the applicable account-specific operators for authorized scoped evidence.
+   Preserve the original source privately and record provider/account/source ID
+   and content hash. Same identity/content is not a second interaction; preserve
+   changed source as a revision and reconcile it with existing records.
+3. Follow the client's existing machine-store or human-record authority. Separate
+   confirmed facts and commitments from recommendations and unknowns. Never
+   invent owners, dates, payment or approval to fill a template.
+4. Validate the existing record contract after authorized writes. Partial evidence
+   or failed reconciliation is a partial result, not completed intake. A request
+   for one meeting does not authorize a broad catch-up.
 
-Never create duplicate folders or repos unless the user explicitly asks for a separate workspace.
+## New workspace
 
-## Local Engagement Folder
+Create only the smallest layout required by the selected workspace's standard
+and known information. Preserve supplied raw evidence privately, and include
+source-linked context, decisions and next steps when facts exist. Do not create
+empty application trees, second semantic databases or duplicate client records.
+Follow the workspace's local Git initialization policy; a local repository,
+commit, remote, push and public delivery are different actions.
 
-Default path:
+## Brief and handoff
 
-`<engagements-root>/<org-slug>/`
+A local brief reads existing records without fetching new evidence or writing
+state. State source dates and gaps. An intake handoff records the client's ask,
+confirmed scope, recommended V1, deferred decisions, inputs needed, commitments,
+open questions and validation. Compare workflow, data model, permissions and
+source-of-truth alternatives only when requested. Do not assume an agent or
+application is needed where a manual or shared-data workflow is sufficient.
 
-Minimum files:
+## Publication and failure boundaries
 
-- `README.md` — client overview, contact, current ask, architecture direction, status
-- `interaction-log.md` — timeline, contacts, commitments, current read
-- `next-steps.md` — RUDI commitments, client inputs needed, open questions
-- `transcript-YYYY-MM-DD.md` — raw transcript if provided
-
-Use lowercase kebab-case for new folder slugs unless the repo already uses another convention for that client.
-
-## Private GitHub Repo
-
-Resolve the repository owner from the user's instruction or the configured
-engagement workspace. Verify that exact owner before creating a repository;
-ask only when it cannot be established from the available context.
-
-Default repo slug:
-
-`<org-slug>-engagement`
-
-The repo must be private if it contains client context, transcripts, contact info, pricing, pipeline, or internal strategy.
-
-Minimum repo files:
-
-- `README.md`
-- `index.html` when a client-facing landing page helps
-- `transcript.html` when a readable transcript page helps
-- `docs/README.md`
-- `docs/meeting-summary-YYYY-MM-DD.md`
-- `docs/next-steps.md`
-- `docs/prototype-comparison.md` when prototypes are involved
-- `docs/transcript-YYYY-MM-DD.md` when the user wants the raw transcript source in the repo
-- `prototype/` when a functional prototype exists
-
-If the repo already exists, update it in place and preserve unrelated user work.
-
-## Handoff Docs
-
-Every handoff should answer:
-
-- What did the client ask for?
-- What did the conversation clarify?
-- What is the recommended V1?
-- What is deferred?
-- What inputs does RUDI need from the client?
-- What does RUDI owe next?
-- What open questions remain?
-
-For prototype comparison docs, compare:
-
-- product shape
-- workflow coverage
-- data model
-- permissions and admin visibility
-- source of truth
-- integration or agent needs
-
-## Architecture Framing
-
-Do not assume the client needs an agent.
-
-Separate the system into:
-
-- **Normal app:** forms, dashboards, filters, update flows, payout calculators
-- **Source of truth:** Google Sheet, lightweight database, local JSON, or other shared store
-- **Agent/Claude layer:** reads messy activity, extracts structured updates, drafts follow-ups, proposes changes, summarizes movement
-
-Recommend a manual/shared-data V1 unless ingestion or automation is explicitly needed now.
-
-## Security Rules
-
-- Never print or commit secrets, API keys, tokens, connection strings, or raw credentials.
-- Demo PINs are acceptable only when clearly marked as prototype-only and not security controls.
-- Keep client repositories private by default.
-- Confirm before inviting external collaborators, sending emails, deleting repos, changing billing, or exposing private materials publicly.
-- If a transcript contains sensitive details, preserve it only in private locations and mark it raw or unreviewed.
-
-## Validation
-
-Before finalizing:
-
-- Verify repo privacy with `gh repo view ... --json visibility`.
-- Run relevant tests for any prototype code.
-- If JS/TS files changed, run the repo's debt scan policy or a scoped fallback scan.
-- Run `git status -sb`.
-- If pushing, commit intentionally and push only intended files.
+Client context remains private. Create a remote, invite collaborators, send
+messages, share files, change visibility, deploy or publish only within explicit
+authorization for that endpoint. Verify the exact private destination before
+placing sensitive material there. Preserve local work when provider access,
+source completeness, identity or validation fails; do not claim success or
+silently substitute another account. Never print or commit secrets.

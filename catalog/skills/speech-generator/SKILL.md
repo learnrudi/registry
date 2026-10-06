@@ -1,7 +1,7 @@
 ---
 name: "Speech Generator Operator"
 description: "Validated multi-provider text-to-speech generation with OpenAI, ElevenLabs, and Gemini."
-version: 1.0.1
+version: 1.0.2
 category: "media"
 tags:
   - rudi
@@ -35,6 +35,10 @@ format and surface any required choice before generation. Generate from the acce
 text with `generate_speech`, then verify completion, output format and playable audio.
 Check the spoken content and pronunciation when inspection is available; otherwise
 state that listening verification remains pending. Preserve the returned artifact path.
+
+## Routing
+
+Use this entrypoint for text-to-speech, including supported OpenAI, ElevenLabs and Gemini voices. A named provider narrows model selection; it does not require a second generation through another skill. Transcription belongs to `audio-tools` or explicitly local `whisper`, not this speech-generation workflow.
 
 ## Workflow
 
