@@ -3,13 +3,13 @@
   "schemaVersion": "2",
   "generatedAt": "2026-10-03T22:39:12.000Z",
   "stats": {
-    "total": 174,
+    "total": 176,
     "byKind": {
       "agent": 4,
       "binary": 28,
       "runtime": 6,
-      "skill": 85,
-      "stack": 51
+      "skill": 86,
+      "stack": 52
     }
   },
   "packages": {
@@ -1740,6 +1740,33 @@
           "operator",
           "audio-tools",
           "capability:extract"
+        ]
+      }
+    },
+    "skill:booking-pages": {
+      "id": "skill:booking-pages",
+      "kind": "skill",
+      "name": "booking-pages",
+      "version": "0.1.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/booking-pages"
+      },
+      "requires": {
+        "stacks": [
+          "stack:booking-pages"
+        ]
+      },
+      "meta": {
+        "description": "Read published meeting availability from a public Google booking page through RUDI. Supply a booking link, duration, date range and timezone; no calendar sign-in required.",
+        "category": "web",
+        "tags": [
+          "rudi",
+          "operator",
+          "booking",
+          "calendar",
+          "capability:read"
         ]
       }
     },
@@ -3980,6 +4007,57 @@
         "skills": [
           "skill:audio-tools"
         ]
+      }
+    },
+    "stack:booking-pages": {
+      "id": "stack:booking-pages",
+      "kind": "stack",
+      "name": "Booking Pages",
+      "version": "0.1.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/stacks/booking-pages"
+      },
+      "runtime": "node",
+      "requires": {
+        "binaries": [],
+        "secrets": []
+      },
+      "provides": {
+        "tools": [
+          "booking_pages_get_availability"
+        ]
+      },
+      "mcp": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "src/index.js"
+        ],
+        "cwd": "."
+      },
+      "related": {
+        "operatorSkill": "skill:booking-pages",
+        "skills": [
+          "skill:booking-pages"
+        ]
+      },
+      "meta": {
+        "description": "Read published Google booking-page availability without calendar authentication. Portable MCP and text/JSON CLI with explicit date coverage.",
+        "author": "RUDI",
+        "license": "MIT",
+        "category": "web",
+        "tags": [
+          "booking",
+          "calendar",
+          "availability",
+          "google",
+          "playwright",
+          "capability:read"
+        ],
+        "boundary": "Public Google appointment pages only. Isolated unsigned-in browser; no cookies imported, sign-in, calendar API credentials, time-slot selection, reservation, booking or messages. Other providers and custom domains are unsupported. Dates and times are provider evidence, not reconstructed calendar availability.",
+        "browserSetup": "After package installation run npm run install-browser in the stack directory. Browser binaries are machine-local dependencies and are not bundled or synchronized."
       }
     },
     "stack:brand-assets": {
