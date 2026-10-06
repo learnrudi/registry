@@ -1,7 +1,7 @@
 ---
 name: "Google Workspace Tools Operator"
 description: "Workflow-focused tools for Gmail, Google Sheets, Docs, Slides, Drive, Calendar, and Tasks"
-version: 1.0.1
+version: 1.0.2
 category: "communication"
 tags:
   - rudi
@@ -110,6 +110,8 @@ unavailable.
 - `drive_make_public`
 - `drive_delete`
 - `calendar_list`
+- `calendar_get`
+- `calendar_update`
 - `calendar_create`
 - `calendar_quick_add`
 - `calendar_delete`
@@ -126,6 +128,16 @@ the mismatch and use the live tool schema only when doing so remains within the
 user's request.
 
 ## Failure Behavior
+
+For existing Calendar events, use `calendar_get` to inspect the exact event and
+`calendar_update` to patch its title, notes, location, or timed interval. Pass
+the selected account on both calls and the returned etag when updating. Choose
+`send_updates` explicitly according to the user's authorization. Omitted fields
+are preserved; empty notes/location clear those fields. Time changes require
+both start and end with UTC offsets. An all-day event can receive metadata edits
+but cannot be converted to a timed event. Recurring series edits are unsupported;
+use an exact occurrence ID for one instance. The tool reads back the result;
+if it reports an unverified update, inspect with `calendar_get` before retrying.
 
 - Missing stack or tools: stop and ask the user to install, index, or integrate
   `stack:google-workspace`; do not simulate a successful tool call.

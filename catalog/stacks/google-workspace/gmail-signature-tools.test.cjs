@@ -1,0 +1,48 @@
+const assert = require('node:assert/strict');
+const {test} = require('node:test');
+const {mkdtempSync,writeFileSync,readFileSync,rmSync} = require('node:fs');
+const {tmpdir} = require('node:os');
+const {join} = require('node:path');
+const {pathToFileURL} = require('node:url');
+const {Client} = require('@modelcontextprotocol/sdk/client/index.js');
+const {StdioClientTransport} = require('@modelcontextprotocol/sdk/client/stdio.js');
+test('MCP draft create/update signs once; unsigned send is blocked; signed sends verify', async () => {
+ const dir=mkdtempSync(join(tmpdir(),'signature-tools-'));
+ const mock=join(dir,'mock.mjs');
+ const updates=join(dir,'updates.log');
+ writeFileSync(updates,'');
+ writeFileSync(join(dir,'token.json'),JSON.stringify({token:'fixture',client_id:'fixture',client_secret:'fixture'}));
+ writeFileSync(mock, `import {appendFileSync} from 'node:fs';
+ import {google} from ${JSON.stringify(pathToFileURL(require.resolve('googleapis')).href)};
+ const sig='<div>Fixture Sender<br>Fixture Company</div>';
+ let body='', sends=0;
+ const payload=()=>({mimeType:'text/html',body:{data:Buffer.from(body).toString('base64url')},headers:[{name:'To',value:'to@example.com'},{name:'From',value:'sender@example.com'},{name:'Subject',value:'Test'}]});
+ const capture=({requestBody})=>{ const raw=Buffer.from(requestBody.raw||requestBody.message.raw,'base64url').toString(); body=Buffer.from(raw.split('\\r\\n\\r\\n')[1].replace(/\\r\\n/g,''),'base64').toString(); if((body.match(/Fixture Sender/g)||[]).length!==1) throw Error('signature count'); return {data:{id:'draft',message:{id:'message'}}}; };
+ google.gmail=()=>({users:{getProfile:async()=>({data:{emailAddress:'sender@example.com'}}),settings:{sendAs:{get:async()=>({data:{sendAsEmail:'sender@example.com',signature:sig}})}},drafts:{create:async x=>capture(x),update:async x=>{appendFileSync(${JSON.stringify(updates)},'update;');return capture(x)},get:async({id})=>({data:{message:{id:'message',payload:id==='mixed'?{...payload(),mimeType:'multipart/mixed',body:undefined,parts:[{mimeType:'multipart/alternative',parts:[payload()]},{mimeType:'text/plain',body:{data:Buffer.from('IMPORTANT authored body continuation').toString('base64url')}}]}:id==='nested'?{...payload(),mimeType:'multipart/alternative',body:undefined,parts:[{mimeType:'text/plain',body:{data:Buffer.from('Hello Fixture Sender Fixture Company').toString('base64url')}},{mimeType:'multipart/related',parts:[payload(),{mimeType:'image/png',filename:'logo.png',body:{attachmentId:'logo'}}]}]}:id==='external'?{...payload(),body:{attachmentId:'external-body',size:1000}}:id==='unsigned'?{...payload(),body:{data:Buffer.from('Unsigned').toString('base64url')}}:payload()}}}),send:async()=>{sends++;return {data:{id:'sent',threadId:'thread'}}}},messages:{send:async x=>{capture(x);sends++;return {data:{id:'sent',threadId:'thread',labelIds:['SENT']}}},get:async()=>({data:{id:'sent',payload:payload()}})}}});`);
+ const client=new Client({name:'signature-test',version:'1'},{capabilities:{}});
+ try {
+ await client.connect(new StdioClientTransport({command:process.execPath,args:['--import','tsx','--import',mock,'src/index.ts'],cwd:process.cwd(),env:{RUDI_STACK_STATE_DIR:dir},stderr:'pipe'}));
+ const call=async(name,args)=>client.callTool({name,arguments:args});
+ assert.ok((await call('gmail_draft',{to:'to@example.com',subject:'Test',body:'Hello'})).content[0].text.includes('Draft created'));
+ assert.notEqual((await call('gmail_draft_update',{draft_id:'draft',subject:'Updated'})).isError,true);
+ const nestedSend=await call('gmail_draft_send',{draft_id:'nested'});
+ assert.notEqual(nestedSend.isError,true,'Nested alternatives must allow a signed send');
+ assert.equal(JSON.parse(nestedSend.content[0].text).signatureVerified,true);
+ const nestedUpdate=await call('gmail_draft_update',{draft_id:'nested',subject:'Nested update',attachments:[]});
+ assert.notEqual(nestedUpdate.isError,true,'Nested alternatives must allow a subject-only update');
+ const updatesBefore=readFileSync(updates,'utf8');
+ const unreadable=await call('gmail_draft_update',{draft_id:'external',subject:'Subject only'});
+ assert.equal(unreadable.isError,true,'An external body must not be overwritten by a signature-only update');
+ assert.match(unreadable.content[0].text,/body.*(stored|readable|read)/i);
+ assert.equal(readFileSync(updates,'utf8'),updatesBefore,'Unreadable body must cause zero provider updates');
+ const mixed=await call('gmail_draft_update',{draft_id:'mixed',subject:'Subject only'});
+ assert.equal(mixed.isError,true);
+ assert.match(mixed.content[0].text,/independent.*body/i);
+ assert.equal(readFileSync(updates,'utf8'),updatesBefore,'Mixed independent bodies must cause zero provider updates');
+ assert.equal((await call('gmail_draft_send',{draft_id:'unsigned'})).isError,true);
+ const sent=await call('gmail_draft_send',{draft_id:'draft'});
+ assert.equal(JSON.parse(sent.content[0].text).signatureVerified,true);
+ const direct=await call('gmail_send',{to:'to@example.com',subject:'Test',body:'Hello'});
+ assert.equal(JSON.parse(direct.content[0].text).signatureVerified,true);
+ } finally {await client.close();rmSync(dir,{recursive:true,force:true});}
+});

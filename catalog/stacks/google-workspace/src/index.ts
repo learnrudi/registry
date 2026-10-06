@@ -19,6 +19,7 @@ import { execSync } from "child_process";
 import { tmpdir } from "os";
 import { homedir } from "os";
 import { buildCalendarEventInsert } from "./calendar.js";
+import { calendarEventToolDefinitions, runCalendarGet, runCalendarUpdate } from "./calendar-events.js";
 import {
   calendarDiscoveryToolDefinitions,
   runCalendarDiscoveryPage,
@@ -37,6 +38,7 @@ import {
   normalizeGmailSendResult,
   resolveRequestedAccount,
 } from "./gmail.js";
+import { assertSignature, includeSignature, loadSignature, messageBody, verifySentSignature } from "./gmail-signature.js";
 import { gmailSearchToolDefinitions, runGmailHeaderSearch, runGmailSearch } from "./gmail-search.js";
 import { resolveOAuthClientConfig } from "./oauthCredentials.js";
 import {
@@ -308,10 +310,6 @@ function extractGmailPayloadBody(payload: any): { text: string; html: string } {
   return result;
 }
 
-function chooseDraftContentType(payload: any): string | undefined {
-  return payload?.mimeType === "text/html" ? "text/html; charset=utf-8" : undefined;
-}
-
 function summarizeGmailMessage(message: any): Record<string, unknown> {
   const headers = message?.payload?.headers || [];
   const body = extractGmailPayloadBody(message?.payload);
@@ -549,7 +547,7 @@ const SLIDES_WRITE_CONTROL_INPUT = {
 };
 
 const server = new Server(
-  { name: "google-workspace", version: "1.1.0" },
+  { name: "google-workspace", version: "1.1.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -581,7 +579,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     ...gmailDiscoveryToolDefinitions(ACCOUNT_INPUT),
     {
       name: "gmail_send",
-      description: "Send an email via Gmail",
+      description: "Send an email via Gmail with the saved sender signature and sent-message verification. Missing signatures block sending.",
       inputSchema: {
         type: "object",
         properties: {
@@ -601,7 +599,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     ...gmailSearchToolDefinitions(ACCOUNT_INPUT),
     {
       name: "gmail_draft",
-      description: "Create a Gmail draft. Pass reply_message_id to create a threaded reply draft.",
+      description: "Create a Gmail draft including the saved sender signature once. Pass reply_message_id for a threaded reply draft.",
       inputSchema: {
         type: "object",
         properties: {
@@ -675,7 +673,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "gmail_draft_send",
-      description: "Send an existing Gmail draft by draft ID",
+      description: "Send a reviewed Gmail draft only if the saved sender signature appears once; does not modify the draft. Verifies the sent message.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1270,6 +1268,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     // Calendar
+    ...calendarEventToolDefinitions(ACCOUNT_INPUT),
     ...calendarDiscoveryToolDefinitions(ACCOUNT_INPUT),
     {
       name: "calendar_list",
@@ -1495,6 +1494,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "gmail_send": {
         const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
+        const signing = await loadSignature(gmail);
+        const signedBody = includeSignature(requireString(args?.body, "body"), signing.signature);
         const replyMessageId = typeof args?.reply_message_id === "string"
           ? args.reply_message_id.trim()
           : "";
@@ -1506,13 +1507,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             })
           : null;
         const profile = await gmail.users.getProfile({ userId: "me" });
-        const from = sanitizeHeaderValue(
-          requireString(
-            profile.data.emailAddress,
-            "gmail profile emailAddress"
-          ),
-          "gmail profile emailAddress"
-        );
         const attachments = loadAttachmentFiles(optionalAttachmentPaths(args));
         const outgoing = replyMessageId
           ? buildGmailDraftMessage({
@@ -1520,7 +1514,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               cc: args?.cc,
               bcc: args?.bcc,
               subject: args?.subject,
-              body: args?.body,
+              body: signedBody,
               replyMessageId,
               replyAll: args?.reply_all,
               originalMessage: original?.data,
@@ -1531,19 +1525,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               cc: args?.cc as string | undefined,
               bcc: args?.bcc as string | undefined,
               subject: args?.subject as string,
-              body: args?.body as string,
+              body: signedBody as string,
               threadId: undefined,
               contentType: undefined,
               inReplyTo: undefined,
               references: undefined,
             };
         const raw = buildRawEmail({
-          from,
+          from: signing.from,
           to: outgoing.to,
           cc: outgoing.cc,
           bcc: outgoing.bcc,
           subject: outgoing.subject,
-          body: args?.body,
+          body: signedBody,
           contentType: outgoing.contentType,
           inReplyTo: outgoing.inReplyTo,
           references: outgoing.references,
@@ -1557,11 +1551,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           userId: "me",
           requestBody,
         });
+        const verification = await verifySentSignature(gmail, sent.data.id, signing.signature);
         return {
           content: [{
             type: "text",
             text: JSON.stringify({
               sent: true,
+              ...verification,
               ...normalizeGmailSendResult(sent.data),
             }, null, 2),
           }],
@@ -1583,6 +1579,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "gmail_draft": {
         const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
+        const signing = await loadSignature(gmail);
+        const signedBody = includeSignature(requireString(args?.body, "body"), signing.signature);
         const replyMessageId = typeof args?.reply_message_id === "string"
           ? args.reply_message_id.trim()
           : "";
@@ -1601,7 +1599,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           cc: args?.cc,
           bcc: args?.bcc,
           subject: args?.subject,
-          body: args?.body,
+          body: signedBody,
           replyMessageId,
           replyAll: args?.reply_all,
           originalMessage: original?.data,
@@ -1609,11 +1607,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         const attachments = loadAttachmentFiles(optionalAttachmentPaths(args));
         const raw = buildRawEmail({
+          from: signing.from,
           to: draftMessage.to,
           cc: draftMessage.cc,
           bcc: draftMessage.bcc,
           subject: draftMessage.subject,
-          body: args?.body,
+          body: signedBody,
           contentType: draftMessage.contentType,
           inReplyTo: draftMessage.inReplyTo,
           references: draftMessage.references,
@@ -1727,21 +1726,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const headers = currentMessage.payload.headers || [];
-        const currentBody = extractGmailPayloadBody(currentMessage.payload);
+        const fromHeader = getHeaderValue(headers, "From");
+        const fromAddress = fromHeader.match(/<([^<>]+)>/)?.[1] || fromHeader || undefined;
+        const signing = await loadSignature(gmail, fromAddress);
+        const signedBody = includeSignature(
+          hasToolArg(args, "body") ? requireString(args?.body, "body") : requireString(messageBody(currentMessage.payload), "existing draft body"),
+          signing.signature
+        );
         const attachments = hasToolArg(args, "attachments")
           ? loadAttachmentFiles(optionalAttachmentPaths(args))
           : currentMessage.id
             ? await loadGmailPayloadAttachments(gmail, currentMessage.id, currentMessage.payload)
             : [];
         const raw = buildRawEmail({
+          from: signing.from,
           to: optionalToolString(args, "to") || getHeaderValue(headers, "To"),
           cc: hasToolArg(args, "cc") ? optionalToolString(args, "cc") : getHeaderValue(headers, "Cc"),
           bcc: hasToolArg(args, "bcc") ? optionalToolString(args, "bcc") : getHeaderValue(headers, "Bcc"),
           subject: optionalToolString(args, "subject") || getHeaderValue(headers, "Subject"),
-          body: hasToolArg(args, "body")
-            ? args?.body
-            : currentBody.html || currentBody.text || "",
-          contentType: chooseDraftContentType(currentMessage.payload),
+          body: signedBody,
           inReplyTo: getHeaderValue(headers, "In-Reply-To"),
           references: getHeaderValue(headers, "References"),
           attachments,
@@ -1783,15 +1786,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
         const draftId = requireString(args?.draft_id, "draft_id");
+        const draft = await gmail.users.drafts.get({ userId: "me", id: draftId, format: "full" });
+        const fromHeader = getHeaderValue(draft.data.message?.payload?.headers || [], "From");
+        const fromAddress = fromHeader.match(/<([^<>]+)>/)?.[1] || fromHeader || undefined;
+        const signing = await loadSignature(gmail, fromAddress);
+        assertSignature(messageBody(draft.data.message?.payload), signing.signature);
         const sent = await gmail.users.drafts.send({
           userId: "me",
           requestBody: { id: draftId },
         });
+        const verification = await verifySentSignature(gmail, sent.data.id, signing.signature);
         return {
           content: [{
             type: "text",
             text: JSON.stringify({
               sent: true,
+              ...verification,
               draftId,
               messageId: sent.data.id,
               threadId: sent.data.threadId,
@@ -1990,6 +2000,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "gmail_reply": {
         const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
+        const signing = await loadSignature(gmail);
+        const signedBody = includeSignature(requireString(args?.body, "body"), signing.signature);
         const messageId = requireString(args?.message_id, "message_id");
         const original = await gmail.users.messages.get({
           userId: "me",
@@ -2004,18 +2016,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           cc: args?.cc,
           bcc: args?.bcc,
           subject: args?.subject,
-          body: args?.body,
+          body: signedBody,
           replyMessageId: messageId,
           replyAll: args?.reply_all,
           originalMessage: original.data,
           selfEmail: profile?.data.emailAddress,
         });
         const raw = buildRawEmail({
+          from: signing.from,
           to: replyMessage.to,
           cc: replyMessage.cc,
           bcc: replyMessage.bcc,
           subject: replyMessage.subject,
-          body: args?.body,
+          body: signedBody,
           contentType: replyMessage.contentType,
           inReplyTo: replyMessage.inReplyTo,
           references: replyMessage.references,
@@ -2029,11 +2042,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         });
 
+        const verification = await verifySentSignature(gmail, sent.data.id, signing.signature);
         return {
           content: [{
             type: "text",
             text: JSON.stringify({
               sent: true,
+              ...verification,
               replyToMessageId: messageId,
               to: replyMessage.to,
               ...normalizeGmailSendResult(sent.data),
@@ -2045,6 +2060,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "gmail_forward": {
         const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
+        const signing = await loadSignature(gmail);
         const messageId = requireString(args?.message_id, "message_id");
         const original = await gmail.users.messages.get({
           userId: "me",
@@ -2059,7 +2075,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           : `Fwd: ${originalSubject}`;
         const note = optionalToolString(args, "note");
         const body = [
-          note ? `<p>${escapeHtml(note).replace(/\n/g, "<br>")}</p>` : "",
+          includeSignature(note || "", signing.signature),
           "<br><br>---------- Forwarded message ---------<br>",
           `<b>From:</b> ${escapeHtml(getHeaderValue(headers, "From"))}<br>`,
           `<b>Date:</b> ${escapeHtml(getHeaderValue(headers, "Date"))}<br>`,
@@ -2071,6 +2087,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ? await loadGmailPayloadAttachments(gmail, original.data.id, original.data.payload)
           : [];
         const raw = buildRawEmail({
+          from: signing.from,
           to: args?.to,
           cc: args?.cc,
           bcc: args?.bcc,
@@ -2083,11 +2100,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           userId: "me",
           requestBody: { raw },
         });
+        const verification = await verifySentSignature(gmail, sent.data.id, signing.signature);
         return {
           content: [{
             type: "text",
             text: JSON.stringify({
               forwarded: true,
+              ...verification,
               sourceMessageId: messageId,
               messageId: sent.data.id,
               threadId: sent.data.threadId,
@@ -2818,6 +2837,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // Calendar
+      case "calendar_get":
+      case "calendar_update": {
+        const auth = getAuthForArgs(args);
+        const calendar = google.calendar({ version: "v3", auth });
+        return await (name === "calendar_get" ? runCalendarGet(calendar, args) : runCalendarUpdate(calendar, args));
+      }
+
       case "calendar_discovery_page": {
         const auth = getAuthForArgs(args);
         const calendar = google.calendar({ version: "v3", auth });
