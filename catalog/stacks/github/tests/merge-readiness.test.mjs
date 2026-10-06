@@ -211,7 +211,7 @@ test("composes the canonical publisher inspector and rejects a revoked live chec
       if (path.endsWith("/check-runs")) return Response.json({ total_count: 2, check_runs: checks });
       if (path.includes("/check-runs/")) return Response.json(checks.find(c => c.id === Number(path.split("/").at(-1))));
       if (path.endsWith("/reviews/2000")) return Response.json(review);
-      return Response.json({ number: 7, state: "open", draft: false, merged: false,
+      return Response.json({ number: 7, state: "open", draft: false, merged: false, auto_merge: null,
         base: { ref: "main", sha: f.binding.baseSha, repo: { id: 101 } }, head: { sha: f.binding.headSha, repo: { id: 101 } } });
     }
     return baseFetch(url, init);

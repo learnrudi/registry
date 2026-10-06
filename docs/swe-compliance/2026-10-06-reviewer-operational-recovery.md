@@ -63,7 +63,24 @@ repository debt gates pass. The initial changed-stack selection was vacuous
 because it compares committed revisions. Explicit `--stack stack:github
 --prepare` verification closes this selection gap; its separate log records
 the actual selected-stack checks. No JS/TS source changed.
-Fresh source review, peer source synchronization, reviewed owner recovery and
-live execution remain pending. Keep PR draft and worktree retained. Record source,
+Startup source review and peer synchronization subsequently passed at 0ba1892.
+Private package review then reproduced a no-merge boundary gap: enabling GitHub
+auto-merge during native review did not stop the canonical publisher. A focused
+successor correction requires explicit `auto_merge: null` in every existing
+current-PR gate, including the post-authentication dispatch check. Missing or
+malformed state rejects; historical reconciliation remains read-only. This does
+not make remote reads/writes atomic or prevent later owner changes.
+
+The first auto-merge behavior test failed with “Missing expected rejection,”
+then passed unchanged after the one-condition validator correction. Additional
+regression tests cover each publication boundary, token refresh and later live
+inspection. The merge-readiness fixture now explicitly reports disabled
+auto-merge, matching GitHub's response contract. This follow-up changes one
+TypeScript implementation and two test files plus deployment documentation and
+this record; scoped debt, stack tests, registry gates and independent review
+must pass before publication and regeneration of the private runtime package.
+
+Reviewed owner recovery and live execution remain pending. Keep PR draft and
+worktree retained. Record source,
 deployment, finite review/publication and broader rollout acceptance separately.
 One successful review does not establish recurring service or merge readiness.

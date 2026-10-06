@@ -16,7 +16,7 @@ function fixture() {
   const reviews = [];
   const writes = [];
   const policy = { appId: 123, botUserId: 321, repositories: [{ id: 101, owner: "example", repo: "project", baseBranch: "main" }], evidenceKey: keys.publicKey, model: "gpt-6-astra", effort: "xhigh", reviewerHostId: "review-host" };
-  const state = { enabled: true, headSha: binding.headSha, baseSha: binding.baseSha };
+  const state = { enabled: true, headSha: binding.headSha, baseSha: binding.baseSha, autoMerge: null };
   const deps = {
     now: () => now, enabled: async () => state.enabled,
     loadRequest: async () => request, tokenForRepository: async () => "synthetic-installation-token",
@@ -25,7 +25,7 @@ function fixture() {
       const path = new URL(url).pathname;
       const body = init.body ? JSON.parse(init.body) : undefined;
       let data;
-      if (init.method === "GET" && path.endsWith("/pulls/7")) data = { number: 7, state: "open", draft: false, merged: false, base: { ref: "main", sha: state.baseSha, repo: { id: 101 } }, head: { sha: state.headSha, repo: { id: 101 } } };
+      if (init.method === "GET" && path.endsWith("/pulls/7")) data = { number: 7, state: "open", draft: false, merged: false, auto_merge: state.autoMerge, base: { ref: "main", sha: state.baseSha, repo: { id: 101 } }, head: { sha: state.headSha, repo: { id: 101 } } };
       else if (init.method === "GET" && path.endsWith("/branches/main")) data = { commit: { sha: state.baseSha } };
       else if (init.method === "GET" && path.includes("/check-runs/")) data = checks.get(Number(path.split("/").at(-1)));
       else if (init.method === "GET" && path.endsWith("/check-runs")) {
@@ -60,6 +60,16 @@ test("publishes revision-bound approval with pending checks before marking accep
   assert.equal(JSON.stringify(result).includes("synthetic-installation-token"), false);
 });
 
+test("enabled or unknown auto-merge blocks publication before any write", async () => {
+  for (const autoMerge of [{ merge_method: "squash" }, undefined, false]) {
+    const f = fixture();
+    f.state.autoMerge = autoMerge;
+    await assert.rejects(createReviewPublisher(f.policy, f.deps).publish("request-1"));
+    assert.equal(f.writes.length, 0);
+    assert.equal(f.records.size, 0);
+  }
+});
+
 test("published reviews and checks disclose native configuration assurance", async () => {
   const f=fixture();
   await createReviewPublisher(f.policy,f.deps).publish('request-1');
@@ -69,6 +79,29 @@ test("published reviews and checks disclose native configuration assurance", asy
     assert.match(check.output.summary,/native session configuration/i);
     assert.match(check.output.summary,/provider execution is not attested/i);
   }
+});
+
+test("auto-merge enabled during publication or token refresh stops the next mutation", async () => {
+  for (const afterWrites of [0, 1, 2, 3, 4]) {
+    const f = fixture();
+    f.deps.tokenForRepository = async () => {
+      if (f.records.size && f.writes.length === afterWrites) f.state.autoMerge = { merge_method: "squash" };
+      return "synthetic-installation-token";
+    };
+    await assert.rejects(createReviewPublisher(f.policy, f.deps).publish("request-1"));
+    assert.equal(f.writes.length, afterWrites);
+    assert.equal([...f.records.values()][0].phase, "uncertain");
+  }
+});
+
+test("enabling auto-merge revokes live inspection while historical reconciliation remains read-only", async () => {
+  const f = fixture();
+  const publisher = createReviewPublisher(f.policy, f.deps);
+  await publisher.publish("request-1");
+  f.state.autoMerge = { merge_method: "squash" };
+  await assert.rejects(publisher.inspect("request-1"));
+  assert.equal((await publisher.reconcile("request-1")).auditOnly, true);
+  assert.equal(f.writes.length, 5);
 });
 
 test("duplicate delivery does not duplicate approvals or check runs", async () => {

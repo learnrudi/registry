@@ -252,6 +252,7 @@ function validatePull(pr: Record<string, unknown>, binding: ReviewBinding, branc
   const base = object(pr.base);
   const head = object(pr.head);
   if (pr.number !== binding.pullNumber || pr.state !== "open" || pr.draft !== false || pr.merged !== false
+    || pr.auto_merge !== null
     || base.ref !== branch || base.sha !== binding.baseSha || head.sha !== binding.headSha
     || object(base.repo).id !== binding.repositoryId || object(head.repo).id !== binding.repositoryId) {
     throw new Error("Pull request changed or is ineligible");

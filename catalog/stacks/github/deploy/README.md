@@ -63,7 +63,12 @@ prepared schema-2 evidence after current policy checks and stores an immutable
 signed handoff. The publisher verifies it and all existing veto/current-state
 rules. Assurance is **native session configuration**, with
 `effectiveExecution: null`; no component claims effective provider attestation.
-No operation grants merge permission. Prior green GitHub checks are not revoked
+No operation grants merge permission. Publication and current acceptance require
+GitHub to report `auto_merge: null`; enabled or missing auto-merge state blocks.
+This is rechecked before every publication mutation, including after credential
+refresh. Historical reconciliation remains read-only. These checks cannot make
+separate GitHub reads and writes atomic or prevent later owner changes.
+Prior green GitHub checks are not revoked
 by stopping this host; external merge freezes and server enforcement are separate.
 
 ## Package and installation
