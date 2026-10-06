@@ -152,12 +152,16 @@ def sandbox_profile(program, readable, writable, network=False):
     if network:
         lines += ["(allow network-outbound (remote tcp \"*:443\"))",
                   "(allow network-outbound (remote udp \"*:53\"))",
+                  # macOS getaddrinfo uses this DNS service socket, not direct
+                  # UDP alone. Other local sockets remain denied.
+                  "(allow network-outbound (literal \"/private/var/run/mDNSResponder\"))",
                   "(allow file-read* (subpath \"/private/etc\") (subpath \"/private/var/db/timezone\"))",
                   "(allow mach-lookup (global-name \"com.apple.system.opendirectoryd.membership\")",
                   " (global-name \"com.apple.cfprefsd.daemon\") (global-name \"com.apple.trustd.agent\")",
                   " (global-name \"com.apple.networkd\") (global-name \"com.apple.SystemConfiguration.configd\"))"]
     # No process-fork, signal, task-port, launch service, general Mach IPC, local
-    # socket, inbound network or additional executable allowance. setsid cannot
+    # socket (except the network worker's DNS service), inbound network or
+    # additional executable allowance. setsid cannot
     # escape restrictions inherited by this process; child creation is denied.
     return "\n".join(lines) + "\n"
 
@@ -339,6 +343,9 @@ def account(name, isolated=False):
 
 def worker_config(root):
     return ('model = "gpt-6-astra"\nmodel_reasoning_effort = "xhigh"\nmodel_provider = "openai"\n'
+              # Acknowledge the explicitly selected experimental discovery guard;
+              # the native adapter still rejects unexpected warning events.
+              'suppress_unstable_features_warning = true\n'
               'approval_policy = "never"\nsandbox_mode = "read-only"\nweb_search = "disabled"\n'
               'cli_auth_credentials_store = "file"\n' + 'sqlite_home = ' + json.dumps(str(root / "worker/state")) + '\n'
               + 'log_dir = ' + json.dumps(str(root / "worker/log")) + '\n'

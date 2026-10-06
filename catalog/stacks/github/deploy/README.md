@@ -125,6 +125,27 @@ identity, publication, veto/staleness, stop/drain and recovery on a real PR.
 
 ## Verification limits
 
+Worker startup acknowledges the explicitly selected experimental
+`skip_host_skill_discovery` feature through the runtime's
+`suppress_unstable_features_warning` setting. The native observer still rejects
+unexpected warnings. The network-enabled profile permits only the system DNS
+socket `/private/var/run/mDNSResponder` in addition to its existing HTTPS/DNS
+egress; arbitrary local sockets remain denied. Credential-free proof profiles
+retain network denial.
+
+On macOS, run `RUDI_REVIEWER_TEST_CODEX=/absolute/path/to/trusted/codex
+python3 -B tests/reviewer_native_startup_test.py` with CLI 0.151.0 and the actual
+Python interpreter executable (not a launcher that execs another binary). This
+opt-in test uses a fresh empty credential home, checks session configuration and
+warning-free startup, and checks real DNS plus denial of other local sockets,
+fork and other exec. It never sends `turn/start` or repository source. Host DNS
+must work; these probes are not authenticated inference or deployment evidence.
+
+Existing installations need separately reviewed owner migration of their
+hash-bound config/profile/installation descriptor and code. Source correction
+alone does not update them. Preserve failed requests, locks and receipts;
+do not rerun installation or remove the disabled marker to retry.
+
 Tests cover library boundaries, immutable handoff, malformed/oversized/deadline
 RPC, real local process drain and macOS fork/exec/write denial. An unauthenticated
 admin-peer CLI probe covers initialize/account read/thread configuration only.
