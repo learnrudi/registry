@@ -17,6 +17,23 @@ spec.loader.exec_module(host)
 
 
 class CustodyTests(unittest.TestCase):
+    def test_candidate_admission_allows_verified_launchd_helpers(self):
+        class SourceReached(Exception):
+            pass
+        install = {'root': '/protected/reviewer', 'release': '/protected/reviewer/code/release',
+                   'worker': {'uid': 503}, 'publisher': {'uid': 502}}
+        rows = b'503 120 1 Tue Oct 6 12:00:00 2026\n'
+        with patch.object(host, 'current_pilot', return_value=({}, b'{}')), \
+             patch.object(host, 'protected_path', side_effect=lambda p, *a, **kw: Path(p)), \
+             patch.object(host, 'checked_file', return_value=b'private'), \
+             patch.object(host.subprocess, 'check_output', return_value='503 120\n'), \
+             patch.object(host.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, rows, b'')), \
+             patch.object(host, 'kernel_process_path', create=True, return_value='/usr/sbin/distnoted'), \
+             patch.object(host, 'trusted_background_process', create=True, return_value=True), \
+             patch.object(host, 'publisher_invoke', side_effect=SourceReached):
+            with self.assertRaises(SourceReached):
+                host.prepare_candidate(install)
+
     def test_native_installation_identity_allows_readable_metadata_but_rejects_unsafe_files(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()

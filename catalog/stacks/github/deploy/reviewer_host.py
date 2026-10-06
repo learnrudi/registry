@@ -1,5 +1,6 @@
 """Finite protected macOS reviewer host. No daemon, scheduler or merge operation."""
 import hashlib
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -672,6 +673,105 @@ def proof_invocation(install, mode, data, network=False, production_reads=False)
     return raw
 
 
+def remaining_process_time(deadline):
+    check_stop()
+    budget = min(5, deadline - time.monotonic())
+    if budget <= 0:
+        raise ValueError("Process inspection deadline exhausted")
+    return budget
+
+
+BACKGROUND_PROCESSES = frozenset(('/usr/sbin/distnoted', '/usr/sbin/cfprefsd',
+    '/System/Library/Frameworks/Contacts.framework/Support/contactsd'))
+
+
+def process_inventory(worker_uid, publisher_uid, deadline):
+    result = subprocess.run(['/bin/ps','-axo','uid=,pid=,ppid=,lstart='],
+        env={'PATH':'/usr/bin:/bin','LANG':'C','LC_ALL':'C'}, capture_output=True, check=True, timeout=remaining_process_time(deadline))
+    remaining_process_time(deadline)
+    if len(result.stdout) > 2000000:
+        raise ValueError('process inventory rejected')
+    rows = []
+    for line in result.stdout.decode('utf-8', 'strict').splitlines():
+        fields = line.split()
+        if len(fields) != 8:
+            raise ValueError('process inventory rejected')
+        uid, pid, parent = map(int, fields[:3])
+        if [str(uid),str(pid),str(parent)] != fields[:3]:
+            raise ValueError('process inventory rejected')
+        if pid <= 0 or pid > 2147483647:
+            raise ValueError('process identity rejected')
+        if uid in (worker_uid, publisher_uid):
+            rows.append((uid,pid,parent,' '.join(fields[3:])))
+    return sorted(rows)
+
+
+def kernel_process_path(pid):
+    library = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    library.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+    library.proc_pidpath.restype = ctypes.c_int
+    buffer = ctypes.create_string_buffer(4096)
+    if library.proc_pidpath(pid, buffer, len(buffer)) <= 0:
+        raise ValueError('process path unavailable')
+    return os.fsdecode(buffer.value)
+
+
+def trusted_background_process(path, deadline):
+    # Names reported by ps are not executable identity. Only these observed
+    # launchd helpers, from kernel paths and protected Apple-signed bytes, qualify.
+    if path not in BACKGROUND_PROCESSES:
+        return False
+    executable = Path(path)
+    for item in [executable, *executable.parents]:
+        info = item.lstat()
+        if stat.S_ISLNK(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            return False
+        acl = subprocess.run(['/bin/ls','-lde',str(item)],capture_output=True,check=True,timeout=remaining_process_time(deadline))
+        if len(acl.stdout.splitlines()) != 1:
+            return False
+    if not stat.S_ISREG(executable.lstat().st_mode):
+        return False
+    signed = subprocess.run(['/usr/bin/codesign','--verify','--strict','-R','=anchor apple',path],
+        capture_output=True,timeout=remaining_process_time(deadline))
+    remaining_process_time(deadline)
+    return signed.returncode == 0
+
+
+def reviewer_activity(install, deadline=None):
+    deadline = time.monotonic() + 20 if deadline is None else deadline
+    worker_uid, publisher_uid = install["worker"]["uid"], install["publisher"]["uid"]
+    root = Path(install["root"])
+    rows = process_inventory(worker_uid, publisher_uid, deadline)
+    checked, paths = {}, {}
+    for uid, pid, parent, started in rows:
+        try:
+            path = kernel_process_path(pid)
+        except ValueError:
+            return True
+        paths[pid] = path
+        if uid == worker_uid:
+            if parent != 1:
+                return True
+            if path not in checked:
+                checked[path] = trusted_background_process(path, deadline)
+            if not checked[path]:
+                return True
+        elif path.startswith(str(root / 'code') + '/'):
+            return True
+    # Reject churn/PID reuse rather than declaring an uncertain inventory idle.
+    if process_inventory(worker_uid, publisher_uid, deadline) != rows:
+        return True
+    for pid, path in paths.items():
+        try:
+            current = kernel_process_path(pid)
+        except ValueError:
+            return True
+        if current != path:
+            return True
+    remaining_process_time(deadline)
+    return False
+
+
 def prepare_candidate(install):
     root, release = Path(install["root"]), Path(install["release"])
     pilot, pilot_raw = current_pilot(install)
@@ -679,9 +779,8 @@ def prepare_candidate(install):
     for name in ["app-key.pem", "evidence-key.pem", "evidence-public.pem"]:
         checked_file(protected_path(root / "publisher" / name, install["publisher"]["uid"], private=True), install["publisher"]["uid"], 16384)
     checked_file(protected_path(root / "code/codex-home/auth.json", install["worker"]["uid"], private=True), install["worker"]["uid"], 32768)
-    processes = subprocess.check_output(["/bin/ps", "-axo", "uid=,pid="], text=True, timeout=5).splitlines()
-    if any(line.split()[0] == str(install["worker"]["uid"]) for line in processes if line.split()):
-        raise ValueError("Worker identity already has live processes")
+    if reviewer_activity(install):
+        raise ValueError("Reviewer identity has live or unverified processes")
     source_raw = publisher_invoke(install, "source")
     source = strict_json(source_raw)
     if digest(source["sourceText"].encode()) != source["sourceDigest"]:

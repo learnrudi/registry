@@ -35,7 +35,13 @@ this is not destination-pinned egress. No repository program executes in that
 process. The static document proof runs separately, without credentials or
 network access. Root alone holds the stop-control socket and confirms process
 group death before the controller can complete an audit. Unknown termination or
-partial writes preserve locks and remain held.
+partial writes preserve locks and remain held. Startup admission and the owner
+stop control use the host process classifier: unknown worker processes and live
+Reviewer publisher runtimes block. Only the exact system `distnoted`, `cfprefsd`
+and Contacts `contactsd` helpers may be ignored after kernel path lookup, PID 1
+parentage, protected root ancestry and Apple signature verification. A second
+PID/start-time/path inventory rejects churn or uncertain process identity. This
+does not permit repository subprocesses or require terminating macOS services.
 
 `reviewer-source.ts` independently reads pinned GitHub commit/tree/blob objects,
 verifies their Git SHA-1 bytes, traverses every changed subtree, and rechecks the
