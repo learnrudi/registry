@@ -25,6 +25,11 @@ CLI logs a denied attempt to install bundled skills; unauthenticated protocol
 probes confirm initialization and an instruction-free ephemeral thread still
 succeed. An unexpected protocol warning or tool event rejects acceptance.
 
+Codex changes the non-secret `installation_id` UUID to mode `0644` during
+startup. Verification permits read access while still requiring the worker
+owner, protected ancestry, no group/world writes, a single regular file and
+valid UUID bytes. It does not rewrite the file or change credential permissions.
+
 The worker's outbound TCP 443 and DNS support the native provider connection;
 this is not destination-pinned egress. No repository program executes in that
 process. The static document proof runs separately, without credentials or

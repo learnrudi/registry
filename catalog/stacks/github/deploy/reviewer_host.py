@@ -435,6 +435,16 @@ def install_package(root, package, manifest_digest, node, node_digest, codex, co
     return {"status": "installed-inactive", "sourceCommit": manifest["sourceCommit"], "manifestDigest": manifest_digest, "mergeAuthorized": False}
 
 
+def read_installation_identity(path, owner):
+    # Codex 0.151 makes this non-secret runtime UUID readable (0644). It confers
+    # no configuration authority. Keep custody, link, write and content checks;
+    # credentials and private runtime directories retain their private modes.
+    identity = checked_file(protected_path(path, owner), owner, 100)
+    if not re.fullmatch(rb"[a-f0-9-]{36}", identity):
+        raise ValueError("Invalid native installation identity")
+    return identity
+
+
 def verify_installation(root):
     if os.geteuid() != 0 or sys.platform != "darwin":
         raise ValueError("Protected verification requires owner root")
@@ -464,9 +474,7 @@ def verify_installation(root):
     if set(p.name for p in (root / "code/codex-home").iterdir()) - {"config.toml", "auth.json", "installation_id", "tmp"}:
         raise ValueError("Unexpected worker configuration")
     protected_path(root / "code/codex-home/tmp", install["worker"]["uid"], directory=True, private=True)
-    identity = checked_file(protected_path(root / "code/codex-home/installation_id", install["worker"]["uid"], private=True), install["worker"]["uid"], 100)
-    if not re.fullmatch(rb"[a-f0-9-]{36}", identity):
-        raise ValueError("Invalid native installation identity")
+    read_installation_identity(root / "code/codex-home/installation_id", install["worker"]["uid"])
     if list(Path(install["workingDirectory"]).iterdir()):
         raise ValueError("Worker cwd is not empty")
     for directory in [Path(install["workingDirectory"]), *Path(install["workingDirectory"]).parents]:

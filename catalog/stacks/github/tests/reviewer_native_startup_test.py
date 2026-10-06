@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import selectors
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -62,7 +63,9 @@ print(json.dumps(result))'''
             for name in ("scratch", "state", "log"):
                 (root / "worker" / name).mkdir()
             (home / "config.toml").write_text(host.worker_config(root))
-            (home / "installation_id").write_text(str(uuid.uuid4()))
+            identity = str(uuid.uuid4()).encode()
+            (home / "installation_id").write_bytes(identity)
+            (home / "installation_id").chmod(0o600)
             (home / "tmp").mkdir()
             writable = [str(root / "worker" / name) for name in ("scratch", "state", "log")]
             writable += [str(home / "tmp"), str(home / "installation_id")]
@@ -126,6 +129,10 @@ print(json.dumps(result))'''
             self.assertTrue(started["thread"]["ephemeral"])
             self.assertEqual(started["thread"]["turns"], [])
             self.assertFalse((home / "auth.json").exists())
+            # Runtime startup changes metadata permissions; the UUID is not a
+            # credential and must remain verifiable without rewriting it.
+            self.assertEqual(stat.S_IMODE((home / "installation_id").stat().st_mode), 0o644)
+            self.assertEqual(host.read_installation_identity(home / "installation_id", os.getuid()), identity)
 
 
 if __name__ == "__main__":

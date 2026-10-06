@@ -17,6 +17,29 @@ spec.loader.exec_module(host)
 
 
 class CustodyTests(unittest.TestCase):
+    def test_native_installation_identity_allows_readable_metadata_but_rejects_unsafe_files(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw).resolve()
+            path = root / 'installation_id'
+            identity = b'6f77b1d1-7b93-49bd-9229-408453dd5eaf'
+            path.write_bytes(identity)
+            for mode in (0o600, 0o644):
+                path.chmod(mode)
+                self.assertEqual(host.read_installation_identity(path, os.getuid()), identity)
+            path.chmod(0o664)
+            with self.assertRaises(ValueError): host.read_installation_identity(path, os.getuid())
+            path.chmod(0o644)
+            with self.assertRaises(ValueError): host.read_installation_identity(path, os.getuid() + 1)
+            alias = root / 'alias'
+            alias.symlink_to(path)
+            with self.assertRaises(ValueError): host.read_installation_identity(alias, os.getuid())
+            alias.unlink()
+            os.link(path, alias)
+            with self.assertRaises(ValueError): host.read_installation_identity(path, os.getuid())
+            alias.unlink()
+            path.write_bytes(b'not-an-installation-id')
+            with self.assertRaises(ValueError): host.read_installation_identity(path, os.getuid())
+
     def test_worker_config_disables_ambient_capabilities_and_keeps_state_outside_config(self):
         config = host.worker_config(Path('/protected/reviewer'))
         for feature in ['plugins', 'remote_plugin', 'multi_agent', 'skill_search', 'skill_mcp_dependency_install',
