@@ -68,6 +68,7 @@ export interface PlatformSpec {
 export interface Install {
   source: InstallSource;
   package?: string;
+  nodeRuntime?: string;
   path?: string;
   platforms?: Record<string, PlatformSpec>;
 }

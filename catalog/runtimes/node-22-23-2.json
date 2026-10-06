@@ -1,17 +1,17 @@
 {
-  "id": "runtime:node",
+  "id": "runtime:node-22-23-2",
   "kind": "runtime",
-  "name": "Node.js",
-  "version": "24.21.0",
+  "name": "Node.js 22.23.2",
+  "version": "22.23.2",
   "delivery": "remote",
   "install": {
     "source": "download",
     "platforms": {
       "darwin-arm64": {
-        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
+        "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz",
         "checksum": {
           "algo": "sha256",
-          "value": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057"
+          "value": "61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6"
         },
         "extract": {
           "type": "tar.gz",
@@ -19,10 +19,10 @@
         }
       },
       "darwin-x64": {
-        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-x64.tar.gz",
+        "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-x64.tar.gz",
         "checksum": {
           "algo": "sha256",
-          "value": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097"
+          "value": "58e99022c2ff89395576cc7fd4d98cea24bb68081475d5f88b801ee8729fb026"
         },
         "extract": {
           "type": "tar.gz",
@@ -30,10 +30,10 @@
         }
       },
       "linux-x64": {
-        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
+        "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-x64.tar.gz",
         "checksum": {
           "algo": "sha256",
-          "value": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff"
+          "value": "b294a556e639d64338823920e5866c21c02741742d2e1529ee1a225c1ec9252a"
         },
         "extract": {
           "type": "tar.gz",
@@ -41,10 +41,10 @@
         }
       },
       "linux-arm64": {
-        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.gz",
+        "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-arm64.tar.gz",
         "checksum": {
           "algo": "sha256",
-          "value": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5"
+          "value": "013b59cfd2819703a6f4a14ab891fc46fc2a4e3f5bcd92de3fb4929b43e35b30"
         },
         "extract": {
           "type": "tar.gz",
@@ -69,7 +69,7 @@
     "expectExitCode": 0
   },
   "meta": {
-    "description": "JavaScript runtime for agents and stacks",
+    "description": "Versioned Node.js 22.23.2 runtime for npm tools with explicit runtime bindings",
     "category": "runtime"
   }
 }

@@ -202,6 +202,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["source"],
+      "allOf": [{
+        "if": { "required": ["nodeRuntime"] },
+        "then": { "properties": { "source": { "const": "npm" } } }
+      }],
       "properties": {
         "source": {
           "type": "string",
@@ -212,6 +216,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Package name for npm/pip sources"
+        },
+        "nodeRuntime": {
+          "type": "string",
+          "pattern": "^runtime:node(?:-[a-z0-9]+)*$",
+          "description": "Explicit managed Node dependency for npm installation and generated command wrappers"
         },
         "path": {
           "type": "string",

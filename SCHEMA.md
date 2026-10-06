@@ -108,6 +108,14 @@ Human-readable display name.
 | `system` | Pre-installed or OS package manager | `detect.command`, `installHints` recommended |
 | `catalog` | In-repo packages (stacks, skills, prompts) | `path` (optional, derived from `id`) |
 
+For npm tools, `install.nodeRuntime` optionally names a managed Node package,
+for example `runtime:node-22-23-2`. The CLI installs that dependency first and
+uses it for npm and the generated command wrapper. Installed metadata retains
+the binding when shims are rebuilt. An invalid or missing explicit runtime is
+an error; the CLI must not fall back to the shared Node runtime. Omission keeps
+the existing shared-runtime behavior. This field is only valid for npm sources.
+The top-level package `version` pins the npm install; `latest` remains unpinned.
+
 ### Catalog Source
 
 For `source: "catalog"`, the payload lives inside the registry itself:
@@ -455,25 +463,76 @@ layer.
   "id": "runtime:node",
   "kind": "runtime",
   "name": "Node.js",
-  "version": "20.10.0",
-
+  "version": "24.21.0",
   "delivery": "remote",
   "install": {
     "source": "download",
     "platforms": {
       "darwin-arm64": {
-        "url": "https://github.com/learnrudi/registry/releases/.../node-20.10.0-darwin-arm64.tar.gz",
-        "checksum": { "algo": "sha256", "value": "..." },
-        "extract": { "type": "tar.gz", "strip": 1 }
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
+        "checksum": {
+          "algo": "sha256",
+          "value": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057"
+        },
+        "extract": {
+          "type": "tar.gz",
+          "strip": 1
+        }
       },
-      "darwin-x64": { "url": "...", "checksum": {...}, "extract": {...} },
-      "linux-x64": { "url": "...", "checksum": {...}, "extract": {...} },
-      "win32-x64": { "url": "...", "checksum": {...}, "extract": { "type": "zip" } }
+      "darwin-x64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-x64.tar.gz",
+        "checksum": {
+          "algo": "sha256",
+          "value": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097"
+        },
+        "extract": {
+          "type": "tar.gz",
+          "strip": 1
+        }
+      },
+      "linux-x64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
+        "checksum": {
+          "algo": "sha256",
+          "value": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff"
+        },
+        "extract": {
+          "type": "tar.gz",
+          "strip": 1
+        }
+      },
+      "linux-arm64": {
+        "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.gz",
+        "checksum": {
+          "algo": "sha256",
+          "value": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5"
+        },
+        "extract": {
+          "type": "tar.gz",
+          "strip": 1
+        }
+      }
     }
   },
-
-  "bins": ["node", "npm", "npx"],
-  "detect": { "command": "node --version" }
+  "bins": {
+    "node": {
+      "path": "bin/node"
+    },
+    "npm": {
+      "path": "bin/npm"
+    },
+    "npx": {
+      "path": "bin/npx"
+    }
+  },
+  "detect": {
+    "command": "node --version",
+    "expectExitCode": 0
+  },
+  "meta": {
+    "description": "JavaScript runtime for agents and stacks",
+    "category": "runtime"
+  }
 }
 ```
 

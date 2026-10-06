@@ -45,6 +45,19 @@ function getErrorMessages(validate: ValidateFunction): string[] {
 // Invalid Manifest Tests
 // =============================================================================
 
+it("accepts a canonical npm Node binding and rejects unsafe or inapplicable bindings", () => {
+  const manifest = {
+    id: "binary:demo", kind: "binary", name: "Demo", version: "1.0.0",
+    delivery: "remote", bins: ["demo"],
+    install: { source: "npm", package: "demo", nodeRuntime: "runtime:node-22-23-2" },
+  };
+  expect(validate(manifest), JSON.stringify(validate.errors)).toBe(true);
+  for (const nodeRuntime of ["../../node", "runtime:python", "node", "runtime:node;echo"]) {
+    expect(validate({ ...manifest, install: { ...manifest.install, nodeRuntime } })).toBe(false);
+  }
+  expect(validate({ ...manifest, install: { ...manifest.install, source: "pip" } })).toBe(false);
+});
+
 describe("schema validation - invalid manifests", () => {
   describe("required fields", () => {
     it("should reject manifest missing id", async () => {

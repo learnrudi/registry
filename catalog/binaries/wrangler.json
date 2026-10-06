@@ -2,27 +2,25 @@
   "id": "binary:wrangler",
   "kind": "binary",
   "name": "Cloudflare Wrangler",
-  "version": "latest",
-
+  "version": "4.131.1",
   "delivery": "remote",
   "install": {
     "source": "npm",
-    "package": "wrangler"
+    "package": "wrangler",
+    "nodeRuntime": "runtime:node-22-23-2"
   },
-
-  "bins": ["wrangler"],
-
+  "bins": [
+    "wrangler"
+  ],
   "detect": {
     "command": "wrangler --version",
     "expectExitCode": 0
   },
-
   "auth": {
     "required": true,
     "command": "wrangler login",
     "instructions": "Run 'wrangler login' to authenticate with your Cloudflare account"
   },
-
   "meta": {
     "description": "Deploy to Cloudflare Workers/Pages",
     "category": "devops"
