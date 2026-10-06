@@ -1,0 +1,22 @@
+{
+  "name": "@rudi/stack-booking-pages",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "verify": "npm test",
+    "verify:prepare": "playwright install chromium",
+    "install-browser": "playwright install chromium"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "luxon": "3.7.2",
+    "playwright": "1.62.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
