@@ -1,6 +1,7 @@
-export interface EnvLike {
-  [key: string]: string | undefined;
-}
+import { getEnv, getTimeoutMs, resolveToken, type EnvLike } from "./request-config.js";
+
+export { getEnv, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from "./request-config.js";
+export type { EnvLike } from "./request-config.js";
 
 export type ToolArgs = Record<string, unknown> | undefined;
 
@@ -22,6 +23,8 @@ export type FetchLike = (
 export interface GitHubDependencies {
   env?: EnvLike;
   fetchImpl?: FetchLike;
+  // Trusted service dependency only; never accepted from MCP tool arguments.
+  tokenProvider?: () => Promise<string>;
 }
 
 export interface ConfigStatus {
@@ -53,8 +56,6 @@ type Direction = "asc" | "desc";
 
 export const DEFAULT_API_BASE_URL = "https://api.github.com";
 export const DEFAULT_API_VERSION = "2022-11-28";
-export const DEFAULT_TIMEOUT_MS = 30_000;
-export const MAX_TIMEOUT_MS = 120_000;
 export const MAX_PER_PAGE = 100;
 export const MAX_BODY_LENGTH = 65_536;
 export const MAX_TITLE_LENGTH = 256;
@@ -82,11 +83,6 @@ const PULL_STATES = ["open", "closed", "all"] as const;
 const PULL_SORTS = ["created", "updated", "popularity", "long-running"] as const;
 const REST_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const;
 const MERGE_METHODS = ["merge", "squash", "rebase"] as const;
-
-export function getEnv(name: string, env: EnvLike = process.env): string | undefined {
-  const value = env[name]?.trim();
-  return value ? value : undefined;
-}
 
 export function getApiBaseUrl(env: EnvLike = process.env): string {
   return getEnv("GITHUB_API_BASE_URL", env) || DEFAULT_API_BASE_URL;
@@ -316,26 +312,6 @@ function normalizeApiBaseUrl(env: EnvLike = process.env): URL {
   return url;
 }
 
-function getToken(env: EnvLike = process.env): string {
-  const token = getEnv("GITHUB_TOKEN", env);
-  if (!token) {
-    throw new Error("GITHUB_TOKEN is not configured");
-  }
-  return token;
-}
-
-function getTimeoutMs(env: EnvLike = process.env): number {
-  const raw = getEnv("GITHUB_API_TIMEOUT_MS", env);
-  if (!raw) {
-    return DEFAULT_TIMEOUT_MS;
-  }
-  const timeout = Number(raw);
-  if (!Number.isInteger(timeout) || timeout < 1_000 || timeout > MAX_TIMEOUT_MS) {
-    throw new Error(`GITHUB_API_TIMEOUT_MS must be an integer between 1000 and ${MAX_TIMEOUT_MS}`);
-  }
-  return timeout;
-}
-
 function getFetch(fetchImpl?: FetchLike): FetchLike {
   if (fetchImpl) {
     return fetchImpl;
@@ -407,7 +383,7 @@ async function githubApiRequest<T>(
   deps: GitHubDependencies = {}
 ): Promise<ApiResult<T>> {
   const env = deps.env ?? process.env;
-  const token = getToken(env);
+  const token = await resolveToken(deps, env);
   const base = normalizeApiBaseUrl(env);
   const url = new URL(path.replace(/^\//, ""), base);
   appendQuery(url, options.query ?? {});
