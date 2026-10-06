@@ -2165,7 +2165,7 @@
       "id": "skill:google-workspace",
       "kind": "skill",
       "name": "Google Workspace Tools Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -4887,7 +4887,7 @@
       "id": "stack:google-workspace",
       "kind": "stack",
       "name": "Google Workspace Tools",
-      "version": "1.1.0",
+      "version": "1.1.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -4972,6 +4972,8 @@
           "drive_make_public",
           "drive_delete",
           "calendar_list",
+          "calendar_get",
+          "calendar_update",
           "calendar_discovery_page",
           "calendar_create",
           "calendar_quick_add",
