@@ -134,7 +134,7 @@ def document_proof(source):
     return {"schemaVersion": 1, "filesChecked": len(files), "check": "document-integrity", "passed": True}
 
 
-def sandbox_profile(program, readable, writable, network=False):
+def sandbox_profile(program, readable, writable, network=False, preferences_uid=None):
     def literal(path):
         if not Path(path).is_absolute() or any(c in str(path) for c in '\n\r\0'):
             raise ValueError("Invalid sandbox path")
@@ -150,6 +150,14 @@ def sandbox_profile(program, readable, writable, network=False):
              "(allow process-exec (literal " + literal(program) + "))"]
     lines += ["(allow file-read* (subpath " + literal(p) + "))" for p in read_paths]
     lines += ["(allow file-write* (subpath " + literal(p) + "))" for p in writable]
+    if preferences_uid is not None:
+        if not network or type(preferences_uid) is not int or not 0 < preferences_uid < 2147483648:
+            raise ValueError("Invalid preferences identity")
+        # Native 0.160.1 synchronizes managed preferences before loading config.
+        # Permit only this role's read caches, with no shared-memory writes.
+        lines += ['(allow mach-lookup (global-name "com.apple.cfprefsd.agent"))',
+                  '(allow ipc-posix-shm-read-data (ipc-posix-name "apple.cfprefs.daemonv1") '
+                  '(ipc-posix-name "apple.cfprefs.' + str(preferences_uid) + 'v1"))']
     if network:
         lines += ["(allow network-outbound (remote tcp \"*:443\"))",
                   "(allow network-outbound (remote udp \"*:53\"))",
@@ -356,6 +364,24 @@ def worker_config(root):
               'shell_snapshot = false\nunified_exec = false\ncode_mode_host = false\ntool_suggest = false\ngoals = false\n')
 
 
+def system_ca_bytes():
+    # Native trust enumeration is unavailable under the worker's confinement.
+    # This root-owned OS bundle is public; TLS and hostname checks stay enabled.
+    return checked_file(protected_path(Path('/private/etc/ssl/cert.pem')), 0, 1000000)
+
+
+def configuration_digest(config, profile, ca):
+    return digest(config + b'\0' + profile + b'\0' + ca)
+
+
+def worker_environment(install):
+    if digest(system_ca_bytes()) != install['systemCaDigest']:
+        raise ValueError('System CA bundle changed')
+    return {"PATH": "/usr/bin:/bin", "HOME": install["workingDirectory"], "CODEX_HOME": install["codexHome"],
+            "TMPDIR": str(Path(install['root']) / "worker/scratch"), "LANG": "en_US.UTF-8", "NO_COLOR": "1",
+            "SSL_CERT_FILE": "/private/etc/ssl/cert.pem"}
+
+
 def install_package(root, package, manifest_digest, node, node_digest, codex, codex_digest,
                     worker_name, publisher_name, author_name, python):
     if os.geteuid() != 0 or sys.platform != "darwin":
@@ -418,26 +444,28 @@ def install_package(root, package, manifest_digest, node, node_digest, codex, co
             path = parent / name
             make_directory(path, 0o700, role["uid"])
     config = worker_config(root)
+    ca = system_ca_bytes()
     write_new(codex_home / "config.toml", config.encode(), mode=0o444)
-    # 0.151 opens installation_id read/write even when it exists. These two
+    # Native Codex opens installation_id read/write even when it exists. These two
     # runtime locations confer no configuration authority; the parent is root.
     write_new(codex_home / "installation_id", str(uuid.uuid4()).encode(), worker["uid"])
     make_directory(codex_home / "tmp", 0o700, worker["uid"])
-    profile = sandbox_profile(str(release / "bin/codex"), [str(root / "code"), str(root / "worker")], [str(root / "worker/scratch"), str(root / "worker/state"), str(root / "worker/log"), str(codex_home / "installation_id"), str(codex_home / "tmp")], network=True)
+    profile = sandbox_profile(str(release / "bin/codex"), [str(root / "code"), str(root / "worker")], [str(root / "worker/scratch"), str(root / "worker/state"), str(root / "worker/log"), str(codex_home / "installation_id"), str(codex_home / "tmp")], network=True, preferences_uid=worker["uid"])
     write_new(root / "policy/worker.sb", profile.encode(), mode=0o444)
     install = {"schemaVersion": 1, "root": str(root), "release": str(release), "manifest": manifest,
                "manifestDigest": manifest_digest, "worker": worker, "publisher": publisher, "author": author,
                "python": str(python), "pythonDigest": digest(checked_file(python, 0, 268435456)),
                "nodeDigest": node_digest, "codexDigest": codex_digest,
                "configDigest": digest(config.encode()), "profileDigest": digest(profile.encode()),
-               "configurationDigest": digest(config.encode() + b'\0' + profile.encode()),
+               "systemCaDigest": digest(ca),
+               "configurationDigest": configuration_digest(config.encode(), profile.encode(), ca),
                "codexHome": str(codex_home), "workingDirectory": str(working), "mergeAuthorized": False}
     write_new(root / "policy/installation.json", json.dumps(install, sort_keys=True).encode(), mode=0o444)
     return {"status": "installed-inactive", "sourceCommit": manifest["sourceCommit"], "manifestDigest": manifest_digest, "mergeAuthorized": False}
 
 
 def read_installation_identity(path, owner):
-    # Codex 0.151 makes this non-secret runtime UUID readable (0644). It confers
+    # Native Codex makes this non-secret runtime UUID readable (0644). It confers
     # no configuration authority. Keep custody, link, write and content checks;
     # credentials and private runtime directories retain their private modes.
     identity = checked_file(protected_path(path, owner), owner, 100)
@@ -470,7 +498,10 @@ def verify_installation(root):
         raise ValueError("Proof interpreter changed")
     config = checked_file(protected_path(root / "code/codex-home/config.toml"), 0)
     profile = checked_file(protected_path(root / "policy/worker.sb"), 0)
-    if digest(config) != install["configDigest"] or digest(profile) != install["profileDigest"] or digest(config + b'\0' + profile) != install["configurationDigest"]:
+    ca = system_ca_bytes()
+    if (digest(config) != install["configDigest"] or digest(profile) != install["profileDigest"]
+            or digest(ca) != install["systemCaDigest"]
+            or configuration_digest(config, profile, ca) != install["configurationDigest"]):
         raise ValueError("Installed configuration changed")
     if set(p.name for p in (root / "code/codex-home").iterdir()) - {"config.toml", "auth.json", "installation_id", "tmp"}:
         raise ValueError("Unexpected worker configuration")
@@ -489,7 +520,7 @@ def verify_installation(root):
     worker = install["worker"]
     version = bounded_capture([str(Path(install["release"]) / "bin/codex"), "--version"], {"PATH": "/usr/bin:/bin"},
                               install["workingDirectory"], worker["uid"], worker["gid"], maximum=1000)
-    if version.strip() != b"codex-cli 0.151.0":
+    if version.strip() != b"codex-cli 0.160.1":
         raise ValueError("Unsupported Codex runtime")
     return install
 
@@ -797,7 +828,7 @@ def prepare_candidate(install):
     commands = [{"id": name, "commandDigest": digest((host_hash + ":" + name + ":" + install["configurationDigest"]).encode())} for name in checks]
     policy = {"schemaVersion": 2, "enabled": True, "repositoryIds": [pilot["target"]["repositoryId"]], "model": "gpt-6-astra", "effort": "xhigh",
               "reviewerHostId": pilot["reviewerHostId"], "proofHostId": pilot["proofHostId"], "requiredChecks": [{"id": "document-integrity", "commandDigest": command_hash}],
-              "acceptance": {"assurance": "native-session-configuration", "approvalDigest": digest(pilot["ownerApprovalText"].encode()), "runtime": "0.151.0",
+              "acceptance": {"assurance": "native-session-configuration", "approvalDigest": digest(pilot["ownerApprovalText"].encode()), "runtime": "0.160.1",
                              "binaryDigest": install["codexDigest"], "configurationDigest": install["configurationDigest"], "requiredRuntimeChecks": commands}}
     policy_raw = json.dumps(policy, separators=(",", ":")).encode()
     target = pilot["target"]
@@ -826,7 +857,7 @@ def prepare_candidate(install):
                install["configurationDigest"].encode(), json.dumps(custody).encode(), confinement, no_auth]
     now = int(time.time() * 1000)
     runtime = {"schemaVersion": 1, "policyDigest": digest(policy_raw), "workerHostId": pilot["reviewerHostId"], "executorHostId": pilot["proofHostId"],
-               "runtime": "0.151.0", "binaryDigest": install["codexDigest"], "configurationDigest": install["configurationDigest"],
+               "runtime": "0.160.1", "binaryDigest": install["codexDigest"], "configurationDigest": install["configurationDigest"],
                "checkedAt": now, "expiresAt": min(now + 1800000, pilot["expiresAt"]), "terminationConfirmed": True,
                "checks": [dict(command, exitCode=0, outputDigest=digest(output)) for command, output in zip(commands, outputs)]}
     proof_raw = json.dumps(proof, separators=(",", ":")).encode()
@@ -855,9 +886,8 @@ def run_pilot(install):
         pilot = prepare_candidate(install)
         worker = install["worker"]
         publisher = install["publisher"]
-        clean_env = {"PATH": "/usr/bin:/bin", "HOME": install["workingDirectory"], "CODEX_HOME": install["codexHome"],
-                     "TMPDIR": str(root / "worker/scratch"), "LANG": "en_US.UTF-8", "NO_COLOR": "1"}
-        args = ["/usr/bin/sandbox-exec", "-f", str(root / "policy/worker.sb"), str(release / "bin/codex"), "app-server", "--listen", "stdio://"]
+        clean_env = worker_environment(install)
+        args = ["/usr/bin/sandbox-exec", "-f", str(root / "policy/worker.sb"), str(release / "bin/codex"), "app-server", "--strict-config", "--listen", "stdio://"]
         result = supervise_worker(args, publisher_command(install, "audit"), clean_env,
                                   {"PATH": "/usr/bin:/bin", "HOME": str(root / "publisher")}, install["workingDirectory"],
                                   worker["uid"], publisher["uid"], worker["gid"], publisher["gid"])

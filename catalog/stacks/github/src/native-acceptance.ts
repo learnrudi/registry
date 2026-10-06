@@ -8,7 +8,7 @@ export interface NativeProvenance {
   sourceDigest: string; candidateDigest: string; packetDigest: string; outputDigest: string;
   runtimeProofDigest: string; approvalDigest: string; binaryDigest: string; configurationDigest: string;
   native: {
-    runtime: "0.151.0"; threadId: string; turnId: string;
+    runtime: "0.160.1"; threadId: string; turnId: string;
     requested: { model: string; effort: string };
     observed: { model: string; effort: string; provider: "openai"; accountType: "chatgpt" };
     access: "read-only"; freshContext: true; terminationConfirmed: true;
@@ -29,7 +29,7 @@ export function validateNativeProvenance(value: unknown, binding: ReviewBinding)
   reviewId(n.threadId); reviewId(n.turnId);
   const requested = reviewObject(n.requested); const observed = reviewObject(n.observed);
   reviewKeys(requested, ["model", "effort"]); reviewKeys(observed, ["model", "effort", "provider", "accountType"]);
-  if (n.runtime !== "0.151.0" || n.access !== "read-only" || n.freshContext !== true || n.terminationConfirmed !== true
+  if (n.runtime !== "0.160.1" || n.access !== "read-only" || n.freshContext !== true || n.terminationConfirmed !== true
     || requested.model !== binding.model || requested.effort !== binding.effort
     || observed.model !== binding.model || observed.effort !== binding.effort
     || observed.provider !== "openai" || observed.accountType !== "chatgpt") throw new Error("Native provenance rejected");

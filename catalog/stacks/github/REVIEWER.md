@@ -204,7 +204,7 @@ wrong hashes, source over the byte cap, missing/failed checks and identity reuse
 reject before dispatch. See the focused controller tests for synthetic records.
 
 The native host supplies an exclusively owned stdio connection for the exact
-observed Codex CLI 0.151.0 protocol. It owns launch, configuration and process-group
+observed Codex CLI 0.160.1 protocol. It owns launch, configuration and process-group
 termination; `createCodexReviewRpc` only adapts those streams. A bootstrap must
 use a separately provisioned worker account and clean approved Codex home, an
 empty trusted cwd, no inherited repository/user instructions, hooks, MCP servers,
@@ -280,7 +280,7 @@ audit-only; there is no implicit upgrade based on a passing model verdict.
 
 Schema-2 candidate adds `runtimeProofDigest`. Schema-2 policy adds `acceptance`:
 `assurance: native-session-configuration`, SHA-256 `approvalDigest` of the owner's
-accepted contract, exact `runtime: 0.151.0`, approved `binaryDigest` and
+accepted contract, exact `runtime: 0.160.1`, approved `binaryDigest` and
 `configurationDigest`, and `requiredRuntimeChecks`. The latter pins IDs and
 command digests in this order: runtime-custody, configuration-custody,
 worker-isolation, process-confinement, credential-separation. Source-proof checks

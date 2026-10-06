@@ -17,13 +17,13 @@ class NativeFixture {
   async request(method, params) {
     this.calls.push({ method, params });
     if (Object.hasOwn(this.overrides, method)) return this.overrides[method](params);
-    if (method === "initialize") return { userAgent: "codex/0.151.0" };
+    if (method === "initialize") return { userAgent: "codex/0.160.1" };
     if (method === "account/read") return { account: { type: "chatgpt" }, requiresOpenaiAuth: true };
     if (method === "thread/start") return {
       model: "gpt-6-astra", reasoningEffort: "xhigh", modelProvider: "openai",
       cwd: params.cwd, approvalPolicy: "never", sandbox: { type: "readOnly", networkAccess: false },
       instructionSources: [],
-      thread: { id: "thread-1", cliVersion: "0.151.0", modelProvider: "openai", ephemeral: true, turns: [], parentThreadId: null, forkedFromId: null },
+      thread: { id: "thread-1", cliVersion: "0.160.1", modelProvider: "openai", ephemeral: true, turns: [], parentThreadId: null, forkedFromId: null },
     };
     if (method === "turn/start") {
       queueMicrotask(() => {
@@ -70,6 +70,7 @@ test("native review rejects cancellation before touching the host", async () => 
 for (const [name, change] of [
   ["wrong selected model", value => { value.model = "gpt-6-sol"; }],
   ["missing effort", value => { delete value.reasoningEffort; }],
+  ["old runtime", value => { value.thread.cliVersion = "0.151.0"; }],
   ["unknown runtime", value => { value.thread.cliVersion = "0.152.0"; }],
   ["reused context", value => { value.thread.forkedFromId = "author-thread"; }],
   ["loaded instructions", value => { value.instructionSources = ["/untrusted/AGENTS.md"]; }],

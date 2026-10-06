@@ -17,6 +17,26 @@ spec.loader.exec_module(host)
 
 
 class CustodyTests(unittest.TestCase):
+    def test_worker_environment_requires_pinned_ca_and_ignores_ambient_trust(self):
+        ca = b'approved public CA bytes'
+        install = {'root': '/protected/reviewer', 'workingDirectory': '/protected/empty',
+                   'codexHome': '/protected/config', 'systemCaDigest': host.digest(ca)}
+        with patch.object(host, 'protected_path', side_effect=lambda p: p) as custody, \
+             patch.object(host, 'checked_file', return_value=ca) as read, \
+             patch.dict(os.environ, {'SSL_CERT_FILE': '/untrusted', 'SSL_CERT_DIR': '/untrusted'}):
+            env = host.worker_environment(install)
+            self.assertEqual(env['SSL_CERT_FILE'], '/private/etc/ssl/cert.pem')
+            self.assertNotIn('SSL_CERT_DIR', env)
+            self.assertEqual(env['CODEX_HOME'], install['codexHome'])
+            custody.assert_called_with(Path('/private/etc/ssl/cert.pem'))
+            read.assert_called_with(Path('/private/etc/ssl/cert.pem'), 0, 1000000)
+            read.return_value = b'changed trust'
+            with self.assertRaisesRegex(ValueError, 'CA bundle changed'):
+                host.worker_environment(install)
+            custody.side_effect = ValueError('Unsafe protected ancestry')
+            with self.assertRaisesRegex(ValueError, 'Unsafe protected ancestry'):
+                host.worker_environment(install)
+
     def test_candidate_admission_allows_verified_launchd_helpers(self):
         class SourceReached(Exception):
             pass

@@ -19,7 +19,7 @@ spec.loader.exec_module(host)
 
 
 @unittest.skipUnless(sys.platform == "darwin" and os.environ.get("RUDI_REVIEWER_TEST_CODEX"),
-                     "Set RUDI_REVIEWER_TEST_CODEX to a trusted CLI 0.151.0 binary on macOS")
+                     "Set RUDI_REVIEWER_TEST_CODEX to a trusted CLI 0.160.1 binary on macOS")
 class NativeStartupTests(unittest.TestCase):
     def test_network_worker_can_resolve_but_cannot_use_arbitrary_local_sockets(self):
         # Confirm the host's DNS before attributing a failure to confinement.
@@ -46,7 +46,7 @@ except PermissionError: result['execDenied']=True
 print(json.dumps(result))'''
                 for network in (True, False):
                     with self.subTest(network=network):
-                        profile = host.sandbox_profile(program, [sys.base_prefix, str(Path(program).parents[1]), str(root)], [], network=network)
+                        profile = host.sandbox_profile(program, [sys.base_prefix, str(Path(program).parents[1]), str(root)], [], network=network, preferences_uid=os.getuid() if network else None)
                         result = subprocess.run(['/usr/bin/sandbox-exec', '-p', profile, program, '-I', '-B', '-c', script, str(root / 'other.sock')],
                                                 env={'PATH': '/usr/bin:/bin'}, capture_output=True, timeout=15)
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
@@ -55,7 +55,7 @@ print(json.dumps(result))'''
     def test_credential_free_session_has_expected_profile_without_warnings(self):
         executable = str(Path(os.environ["RUDI_REVIEWER_TEST_CODEX"]).resolve(strict=True))
         version = subprocess.check_output([executable, "--version"], timeout=5, env={"PATH": "/usr/bin:/bin"})
-        self.assertEqual(version.strip(), b"codex-cli 0.151.0")
+        self.assertEqual(version.strip(), b"codex-cli 0.160.1")
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
             home, working = root / "code", root / "empty"
@@ -69,14 +69,14 @@ print(json.dumps(result))'''
             (home / "tmp").mkdir()
             writable = [str(root / "worker" / name) for name in ("scratch", "state", "log")]
             writable += [str(home / "tmp"), str(home / "installation_id")]
-            profile = host.sandbox_profile(executable, [str(root), str(Path(executable).parent)], writable, network=True)
-            env = {"PATH": "/usr/bin:/bin", "HOME": str(working), "CODEX_HOME": str(home),
-                   "TMPDIR": str(root / "worker/scratch"), "LANG": "en_US.UTF-8", "NO_COLOR": "1"}
-            process = subprocess.Popen(["/usr/bin/sandbox-exec", "-p", profile, executable, "app-server", "--listen", "stdio://"],
+            profile = host.sandbox_profile(executable, [str(root), str(Path(executable).parent)], writable, network=True, preferences_uid=os.getuid())
+            env = host.worker_environment({"root": str(root), "workingDirectory": str(working),
+                "codexHome": str(home), "systemCaDigest": host.digest(host.system_ca_bytes())})
+            process = subprocess.Popen(["/usr/bin/sandbox-exec", "-p", profile, executable, "app-server", "--strict-config", "--listen", "stdio://"],
                                        env=env, cwd=working, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE, start_new_session=True)
             selector = selectors.DefaultSelector()
-            messages, buffer, count = [], b"", 0
+            messages, buffer, count, stderr = [], b"", 0, b""
             def send(value):
                 # This helper has no turn/start path; even failed tests cannot run inference.
                 self.assertIn(value["method"], ("initialize", "initialized", "account/read", "thread/start"))
@@ -95,6 +95,7 @@ print(json.dumps(result))'''
                         count += len(chunk)
                         self.assertLessEqual(count, 262144)
                         if key.data != "output":
+                            stderr += chunk
                             continue
                         buffer += chunk
                         while b"\n" in buffer:
@@ -121,6 +122,7 @@ print(json.dumps(result))'''
                 self.assertTrue(drained)
             warnings = [m.get("params") for m in messages if m.get("method") in ("warning", "configWarning")]
             self.assertEqual(warnings, [])
+            self.assertTrue(any(m.get("id") == 3 for m in messages), stderr.decode(errors="replace"))
             started = next(m["result"] for m in messages if m.get("id") == 3)
             self.assertEqual((started["model"], started["reasoningEffort"], started["modelProvider"]), ("gpt-6-astra", "xhigh", "openai"))
             self.assertEqual(started["approvalPolicy"], "never")

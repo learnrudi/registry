@@ -12,8 +12,8 @@ test("native RPC correlates wire replies, forwards events and drains through hos
   const line = new Promise(resolve => writable.once("data", value => resolve(JSON.parse(value))));
   const response = rpc.request("initialize", { clientInfo: { name: "rudi_reviewer" } });
   const message = await line;
-  readable.write(JSON.stringify({ id: message.id, result: { userAgent: "codex/0.151.0" } }) + "\n");
-  assert.deepEqual(await response, { userAgent: "codex/0.151.0" });
+  readable.write(JSON.stringify({ id: message.id, result: { userAgent: "codex/0.160.1" } }) + "\n");
+  assert.deepEqual(await response, { userAgent: "codex/0.160.1" });
   readable.write('{"method":"turn/started","params":{"threadId":"t"}}\n');
   assert.equal(events.length, 1);
   assert.deepEqual(await rpc.stop(), { terminationConfirmed: true });

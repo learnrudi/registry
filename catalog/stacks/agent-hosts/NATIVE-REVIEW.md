@@ -1,7 +1,7 @@
 # Native review protocol observation
 
 `src/codex-review.js` implements one bounded private-source audit using the
-observed Codex CLI 0.151.0 app-server protocol and exact GPT-6 Astra/xhigh.
+observed Codex CLI 0.160.1 app-server protocol and exact GPT-6 Astra/xhigh.
 `src/codex-review-rpc.js` adapts a dedicated native host stdio channel. Neither
 module launches or schedules agents or changes the synthetic-only V0 gateway.
 They are internal library entrypoints, not additional MCP methods.

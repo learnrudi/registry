@@ -119,7 +119,7 @@ function validateObservation(value: unknown, packetDigest: string): Record<strin
   reviewId(n.threadId); reviewId(n.turnId); reviewText(n.outputText, 131072);
   const requested = reviewObject(n.requested); const observed = reviewObject(n.observed);
   reviewKeys(requested, ["model", "effort"]); reviewKeys(observed, ["model", "effort", "provider", "accountType"]);
-  if (n.schemaVersion !== 1 || n.status !== "observed" || n.runtime !== "0.151.0" || n.effectiveExecution !== null
+  if (n.schemaVersion !== 1 || n.status !== "observed" || n.runtime !== "0.160.1" || n.effectiveExecution !== null
     || n.acceptanceEligible !== false || n.assurance !== "native-session-configuration-only" || n.access !== "read-only"
     || n.freshContext !== true || n.packetDigest !== packetDigest || n.terminationConfirmed !== true
     || requested.model !== REVIEW_MODEL || requested.effort !== REVIEW_EFFORT || observed.model !== REVIEW_MODEL

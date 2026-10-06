@@ -308,12 +308,12 @@ test("real stdio connection composes with native observation without granting ac
     readline.createInterface({input:process.stdin}).on('line',text=>{
       const req=JSON.parse(text);if(!req.id)return;
       let result;
-      if(req.method==='initialize')result={userAgent:'codex/0.151.0'};
+      if(req.method==='initialize')result={userAgent:'codex/0.160.1'};
       if(req.method==='account/read')result={account:{type:'chatgpt'},requiresOpenaiAuth:true};
       if(req.method==='thread/start')result={
         model:'gpt-6-astra',reasoningEffort:'xhigh',modelProvider:'openai',cwd:req.params.cwd,
         approvalPolicy:'never',sandbox:{type:'readOnly',networkAccess:false},instructionSources:[],
-        thread:{id:'t',cliVersion:'0.151.0',modelProvider:'openai',ephemeral:true,turns:[],parentThreadId:null,forkedFromId:null}
+        thread:{id:'t',cliVersion:'0.160.1',modelProvider:'openai',ephemeral:true,turns:[],parentThreadId:null,forkedFromId:null}
       };
       if(req.method==='turn/start')result={turn:{id:'r',status:'inProgress',items:[]}};
       send({id:req.id,result});

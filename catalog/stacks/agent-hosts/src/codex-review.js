@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
 
 export const CODEX_REVIEW_PROFILE = Object.freeze({ model: "gpt-6-astra", effort: "xhigh" });
-export const CODEX_REVIEW_RUNTIME = "0.151.0";
+export const CODEX_REVIEW_RUNTIME = "0.160.1";
 const failure = () => new Error("Native review rejected");
 
 /**

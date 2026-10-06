@@ -27,7 +27,7 @@ function fixture() {
       assert.equal(request.contentClass, "private_repository");
       assert.equal(digest(request.packet), request.packetDigest);
       assert.ok(request.packet.includes(sourceText));
-      return { schemaVersion: 1, status: "observed", runtime: "0.151.0", threadId: "thread-1", turnId: "turn-1", requested: { model: policy.model, effort: policy.effort }, observed: { model: policy.model, effort: policy.effort, provider: "openai", accountType: "chatgpt" }, effectiveExecution: null, acceptanceEligible: false, assurance: "native-session-configuration-only", access: "read-only", freshContext: true, packetDigest: request.packetDigest, outputText: serialize(passing), terminationConfirmed: true };
+      return { schemaVersion: 1, status: "observed", runtime: "0.160.1", threadId: "thread-1", turnId: "turn-1", requested: { model: policy.model, effort: policy.effort }, observed: { model: policy.model, effort: policy.effort, provider: "openai", accountType: "chatgpt" }, effectiveExecution: null, acceptanceEligible: false, assurance: "native-session-configuration-only", access: "read-only", freshContext: true, packetDigest: request.packetDigest, outputText: serialize(passing), terminationConfirmed: true };
     },
   };
   const controller = createReviewController({ authority, nativeHost, enabled: async () => true, now: () => 1700000000000, timeoutMs: 1000 });
@@ -128,12 +128,12 @@ test("controller composes with the native wire adapter and cannot publish its ob
     const message = JSON.parse(bytes.toString());
     if (!Object.hasOwn(message, "id")) return;
     let result;
-    if (message.method === "initialize") result = { userAgent: "codex/0.151.0" };
+    if (message.method === "initialize") result = { userAgent: "codex/0.160.1" };
     if (message.method === "account/read") result = { account: { type: "chatgpt" }, requiresOpenaiAuth: true };
     if (message.method === "thread/start") result = {
       model: "gpt-6-astra", reasoningEffort: "xhigh", modelProvider: "openai", cwd: message.params.cwd,
       approvalPolicy: "never", sandbox: { type: "readOnly", networkAccess: false }, instructionSources: [],
-      thread: { id: "native-thread", cliVersion: "0.151.0", modelProvider: "openai", ephemeral: true, turns: [], parentThreadId: null, forkedFromId: null },
+      thread: { id: "native-thread", cliVersion: "0.160.1", modelProvider: "openai", ephemeral: true, turns: [], parentThreadId: null, forkedFromId: null },
     };
     if (message.method === "turn/start") { dispatched++; result = { turn: { id: "native-turn", status: "inProgress", items: [] } }; }
     assert.notEqual(result, undefined);

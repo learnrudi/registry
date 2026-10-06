@@ -12,7 +12,7 @@ export interface ReviewCandidate {
   runtimeProofDigest?: string;
 }
 export interface NativeAcceptancePolicy {
-  assurance: "native-session-configuration"; approvalDigest: string; runtime: "0.151.0";
+  assurance: "native-session-configuration"; approvalDigest: string; runtime: "0.160.1";
   binaryDigest: string; configurationDigest: string; requiredRuntimeChecks: { id: string; commandDigest: string }[];
 }
 export const RUNTIME_CHECKS = ["runtime-custody", "configuration-custody", "worker-isolation", "process-confinement", "credential-separation"];
@@ -78,7 +78,7 @@ export function validateReviewAuthority(candidate: ReviewCandidate, policyRaw: s
 function validateAcceptancePolicy(value: unknown): void {
   const p = reviewObject(value);
   reviewKeys(p, ["assurance", "approvalDigest", "runtime", "binaryDigest", "configurationDigest", "requiredRuntimeChecks"]);
-  if (p.assurance !== "native-session-configuration" || p.runtime !== "0.151.0") throw new Error("Native acceptance policy rejected");
+  if (p.assurance !== "native-session-configuration" || p.runtime !== "0.160.1") throw new Error("Native acceptance policy rejected");
   for (const key of ["approvalDigest", "binaryDigest", "configurationDigest"]) reviewMatch(p[key], /^[a-f0-9]{64}$/);
   if (!Array.isArray(p.requiredRuntimeChecks) || p.requiredRuntimeChecks.length !== RUNTIME_CHECKS.length) throw new Error("Runtime checks missing");
   for (const [index, value] of p.requiredRuntimeChecks.entries()) {

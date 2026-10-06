@@ -18,7 +18,7 @@ The worker can read its own authentication but cannot reach publisher keys,
 policy, authority records or the publication journal. The macOS sandbox denies
 fork, execution of other binaries, local service sockets and general Mach IPC.
 Writes are limited to scratch/state/log, `tmp` and `installation_id`. The last
-two are required by Codex 0.151.0 and grant no configuration authority. Plugins,
+two are required by Codex 0.160.1 and grant no configuration authority. Plugins,
 remote plugins, tools, hooks, delegation, skill search and dependency install are
 disabled. Root ownership prevents adding ambient configurations or skills. The
 CLI logs a denied attempt to install bundled skills; unauthenticated protocol
@@ -93,7 +93,7 @@ by stopping this host; external merge freezes and server enforcement are separat
    only approved bytes, checks protected runtime library dependencies, creates
    the inactive layout, and writes the installation descriptor last. A partial
    install requires owner investigation. `verify --root <root>` rechecks hashes,
-   ownership/ACLs, account identities, empty cwd and exact CLI 0.151.0. Every
+   ownership/ACLs, account identities, empty cwd and exact CLI 0.160.1. Every
    operational command except emergency `disable` performs the same verification.
 5. The owner runs `keygen`, interactive `login`, and `provision-app-key` against
    the protected installation. Login uses only the worker's fresh login home;
@@ -150,7 +150,7 @@ egress; arbitrary local sockets remain denied. Credential-free proof profiles
 retain network denial.
 
 On macOS, run `RUDI_REVIEWER_TEST_CODEX=/absolute/path/to/trusted/codex
-python3 -B tests/reviewer_native_startup_test.py` with CLI 0.151.0 and the actual
+python3 -B tests/reviewer_native_startup_test.py` with CLI 0.160.1 and the actual
 Python interpreter executable (not a launcher that execs another binary). This
 opt-in test uses a fresh empty credential home, checks session configuration and
 warning-free startup, and checks real DNS plus denial of other local sockets,
@@ -171,3 +171,23 @@ live pilot. Fixture success cannot close these gates.
 
 References: [Git trees and modes](https://docs.github.com/en/rest/git/trees),
 [Codex configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
+
+### Native 0.160.1 runtime upgrade
+
+The protected runtime is pinned independently of the interactive CLI. The worker
+uses strict config loading and a root-owned `/private/etc/ssl/cert.pem` selected
+through `SSL_CERT_FILE`. Installation pins the bundle digest and includes its
+bytes in the configuration digest. A trust-store change requires owner review;
+verification fails closed until the installation binding is updated. TLS and
+hostname validation remain enabled.
+
+Native startup requires the macOS preferences agent and read-only access to
+`apple.cfprefs.daemonv1` and the exact worker UID's preferences cache. These
+permissions apply only to the network worker profile; shared-memory writes,
+arbitrary IPC, forks and additional executables remain denied. No provider
+execution attestation is implied by a successful configuration handshake.
+
+An old installation cannot be updated by replacing its binary alone: source,
+runtime, sandbox and CA configuration digests must be migrated together by an
+owner-reviewed package. Preserve the prior release, failed attempts, disabled
+marker and operation lock. An upgrade does not authorize replay.
