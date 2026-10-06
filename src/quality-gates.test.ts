@@ -51,6 +51,11 @@ describe("registry quality workflow", () => {
     expect(workflow).toContain("SOURCE_DATE_EPOCH");
     expect(workflow).toContain("JSON.parse");
     expect(workflow).toContain("$GITHUB_ENV");
+    expect(workflow).toContain("name: registry-dist-${{ matrix.node }}");
+    expect(workflow).toContain("node: [22, 24]");
+    expect(workflow).toContain("node-version: ${{ matrix.node }}");
+    expect(workflow.match(/node-version: '24'/g)).toHaveLength(2);
+    expect(workflow).not.toMatch(/node-version: ['"]?20/);
 
     expect(packageJson.scripts?.["debt:scan"]).toBeTypeOf("string");
     expect(packageJson.scripts["debt:scan"].trim()).not.toBe("");

@@ -3,11 +3,11 @@
   "schemaVersion": "2",
   "generatedAt": "2026-10-03T22:39:12.000Z",
   "stats": {
-    "total": 173,
+    "total": 174,
     "byKind": {
       "agent": 4,
       "binary": 28,
-      "runtime": 6,
+      "runtime": 7,
       "skill": 84,
       "stack": 51
     }
@@ -1041,11 +1041,12 @@
       "id": "binary:wrangler",
       "kind": "binary",
       "name": "Cloudflare Wrangler",
-      "version": "latest",
+      "version": "4.131.1",
       "delivery": "remote",
       "install": {
         "source": "npm",
-        "package": "wrangler"
+        "package": "wrangler",
+        "nodeRuntime": "runtime:node-22-23-2"
       },
       "bins": [
         "wrangler"
@@ -1287,16 +1288,16 @@
       "id": "runtime:node",
       "kind": "runtime",
       "name": "Node.js",
-      "version": "20.10.0",
+      "version": "24.21.0",
       "delivery": "remote",
       "install": {
         "source": "download",
         "platforms": {
           "darwin-arm64": {
-            "url": "https://nodejs.org/dist/v20.10.0/node-v20.10.0-darwin-arm64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
             "checksum": {
               "algo": "sha256",
-              "value": "68b93099451d77aac116cf8fce179cabcf53fec079508dc6b39d3a086fb461a8"
+              "value": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057"
             },
             "extract": {
               "type": "tar.gz",
@@ -1304,10 +1305,10 @@
             }
           },
           "darwin-x64": {
-            "url": "https://nodejs.org/dist/v20.10.0/node-v20.10.0-darwin-x64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-x64.tar.gz",
             "checksum": {
               "algo": "sha256",
-              "value": "5ff5e8abd3eea6e5f507eb6677554f5b2188eedef654096aa4168a9941e91a32"
+              "value": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097"
             },
             "extract": {
               "type": "tar.gz",
@@ -1315,10 +1316,10 @@
             }
           },
           "linux-x64": {
-            "url": "https://nodejs.org/dist/v20.10.0/node-v20.10.0-linux-x64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
             "checksum": {
               "algo": "sha256",
-              "value": "d3f0908a9d9190a8525c5b9a716ed91bb57e908555841b0c47f75b2a001ff91b"
+              "value": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff"
             },
             "extract": {
               "type": "tar.gz",
@@ -1326,10 +1327,10 @@
             }
           },
           "linux-arm64": {
-            "url": "https://nodejs.org/dist/v20.10.0/node-v20.10.0-linux-arm64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.gz",
             "checksum": {
               "algo": "sha256",
-              "value": "8354cdb7cb2ad585ee6bb24819f5229bb48c118c5dabb282dfed153d766a68a4"
+              "value": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5"
             },
             "extract": {
               "type": "tar.gz",
@@ -1430,6 +1431,81 @@
       },
       "meta": {
         "description": "Versioned Node.js 20.20.2 runtime for exact side-by-side bindings",
+        "category": "runtime"
+      }
+    },
+    "runtime:node-22-23-2": {
+      "id": "runtime:node-22-23-2",
+      "kind": "runtime",
+      "name": "Node.js 22.23.2",
+      "version": "22.23.2",
+      "delivery": "remote",
+      "install": {
+        "source": "download",
+        "platforms": {
+          "darwin-arm64": {
+            "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-arm64.tar.gz",
+            "checksum": {
+              "algo": "sha256",
+              "value": "61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6"
+            },
+            "extract": {
+              "type": "tar.gz",
+              "strip": 1
+            }
+          },
+          "darwin-x64": {
+            "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-darwin-x64.tar.gz",
+            "checksum": {
+              "algo": "sha256",
+              "value": "58e99022c2ff89395576cc7fd4d98cea24bb68081475d5f88b801ee8729fb026"
+            },
+            "extract": {
+              "type": "tar.gz",
+              "strip": 1
+            }
+          },
+          "linux-x64": {
+            "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-x64.tar.gz",
+            "checksum": {
+              "algo": "sha256",
+              "value": "b294a556e639d64338823920e5866c21c02741742d2e1529ee1a225c1ec9252a"
+            },
+            "extract": {
+              "type": "tar.gz",
+              "strip": 1
+            }
+          },
+          "linux-arm64": {
+            "url": "https://nodejs.org/dist/v22.23.2/node-v22.23.2-linux-arm64.tar.gz",
+            "checksum": {
+              "algo": "sha256",
+              "value": "013b59cfd2819703a6f4a14ab891fc46fc2a4e3f5bcd92de3fb4929b43e35b30"
+            },
+            "extract": {
+              "type": "tar.gz",
+              "strip": 1
+            }
+          }
+        }
+      },
+      "bins": {
+        "node": {
+          "path": "bin/node"
+        },
+        "npm": {
+          "path": "bin/npm"
+        },
+        "npx": {
+          "path": "bin/npx"
+        }
+      },
+      "detect": {
+        "command": "node --version",
+        "expectExitCode": 0
+      },
+      "meta": {
+        "description": "Versioned Node.js 22.23.2 runtime for npm tools with explicit runtime bindings",
         "category": "runtime"
       }
     },

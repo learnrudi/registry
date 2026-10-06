@@ -44,7 +44,37 @@ describe("Python runtime catalog contract", () => {
 });
 
 describe("Node runtime catalog contract", () => {
-  it("publishes Node 20.20.2 side-by-side without replacing the shared Node runtime", async () => {
+  it("binds pinned Wrangler to a separate supported Node runtime", async () => {
+    const wrangler = JSON.parse(await fs.readFile(path.resolve(
+      import.meta.dirname, "../catalog/binaries/wrangler.json"
+    ), "utf8"));
+    expect(wrangler).toMatchObject({
+      version: "4.131.1",
+      install: { package: "wrangler", nodeRuntime: "runtime:node-22-23-2" },
+    });
+    const runtime = await loadRuntime("node-22-23-2");
+    expect(runtime.id).toBe(wrangler.install.nodeRuntime);
+    expect(runtime.version).toBe("22.23.2");
+    expect(runtime.bins).toEqual({
+      node: { path: "bin/node" }, npm: { path: "bin/npm" }, npx: { path: "bin/npx" },
+    });
+    const hashes: Record<string, string> = {
+      "darwin-arm64": "61130f394c1630d211dd50aecc4353d379480f36d3ac913cd85dbba1aed585c6",
+      "darwin-x64": "58e99022c2ff89395576cc7fd4d98cea24bb68081475d5f88b801ee8729fb026",
+      "linux-arm64": "013b59cfd2819703a6f4a14ab891fc46fc2a4e3f5bcd92de3fb4929b43e35b30",
+      "linux-x64": "b294a556e639d64338823920e5866c21c02741742d2e1529ee1a225c1ec9252a",
+    };
+    expect(Object.keys(runtime.install.platforms).sort()).toEqual(Object.keys(hashes).sort());
+    for (const [platform, checksum] of Object.entries(hashes)) {
+      expect(runtime.install.platforms[platform]).toEqual({
+        url: `https://nodejs.org/dist/v22.23.2/node-v22.23.2-${platform}.tar.gz`,
+        checksum: { algo: "sha256", value: checksum },
+        extract: { type: "tar.gz", strip: 1 },
+      });
+    }
+  });
+
+  it("keeps versioned Node 20 separate from the verified Node 24 shared default", async () => {
     const [shared, versioned] = await Promise.all([
       loadRuntime("node"),
       loadRuntime("node-20-20-2"),
@@ -52,8 +82,22 @@ describe("Node runtime catalog contract", () => {
 
     expect(shared).toMatchObject({
       id: "runtime:node",
-      version: "20.10.0",
+      version: "24.21.0",
     });
+    const sharedHashes: Record<string, string> = {
+      "darwin-arm64": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+      "darwin-x64": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097",
+      "linux-arm64": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5",
+      "linux-x64": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+    };
+    expect(Object.keys(shared.install.platforms).sort()).toEqual(Object.keys(sharedHashes).sort());
+    for (const [platform, checksum] of Object.entries(sharedHashes)) {
+      expect(shared.install.platforms[platform]).toEqual({
+        url: `https://nodejs.org/dist/v24.21.0/node-v24.21.0-${platform}.tar.gz`,
+        checksum: { algo: "sha256", value: checksum },
+        extract: { type: "tar.gz", strip: 1 },
+      });
+    }
     expect(versioned).toMatchObject({
       id: "runtime:node-20-20-2",
       version: "20.20.2",
