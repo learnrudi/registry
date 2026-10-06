@@ -13,6 +13,11 @@ RUDI CLI. The catalog uses schema version 2 with unversioned canonical paths.
 | Runtime | Language interpreters | `catalog/runtimes/{id}.json` |
 | Skill | Reusable agent workflows | `catalog/skills/{id}/SKILL.md` |
 
+[Workers](catalog/workers/README.md) compose goals, processes, stacks and skills,
+context, operating boundaries, and completion criteria. The workers authoring
+area currently contains manually loaded Markdown definitions and a synthetic
+Client Meeting Update example; it is not an installable package type.
+
 `index.json` is the single generated package index. Do not add parallel
 version-suffixed files or directories; the schema version belongs inside the
 document, not in its path.
@@ -35,6 +40,7 @@ catalog/
 │   ├── manifest.json         # Canonical stack metadata
 │   └── src/, node/, python/  # Stack implementation
 ├── skills/                   # Same-ID skill folders
+├── workers/                  # Markdown worker definitions; authoring only
 ├── binaries/{id}.json        # Canonical binary metadata
 ├── agents/{id}.json          # Canonical agent metadata
 └── runtimes/{id}.json        # Canonical runtime metadata

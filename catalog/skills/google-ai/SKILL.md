@@ -1,7 +1,7 @@
 ---
 name: "Google AI Suite Operator"
-description: "Generate images and videos using the supported Google AI models selected for the requested media task"
-version: 1.0.1
+description: "Provider-specific operator for explicit Google AI requests or an already-selected provider route within media generation."
+version: 1.0.2
 category: "media"
 tags:
   - rudi
@@ -27,6 +27,10 @@ Generate images and videos using the supported Google AI models selected for the
 Use the stack when the request needs these capabilities. Do not substitute
 invented results when the stack, a required secret, or a supporting service is
 unavailable.
+
+## Routing
+
+Use this operator for an explicit Google AI provider or `stack:google-ai` request, or as the selected provider inside an image/video workflow. For an unspecified provider, enter through `image-generate` (`skill:image-generator`) or `video-generate` (`skill:video-generator`). Use `speech-generate` (`skill:speech-generator`) for supported Gemini speech. Do not silently switch models/providers or duplicate generation when composing skills.
 
 ## Workflow
 

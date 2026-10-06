@@ -1,10 +1,10 @@
 ---
 name: RUDI Code Review
-description: Review a completed software change independently against three separate axes—engineering Standards, the approved Spec, and the claimed Proof—and return prioritized, evidence-backed findings without editing by default. Use for pre-merge, pre-release, or high-risk change review when a diff and task contract exist; do not use for initial implementation, generic architecture consolidation, or debugging an unknown cause.
+description: "Review a snippet, file or diff in quick mode, or assess a completed change against Standards, Spec and Proof for formal acceptance. Read-only by default; use for code review, not initial implementation, unknown-cause debugging or repository-wide consolidation."
 category: code
 tags:
   - capability:review
-version: 1.0.1
+version: 1.0.2
 ---
 
 # RUDI Code Review
@@ -12,6 +12,21 @@ version: 1.0.1
 Review what changed, what was promised, and what was proved as independent
 questions. A clean style pass cannot compensate for a missed requirement, and
 green tests cannot prove an untested claim.
+
+## Select review depth
+
+- **Quick:** a supplied snippet, file or bounded diff without a release decision.
+  Check observable bugs, edge cases, security, input validation, failure behavior,
+  races and material performance issues. Report file/line, concrete failure and
+  smallest fix/proof, ordered by severity. Do not require a formal task contract
+  merely to review a snippet and do not invent style findings.
+- **Formal:** pre-merge, pre-release, high-risk or explicitly requested
+  Standards/Spec/Proof review. Follow the contract and workflow below. A quick
+  pass never substitutes for an independently required formal review.
+
+The former `code-review` entrypoint uses quick mode unless the request or
+repository policy calls for formal review. Missing requirements remain unknown;
+never infer the spec from implementation. Both modes are read-only by default.
 
 Read [the review contract](references/assessment-contract.md) before reviewing a
 medium- or high-risk change.

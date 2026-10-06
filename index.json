@@ -3,12 +3,12 @@
   "schemaVersion": "2",
   "generatedAt": "2026-10-03T22:39:12.000Z",
   "stats": {
-    "total": 173,
+    "total": 174,
     "byKind": {
       "agent": 4,
       "binary": 28,
       "runtime": 6,
-      "skill": 84,
+      "skill": 85,
       "stack": 51
     }
   },
@@ -1864,14 +1864,14 @@
       "id": "skill:client-engagement-intake",
       "kind": "skill",
       "name": "Client Engagement Intake",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
         "path": "catalog/skills/client-engagement-intake"
       },
       "meta": {
-        "description": "Create RUDI client engagement workspaces and private GitHub repos from client conversations, transcripts, and pipeline discussions",
+        "description": "Portable client-intake fallback when no workspace-specific client skill exists; prefer that canonical client operator for managed workspaces.",
         "category": "documents",
         "tags": [
           "clients",
@@ -2138,7 +2138,7 @@
       "id": "skill:google-ai",
       "kind": "skill",
       "name": "Google AI Suite Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2150,7 +2150,7 @@
         ]
       },
       "meta": {
-        "description": "Generate images and videos using the supported Google AI models selected for the requested media task",
+        "description": "Provider-specific operator for explicit Google AI requests or an already-selected provider route within media generation.",
         "category": "media",
         "tags": [
           "rudi",
@@ -2296,7 +2296,7 @@
       "id": "skill:image-generator",
       "kind": "skill",
       "name": "Image Generator Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2423,6 +2423,28 @@
           "planning",
           "verification",
           "capability:review"
+        ]
+      }
+    },
+    "skill:map-my-work": {
+      "id": "skill:map-my-work",
+      "kind": "skill",
+      "name": "map-my-work",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/map-my-work"
+      },
+      "meta": {
+        "description": "Interview someone one focused question at a time to turn recurring work into a confirmed task and microstep map, matching Mermaid workflow, and one small reversible AI-assisted test. Use when a person wants to explain, document, hand off, or find responsible AI support for how work actually gets done; do not use it to execute the mapped workflow.",
+        "category": "documents",
+        "tags": [
+          "workflow-mapping",
+          "task-decomposition",
+          "process-documentation",
+          "human-in-the-loop",
+          "capability:plan"
         ]
       }
     },
@@ -2565,7 +2587,7 @@
       "id": "skill:openai",
       "kind": "skill",
       "name": "OpenAI Suite Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2577,7 +2599,7 @@
         ]
       },
       "meta": {
-        "description": "OpenAI tools: DALL-E images, Whisper transcription, TTS speech, Sora video",
+        "description": "Provider-specific operator for explicit OpenAI requests or an already-selected provider route within media generation.",
         "category": "media",
         "tags": [
           "rudi",
@@ -2735,8 +2757,8 @@
     "skill:reddit-saved-link-enrichment": {
       "id": "skill:reddit-saved-link-enrichment",
       "kind": "skill",
-      "name": "Reddit Saved Link Enrichment",
-      "version": "1.0.1",
+      "name": "Saved Link Enrichment",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2749,7 +2771,7 @@
         ]
       },
       "meta": {
-        "description": "Enrich Reddit rows from a saved-links database by extracting posts and comment discussion, drafting a concise database note, and preparing a full page body before any explicit Notion write.",
+        "description": "Enrich saved-link inboxes across Reddit, YouTube, TikTok and articles, with source extraction, concise notes and idempotent authorized Notion updates.",
         "category": "data",
         "tags": [
           "reddit",
@@ -2792,7 +2814,7 @@
       "id": "skill:rudi-ai-policy-assessor",
       "kind": "skill",
       "name": "RUDI AI Policy Assessor",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2836,14 +2858,14 @@
       "id": "skill:rudi-code-review",
       "kind": "skill",
       "name": "RUDI Code Review",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
         "path": "catalog/skills/rudi-code-review"
       },
       "meta": {
-        "description": "Review a completed software change independently against three separate axes—engineering Standards, the approved Spec, and the claimed Proof—and return prioritized, evidence-backed findings without editing by default. Use for pre-merge, pre-release, or high-risk change review when a diff and task contract exist; do not use for initial implementation, generic architecture consolidation, or debugging an unknown cause.",
+        "description": "Review a snippet, file or diff in quick mode, or assess a completed change against Standards, Spec and Proof for formal acceptance. Read-only by default; use for code review, not initial implementation, unknown-cause debugging or repository-wide consolidation.",
         "category": "code",
         "tags": [
           "capability:review"
@@ -3287,7 +3309,7 @@
       "id": "skill:shortform-social-publish-package",
       "kind": "skill",
       "name": "Shortform Social Publish Package",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3446,7 +3468,7 @@
       "id": "skill:speech-generator",
       "kind": "skill",
       "name": "Speech Generator Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3662,7 +3684,7 @@
       "id": "skill:trace-feature-lineage",
       "kind": "skill",
       "name": "Trace Feature Lineage",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3740,7 +3762,7 @@
       "id": "skill:video-generator",
       "kind": "skill",
       "name": "Video Generator Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",

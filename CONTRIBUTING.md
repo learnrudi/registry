@@ -100,6 +100,10 @@ relationship reciprocal through the stack's `related.operatorSkill` and
 `related.skills` fields.
 
 Unsupported package ideas belong under `docs/proposals/`, not `catalog/`.
+The documented exception is the [workers authoring area](catalog/workers/README.md):
+portable Markdown definitions and explicitly synthetic teaching examples may
+live there without manifests. This does not make workers installable or include
+them in package discovery or release payloads. See [worker status](docs/proposals/workers.md).
 
 ## Required Checks
 
