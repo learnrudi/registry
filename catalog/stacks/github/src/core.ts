@@ -1,3 +1,5 @@
+import { buildRestUrl } from "./request-url.js";
+
 export interface EnvLike {
   [key: string]: string | undefined;
 }
@@ -292,30 +294,6 @@ function requireRef(value: unknown, name: string): string {
   return requireString(value, name, 255);
 }
 
-function appendQuery(url: URL, query: Record<string, unknown>): void {
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === null || value === "") {
-      continue;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        url.searchParams.append(key, String(item));
-      }
-      continue;
-    }
-    url.searchParams.set(key, String(value));
-  }
-}
-
-function normalizeApiBaseUrl(env: EnvLike = process.env): URL {
-  const base = getApiBaseUrl(env).replace(/\/+$/, "");
-  const url = new URL(`${base}/`);
-  if (url.protocol !== "https:") {
-    throw new Error("GITHUB_API_BASE_URL must use https");
-  }
-  return url;
-}
-
 function getToken(env: EnvLike = process.env): string {
   const token = getEnv("GITHUB_TOKEN", env);
   if (!token) {
@@ -408,14 +386,7 @@ async function githubApiRequest<T>(
 ): Promise<ApiResult<T>> {
   const env = deps.env ?? process.env;
   const token = getToken(env);
-  const base = normalizeApiBaseUrl(env);
-  const url = new URL(path.replace(/^\//, ""), base);
-  // Check the parsed URL, not just the spelling of a caller-supplied path.
-  // WHATWG URL normalization treats backslashes as authority separators.
-  if (url.origin !== new URL(base).origin || url.username || url.password) {
-    throw new Error("path must remain on the configured GitHub REST API origin");
-  }
-  appendQuery(url, options.query ?? {});
+  const url = buildRestUrl(getApiBaseUrl(env), path, options.query ?? {});
 
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
