@@ -8,6 +8,28 @@ import test from 'node:test';
 import { acquireBrowserSession, navigateAndWait } from '../dist/browser.js';
 import { validateExportRequest } from '../dist/validate.js';
 
+test('local Chromium renders a document with its native sandbox enabled', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'render-startup-'));
+  let session;
+  try {
+    const input = join(root, 'document.html');
+    writeFileSync(input, '<html><body><h1>Browser startup</h1></body></html>');
+    const request = validateExportRequest({ input, output: join(root, 'out.png') }, 'png');
+    try {
+      session = await acquireBrowserSession(request);
+    } catch (error) {
+      // This fixture uses only a local browser. Include its native startup
+      // diagnostic so CI distinguishes missing libraries from sandbox errors.
+      assert.fail(`${error.message}\n${error.details?.cause ?? ''}`);
+    }
+    await navigateAndWait(session, request);
+    assert.equal(await session.page.locator('h1').textContent(), 'Browser startup');
+  } finally {
+    await session?.release();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('active HTML cannot reach loopback services during rendering', { skip: process.env.RUDI_VERIFY_OFFLINE === '1' ? 'Host listener fixture is forbidden by the offline verifier; run npm test outside it for browser egress proof.' : false }, async () => {
   let requests = 0;
   const server = createServer((_req, res) => { requests++; res.end('private'); });

@@ -60,7 +60,7 @@ jobs:
       - name: Install verification sandbox
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap apparmor-profiles apparmor-utils
+          sudo apt-get install --yes bubblewrap apparmor-profiles apparmor-utils ffmpeg
           # Grant namespace setup to distro bubblewrap, then strip capabilities
           # from its children. Keep the host-wide AppArmor restriction enabled.
           sudo install -m 0644 \
