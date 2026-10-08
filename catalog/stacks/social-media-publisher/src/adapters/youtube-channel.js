@@ -1,3 +1,4 @@
+import { downloadPublicMedia } from '../security/media-download.js';
 import axios from 'axios';
 
 import { PlatformAdapterError } from './platform-errors.js';
@@ -445,13 +446,8 @@ async function getVideoInfo(accessToken, videoId) {
   return video;
 }
 
-async function downloadMedia(item, maxBytes, label) {
-  const response = await axios.get(assertHttpsUrl(item.source_url, label), {
-    responseType: 'arraybuffer',
-    timeout: 120_000,
-    maxContentLength: maxBytes,
-  });
-  const buffer = Buffer.from(response.data);
+export async function downloadMedia(item, maxBytes, label) {
+  const buffer = await downloadPublicMedia(assertHttpsUrl(item.source_url, label), maxBytes, 120000);
 
   if (buffer.length > maxBytes) {
     throw new PlatformAdapterError(

@@ -105,17 +105,31 @@ async function listAllStackIds(root: string): Promise<string[]> {
   return [...new Set(packageIds)].sort();
 }
 
-async function listChangedPaths(root: string, base: string): Promise<string[]> {
+export async function listChangedPaths(root: string, base: string): Promise<string[]> {
   const result = await execFileAsync(
     "git",
-    ["diff", "--name-only", "--diff-filter=ACMRT", `${base}...HEAD`, "--"],
+    ["diff", "--name-only", "-z", "--no-renames", `${base}...HEAD`, "--"],
     { cwd: root, encoding: "utf8" }
   ) as { stdout: string };
 
   return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
+    .split("\0")
     .filter(Boolean);
+}
+
+export async function listChangedStackIds(root: string, base: string): Promise<string[]> {
+  const selected: string[] = [];
+  for (const id of selectChangedStackIds(await listChangedPaths(root, base))) {
+    try {
+      await fs.lstat(path.join(root, "catalog/stacks", id.slice("stack:".length)));
+      selected.push(id);
+    } catch (error) {
+      // Fully retired stacks are covered by catalog/reference validation.
+      // A remaining directory with a deleted manifest or verifier must fail.
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  return selected;
 }
 
 async function main(): Promise<void> {
@@ -126,7 +140,7 @@ async function main(): Promise<void> {
   if (args.mode === "all") {
     packageIds = await listAllStackIds(root);
   } else if (args.mode === "changed") {
-    packageIds = selectChangedStackIds(await listChangedPaths(root, args.base));
+    packageIds = await listChangedStackIds(root, args.base);
   } else {
     packageIds = args.packageIds;
   }

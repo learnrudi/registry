@@ -374,3 +374,21 @@ requires:
     );
   });
 });
+
+
+describe("catalog aliases", () => {
+  it("rejects aliases that shadow canonical IDs or another package alias", async () => {
+    for (const id of ["alpha", "beta"]) {
+      await writeJson(path.join(tmpDir, `catalog/binaries/${id}.json`), {
+        id: `binary:${id}`, kind: "binary", name: id, version: "1.0.0", delivery: "system",
+        install: { source: "system" }, detect: { command: id },
+      });
+    }
+    const packages = await discoverCatalogPackages(tmpDir);
+    packages[0].manifest.aliases = ["binary:beta"];
+    expect(() => assertCatalogReferences(packages)).toThrow(/alias.*canonical/i);
+    packages[0].manifest.aliases = ["binary:legacy"];
+    packages[1].manifest.aliases = ["binary:legacy"];
+    expect(() => assertCatalogReferences(packages)).toThrow(/alias.*already/i);
+  });
+});

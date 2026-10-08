@@ -2,6 +2,8 @@
  * Resolve audio input from file path, URL, or base64 data into a local file path.
  */
 
+import { parsePublicUrl, publicHttp } from "./public-http.js";
+
 import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join, basename, extname } from "path";
@@ -45,7 +47,15 @@ function parseHttpUrl(rawUrl: string): URL {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error("url must use http or https");
   }
-  return parsed;
+  return parsePublicUrl(parsed.toString());
+}
+
+function inputByteBudget(): number {
+  const bytes = Number(process.env.AUDIO_TOOLS_MAX_INPUT_BYTES ?? 64 * 1024 * 1024);
+  if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 512 * 1024 * 1024) {
+    throw new Error("AUDIO_TOOLS_MAX_INPUT_BYTES must be between 1 and 536870912");
+  }
+  return bytes;
 }
 
 function safeStem(value: string): string {
@@ -84,6 +94,8 @@ export function buildUrlDownloadPlan(rawUrl: string, tmpDir: string, filename?: 
       outputTemplate,
       args: [
         "--no-playlist",
+        "--max-filesize", String(inputByteBudget()),
+        "--socket-timeout", "30",
         "-x",
         "--audio-format",
         "m4a",
@@ -109,7 +121,7 @@ export function buildUrlDownloadPlan(rawUrl: string, tmpDir: string, filename?: 
 }
 
 async function downloadDirect(rawUrl: string, outputPath: string): Promise<void> {
-  const response = await fetch(rawUrl, { redirect: "follow" });
+  const response = await publicHttp.fetch(rawUrl, { maxBytes: inputByteBudget(), timeoutMs: 120000 });
   if (!response.ok) {
     throw new Error(`download failed: HTTP ${response.status}`);
   }
@@ -195,6 +207,15 @@ export async function resolveInput(args: {
 
   // 3. Base64 data
   if (args.data) {
+    const maxBytes = inputByteBudget();
+    const padding = args.data.endsWith("==") ? 2 : args.data.endsWith("=") ? 1 : 0;
+    if (args.data.length > Math.ceil(maxBytes / 3) * 4
+        || Math.floor(args.data.length * 3 / 4) - padding > maxBytes) {
+      throw new Error(`Base64 input exceeds ${maxBytes} bytes`);
+    }
+    if (args.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(args.data)) {
+      throw new Error("data must be valid padded base64");
+    }
     const tmpDir = join(tmpdir(), "audio-tools");
     mkdirSync(tmpDir, { recursive: true });
 

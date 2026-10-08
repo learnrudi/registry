@@ -4,6 +4,7 @@ import { withTransaction } from '../db/transaction.js';
 import { getPostAggregate } from '../domain/posts.js';
 import {
   beginTargetPublishAttempt,
+  completePublishPreview,
   claimQueuedPublishJob,
   finalizePublishJob,
   markPostPublishing,
@@ -78,17 +79,6 @@ async function loadToken(pool, config, target, adapter) {
   });
 }
 
-function getDryRunResult(target) {
-  return {
-    platformPostId: `dry_run:${target.id}`,
-    permalinkUrl: null,
-    platformResponse: {
-      dry_run: true,
-      target_id: target.id,
-    },
-  };
-}
-
 function assertTargetStillPublishable(target) {
   if (!target.asset_active) {
     throw new PlatformAdapterError(
@@ -107,8 +97,7 @@ function assertTargetStillPublishable(target) {
   }
 }
 
-async function publishTarget(pool, config, job, aggregate, target) {
-  const dryRun = job.metadata?.dry_run === true;
+async function publishTarget(pool, config, job, aggregate, target, resolveAdapter) {
   const requestId = job.metadata?.request_id ?? null;
   const media = aggregate.media ?? [];
   const attempt = await withTransaction(pool, async (client) => {
@@ -116,7 +105,6 @@ async function publishTarget(pool, config, job, aggregate, target) {
       job,
       target,
       requestId,
-      dryRun,
     });
   });
 
@@ -128,7 +116,7 @@ async function publishTarget(pool, config, job, aggregate, target) {
   try {
     assertTargetStillPublishable(target);
 
-    const adapter = getPlatformAdapter(target.platform);
+    const adapter = resolveAdapter(target.platform);
     const validation = adapter.validatePost({
       post: aggregate.post,
       target,
@@ -143,19 +131,15 @@ async function publishTarget(pool, config, job, aggregate, target) {
       );
     }
 
-    if (dryRun) {
-      result = getDryRunResult(target);
-    } else {
-      const token = await loadToken(pool, config, target, adapter);
-      await adapter.checkAuth({ target, token });
-      result = await adapter.publish({
-        post: aggregate.post,
-        target,
-        media,
-        token,
-        idempotencyKey: `${job.id}:${target.id}`,
-      });
-    }
+    const token = await loadToken(pool, config, target, adapter);
+    await adapter.checkAuth({ target, token });
+    result = await adapter.publish({
+      post: aggregate.post,
+      target,
+      media,
+      token,
+      idempotencyKey: `target:${job.organization_id}:${target.id}`,
+    });
   } catch (error) {
     const failure = await markTargetFailed(pool, job, target, attempt.id, error);
     error.publishFailure = failure;
@@ -168,7 +152,6 @@ async function publishTarget(pool, config, job, aggregate, target) {
       target,
       attempt,
       result,
-      dryRun,
     });
   });
 
@@ -211,6 +194,7 @@ async function failJob(pool, job, error) {
 
 export async function runPublishWorkerOnce(config, options = {}) {
   const pool = getDatabasePool(config);
+  const resolveAdapter = options.resolveAdapter ?? getPlatformAdapter;
   const workerId = options.workerId ?? `publish-worker:${process.pid}`;
   const job = await withTransaction(pool, async (client) => claimQueuedPublishJob(client, {
     workerId,
@@ -229,6 +213,20 @@ export async function runPublishWorkerOnce(config, options = {}) {
   });
 
   try {
+    if (job.metadata?.dry_run === true) {
+      const aggregate = await loadAggregate(pool, job);
+      const results = aggregate.targets.map((target) => {
+        try {
+          assertTargetStillPublishable(target);
+          const validation = resolveAdapter(target.platform).validatePost({ post: aggregate.post, target, media: aggregate.media ?? [] });
+          return { target_id: target.id, ...validation };
+        } catch (error) {
+          return { target_id: target.id, ok: false, error: serializeError(error) };
+        }
+      });
+      const state = await withTransaction(pool, (client) => completePublishPreview(client, { job, results }));
+      return { claimed: true, job, ...state };
+    }
     await withTransaction(pool, async (client) => {
       await markPostPublishing(client, {
         organizationId: job.organization_id,
@@ -242,7 +240,7 @@ export async function runPublishWorkerOnce(config, options = {}) {
 
     for (const target of queuedTargets) {
       try {
-        const result = await publishTarget(pool, config, job, aggregate, target);
+        const result = await publishTarget(pool, config, job, aggregate, target, resolveAdapter);
         if (!result.skipped) {
           logInfo('publish_target_succeeded', {
             publish_job_id: job.id,
@@ -251,7 +249,7 @@ export async function runPublishWorkerOnce(config, options = {}) {
           });
         }
       } catch (error) {
-        const failure = error.publishFailure ?? await markTargetFailed(pool, job, target, null, error);
+        const failure = error.publishFailure ?? serializeError(error);
         failures.push({ target_id: target.id, ...failure });
         logError('publish_target_failed', {
           publish_job_id: job.id,

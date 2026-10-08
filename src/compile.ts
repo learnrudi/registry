@@ -18,6 +18,7 @@ import fg from "fast-glob";
 import {
   resolve,
   assertEffectivePolicy,
+  buildAliasMap,
   type Package,
   type ResolveContext,
   type ResolvedPackage,
@@ -137,7 +138,7 @@ async function hashFile(file: string): Promise<string> {
 
 function buildBaseIndex(manifests: CatalogPackageFile[]): RegistryIndex {
   const packages: Record<string, Package> = {};
-  const aliases: Record<string, string> = {};
+  const aliases = Object.fromEntries(buildAliasMap(manifests.map(item => item.manifest)));
   const byKind: Record<string, number> = {};
 
   for (const { manifest } of manifests) {
@@ -146,13 +147,6 @@ function buildBaseIndex(manifests: CatalogPackageFile[]): RegistryIndex {
 
     const kind = manifest.kind;
     byKind[kind] = (byKind[kind] ?? 0) + 1;
-
-    // Collect aliases
-    if (manifest.aliases) {
-      for (const alias of manifest.aliases) {
-        aliases[alias] = id;
-      }
-    }
   }
 
   return {
@@ -173,7 +167,7 @@ function buildPlatformIndex(
   ctx: ResolveContext
 ): PlatformIndex {
   const packages: Record<string, ResolvedPackage> = {};
-  const aliases: Record<string, string> = {};
+  const aliases: Record<string, string> = Object.create(null);
   const byKind: Record<string, number> = {};
   const errors: string[] = [];
 
@@ -200,10 +194,7 @@ function buildPlatformIndex(
   }
 
   if (errors.length > 0) {
-    console.warn(`\nWarnings for ${ctx.os}-${ctx.arch}:`);
-    for (const err of errors) {
-      console.warn(`  - ${err}`);
-    }
+    throw new Error(`Invalid catalog for ${ctx.os}-${ctx.arch}:\n${errors.join("\n")}`);
   }
 
   return {
@@ -226,7 +217,7 @@ function buildPlatformIndex(
 
 async function buildCatalogHash(): Promise<CatalogHash> {
   const files = await fg(CATALOG_PAYLOAD_PATTERNS, {
-    dot: false,
+    dot: true,
     onlyFiles: true,
     cwd: process.cwd(),
     ignore: CATALOG_ARTIFACT_IGNORE,
@@ -273,15 +264,15 @@ async function main() {
   // Build base index
   console.log("Building base index...");
   const baseIndex = buildBaseIndex(manifests);
+  // Validate every target before publishing any part of the new index set.
+  const platformIndexes = PLATFORMS.map(ctx => buildPlatformIndex(manifests, ctx));
   await writeJson("dist/index.json", baseIndex);
   console.log(`  → dist/index.json (${baseIndex.stats.total} packages)`);
 
   // Build platform-specific indexes
   console.log("\nBuilding platform indexes...");
-  for (const { os, arch } of PLATFORMS) {
-    const ctx: ResolveContext = { os, arch };
-    const platformIndex = buildPlatformIndex(manifests, ctx);
-    const filename = `dist/index.${os}-${arch}.json`;
+  for (const platformIndex of platformIndexes) {
+    const filename = `dist/index.${platformIndex.platform}.json`;
     await writeJson(filename, platformIndex);
     console.log(`  → ${filename} (${platformIndex.stats.total} packages)`);
   }

@@ -1,3 +1,4 @@
+import { publicHttp } from '../../src/security/public-http.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -282,6 +283,12 @@ test('youtube adapter maps OAuth invalid_grant token refresh errors to actionabl
 
 test('youtube adapter updates thumbnails with hosted image media', async () => {
   const previousEnv = setGoogleEnv();
+  const originalPublicFetch = publicHttp.fetch;
+  publicHttp.fetch = async (url, options) => {
+    assert.equal(url, 'https://example.com/thumbnail.jpg');
+    assert.equal(options.maxBytes, 2 * 1024 * 1024);
+    return new Response(Buffer.from('thumbnail-bytes'));
+  };
   let uploadedThumbnailVideoId;
   const restoreAxios = mockAxios({
     get: async () => ({ data: Buffer.from('thumbnail-bytes') }),
@@ -306,6 +313,7 @@ test('youtube adapter updates thumbnails with hosted image media', async () => {
     assert.equal(result.platformResponse.thumbnail_uploaded, true);
     assert.equal(uploadedThumbnailVideoId, 'abc123_XYZ');
   } finally {
+    publicHttp.fetch = originalPublicFetch;
     restoreAxios();
     restoreGoogleEnv(previousEnv);
   }

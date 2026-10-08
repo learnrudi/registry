@@ -410,6 +410,11 @@ async function githubApiRequest<T>(
   const token = getToken(env);
   const base = normalizeApiBaseUrl(env);
   const url = new URL(path.replace(/^\//, ""), base);
+  // Check the parsed URL, not just the spelling of a caller-supplied path.
+  // WHATWG URL normalization treats backslashes as authority separators.
+  if (url.origin !== new URL(base).origin || url.username || url.password) {
+    throw new Error("path must remain on the configured GitHub REST API origin");
+  }
   appendQuery(url, options.query ?? {});
 
   const headers: Record<string, string> = {
@@ -422,6 +427,7 @@ async function githubApiRequest<T>(
   const init: RequestInit = {
     method: options.method ?? "GET",
     headers,
+    redirect: "error",
   };
 
   if (options.body) {

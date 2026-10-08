@@ -9,6 +9,7 @@
  *   - As CLI: node index.ts <url> [output]
  */
 
+import { publicHttp } from "./public-http.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -159,6 +160,8 @@ async function getYouTubeTranscriptViaSupaData(videoId: string, url: string) {
 
     const response = await fetch(apiUrl.toString(), {
       method: "GET",
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     });
 
@@ -188,7 +191,7 @@ async function getYouTubeTranscriptViaAPI(videoId: string) {
 
 async function getYouTubeTranscriptViaHTML(videoId: string) {
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const response = await publicHttp.fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
     });
     const html = await response.text();
@@ -201,7 +204,7 @@ async function getYouTubeTranscriptViaHTML(videoId: string) {
     const englishTrack = captionTracks.find((t: any) => t.languageCode === "en" || t.languageCode?.startsWith("en-"));
     if (!englishTrack) throw new Error("No English captions available");
 
-    const captionResponse = await fetch(englishTrack.baseUrl);
+    const captionResponse = await publicHttp.fetch(englishTrack.baseUrl);
     const captionXML = await captionResponse.text();
 
     const texts: string[] = [];
@@ -219,7 +222,7 @@ async function getYouTubeTranscriptViaHTML(videoId: string) {
 
 async function getYouTubeMetadata(videoId: string) {
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const response = await publicHttp.fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
     });
     const html = await response.text();
@@ -325,7 +328,7 @@ function stripVtt(vtt: string): string {
 
 export async function extractTikTok(url: string, preferLang = "eng"): Promise<TikTokResult> {
   const tiktokUrl = requirePlatformUrl(url, "TikTok", ["tiktok.com"]);
-  const response = await fetch(tiktokUrl, { headers: TIKTOK_HEADERS, redirect: "follow" });
+  const response = await publicHttp.fetch(tiktokUrl, { headers: TIKTOK_HEADERS, redirect: "follow" });
   const fullUrl = response.url;
   const html = await response.text();
 
@@ -350,7 +353,7 @@ export async function extractTikTok(url: string, preferLang = "eng"): Promise<Ti
   }
 
   const track = subtitles.find((s: any) => s.LanguageCodeName?.startsWith(preferLang)) || subtitles[0];
-  const vttResponse = await fetch(track.Url, { headers: TIKTOK_HEADERS });
+  const vttResponse = await publicHttp.fetch(track.Url, { headers: TIKTOK_HEADERS });
   const vtt = await vttResponse.text();
   const transcript = stripVtt(vtt);
   const wordCount = transcript.split(/\s+/).filter((w) => w.length > 0).length;
@@ -397,7 +400,7 @@ function htmlToMarkdown(html: string): string {
 export async function extractArticle(url: string): Promise<ArticleResult> {
   const articleUrl = parseHttpUrl(url).toString();
 
-  const response = await fetch(articleUrl, {
+  const response = await publicHttp.fetch(articleUrl, {
     headers: { "User-Agent": ARTICLE_USER_AGENT, Accept: "text/html" },
     redirect: "follow",
   });
@@ -533,7 +536,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "extract_batch",
-      description: "Batch extract content from URL arrays, metadata items, or a CSV file. Deduplicates normalized URLs, routes each URL to the right extractor, classifies blocked/rate-limited failures, and writes per-link artifact folders plus a manifest, CSV report, and JSONL results file. Optional Playwright browser screenshot fallback captures page images for selected failed statuses and, when Tesseract is available, classifies captured screenshots as browser_captured, browser_blocked, browser_empty, browser_not_found, or browser_unclassified.",
+      description: "Batch extract content from URL arrays, metadata items, or a CSV file. Deduplicates normalized URLs, routes each URL to the right extractor, classifies blocked/rate-limited failures, and writes per-link artifact folders plus a manifest, CSV report, and JSONL results file. Playwright browser screenshot fallback is unavailable until browser network egress is guarded; failed extraction statuses are preserved.",
       inputSchema: {
         type: "object",
         properties: {
@@ -559,12 +562,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           url_column: { type: "string", description: "CSV column containing URLs (default: url)" },
           output_dir: { type: "string", description: "Directory where content, manifest, report, and JSONL files are written" },
           max_concurrency: { type: "number", minimum: 1, maximum: 10, description: "Maximum concurrent unique URL extractions (default: 4)" },
-          browser_fallback: { type: "boolean", description: "Enable Playwright browser screenshot fallback for blocked/rate-limited/fetch-failed URLs (default: false)" },
-          browser_timeout_ms: { type: "number", minimum: 1000, maximum: 60000, description: "Playwright browser screenshot fallback timeout in milliseconds (default: 15000)" },
+          browser_fallback: { type: "boolean", description: "Compatibility flag: Playwright browser screenshot fallback is disabled until network egress is guarded" },
+          browser_timeout_ms: { type: "number", minimum: 1000, maximum: 60000, description: "Reserved compatibility timeout; browser fallback is currently unavailable" },
           browser_fallback_statuses: {
             type: "array",
             items: { type: "string", enum: ["blocked", "rate_limited", "fetch_failed", "error", "no_transcript"] },
-            description: "Statuses that should trigger Playwright browser screenshot fallback (default: blocked, rate_limited, fetch_failed)",
+            description: "Statuses that record browser fallback unavailable (default: blocked, rate_limited, fetch_failed)",
           },
         },
       },
