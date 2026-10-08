@@ -85,7 +85,9 @@ export async function buildVerificationSandbox(options: {
   const args = ["--die-with-parent", "--new-session", "--unshare-all"];
   if (options.network) args.push("--share-net");
   const readable = [...new Set([
-    "/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc/ssl", "/etc/ld.so.cache", ...runtimeRoots,
+    // Debian shared-library links (including FFmpeg's BLAS dependency) pass
+    // through alternatives before resolving back into the system libraries.
+    "/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc/alternatives", "/etc/ssl", "/etc/ld.so.cache", ...runtimeRoots,
   ])];
   for (const directory of readable) {
     try {

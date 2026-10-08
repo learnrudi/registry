@@ -562,14 +562,17 @@ describe("verification containment", () => {
     await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:deadline", kind: "stack", runtime: "python" });
     await writeText(path.join(stackDir, "verify.py"), [
       "import subprocess, sys, time",
-      "subprocess.Popen([sys.executable, '-c', \"import time, pathlib; time.sleep(0.4); pathlib.Path('late-marker').write_text('late')\"])" ,
-      "time.sleep(2)",
+      "subprocess.Popen([sys.executable, '-c', \"import time, pathlib; pathlib.Path('started-marker').write_text('started'); time.sleep(2); pathlib.Path('late-marker').write_text('late')\"])" ,
+      "time.sleep(5)",
     ].join("\n"));
-    const [result] = await runStackVerifications(tmpDir, ["stack:deadline"], { timeoutMs: 150 });
-    expect(result).toMatchObject({ status: "failed", error: "verification timed out after 150ms" });
-    await new Promise(resolve => setTimeout(resolve, 600));
+    // Allow native sandbox/Python startup under the full suite's CPU load.
+    // An early macOS exec transition can reject signals with EPERM instead.
+    const [result] = await runStackVerifications(tmpDir, ["stack:deadline"], { timeoutMs: 1_000 });
+    expect(result).toMatchObject({ status: "failed", error: "verification timed out after 1000ms" });
+    await expect(fs.readFile(path.join(stackDir, "started-marker"), "utf8")).resolves.toBe("started");
+    await new Promise(resolve => setTimeout(resolve, 2_200));
     await expect(fs.access(path.join(stackDir, "late-marker"))).rejects.toThrow();
-  });
+  }, 10_000);
 
   it("denies host files and network to verification code and its descendants", async () => {
     const stackDir = path.join(tmpDir, "catalog/stacks/contained");
