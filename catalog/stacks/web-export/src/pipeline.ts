@@ -15,6 +15,7 @@ import type { DiagnosticWarning } from "./types.js";
 import { RenderError } from "./types.js";
 import { verifyPdfArtifacts, verifyPngArtifacts } from "./verify.js";
 import { validateExportRequest } from "./validate.js";
+import { assertRenderBudget, remainingRenderMs } from './render-budget.js';
 
 async function executeValidatedRequest(
   request: ValidatedExportRequest,
@@ -46,6 +47,10 @@ async function executeValidatedRequest(
       request.format === "pdf"
         ? await verifyPdfArtifacts(renderArtifact.artifactPaths)
         : verifyPngArtifacts(renderArtifact.artifactPaths);
+    remainingRenderMs(request);
+    if (request.format === 'pdf') {
+      assertRenderBudget(verification.pageDimensions.map(page => ({ width: page.width * 96 / 72, height: page.height * 96 / 72 })), Math.max(request.scale, request.dpi / 96));
+    }
 
     let previewPaths = renderArtifact.previewPaths;
     let pageAnalyses: PageVisualAnalysis[] = [];
@@ -76,6 +81,7 @@ async function executeValidatedRequest(
       previewWarnings,
     );
 
+    remainingRenderMs(request);
     return {
       success: true,
       format: request.format,

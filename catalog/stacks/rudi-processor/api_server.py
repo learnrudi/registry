@@ -5,40 +5,84 @@ Provides REST API and WebSocket endpoints for the frontend
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from typing import Optional, List, Dict, Any
 import json
 import os
 from pathlib import Path
 import asyncio
-from datetime import datetime
-import hashlib
 import shutil
+import re
+import uuid
+import secrets
+from contextlib import asynccontextmanager
 
 # Import RUDI processors
 from metadata_processor import MetadataProcessor
 from stage2_processor import Stage2Processor
 from batch_process_full import BatchProcessor
 
-app = FastAPI(title="RUDI API", version="1.0.0")
+API_TOKEN = os.environ.get("RUDI_PROCESSOR_API_TOKEN", "")
 
-# CORS configuration for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+def token_configured():
+    return len(API_TOKEN) >= 32 and API_TOKEN.isascii() and not any(c.isspace() for c in API_TOKEN)
+
+
+def authenticated(headers):
+    supplied = headers.get("authorization", "")
+    return token_configured() and secrets.compare_digest(
+        supplied.encode("utf-8"), f"Bearer {API_TOKEN}".encode("utf-8"))
+
+
+@asynccontextmanager
+async def lifespan(app):
+    if not token_configured():
+        raise RuntimeError("Set RUDI_PROCESSOR_API_TOKEN to a random token of at least 32 ASCII characters")
+    yield
+
+
+app = FastAPI(title="RUDI API", version="1.0.0", lifespan=lifespan,
+              docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def require_api_token(request, call_next):
+    # Only the static login UI is public. Every other HTTP path fails closed.
+    if request.url.path not in {"/", "/frontend/rudi_search.js"}:
+        if not token_configured():
+            return JSONResponse({"detail": "API authentication is not configured"}, status_code=503)
+        if not authenticated(request.headers):
+            return JSONResponse({"detail": "Authentication required"}, status_code=401,
+                                headers={"WWW-Authenticate": "Bearer"})
+    return await call_next(request)
+
 
 # Configuration
 # Override with RUDI_BASE_DIR / RUDI_INDEX_DIR env vars or edit paths for your setup
-BASE_DIR = Path(os.environ.get("RUDI_BASE_DIR", Path.home() / ".rudi" / "workspaces" / "rudi-processor" / "inbox"))
-INDEX_DIR = Path(os.environ.get("RUDI_INDEX_DIR", Path.home() / ".rudi" / "workspaces" / "rudi-processor" / "index"))
+BASE_DIR = Path(os.environ.get("RUDI_BASE_DIR", Path.home() / ".rudi" / "workspaces" / "rudi-processor" / "inbox")).expanduser().resolve()
+INDEX_DIR = Path(os.environ.get("RUDI_INDEX_DIR", Path.home() / ".rudi" / "workspaces" / "rudi-processor" / "index")).expanduser().resolve()
 METADATA_DIR = INDEX_DIR / "metadata"
 UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+def contained_path(path, root):
+    """Stored metadata and route parameters are untrusted filesystem input."""
+    candidate = Path(path).expanduser().resolve()
+    if not candidate.is_relative_to(root):
+        raise HTTPException(status_code=403, detail="Path is outside the configured workspace")
+    return candidate
+
+
+def stage2_directory():
+    return contained_path(METADATA_DIR / "stage1" / "stage2" / "2025-08", INDEX_DIR)
+
+
+def metadata_path(file_hash):
+    if not re.fullmatch(r"[a-fA-F0-9]{32,64}", file_hash):
+        raise HTTPException(status_code=400, detail="Invalid file hash")
+    return contained_path(stage2_directory() / f"{file_hash}.stage2.json", INDEX_DIR)
+
 
 # Initialize processors
 stage1 = MetadataProcessor()
@@ -68,7 +112,13 @@ manager = ConnectionManager()
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "RUDI API Server", "status": "running"}
+    return FileResponse(Path(__file__).parent / "frontend" / "rudi_search.html")
+
+@app.get("/frontend/rudi_search.js")
+async def frontend_script():
+    return FileResponse(Path(__file__).parent / "frontend" / "rudi_search.js",
+                        media_type="text/javascript")
+
 
 @app.get("/api/stats")
 async def get_stats():
@@ -84,11 +134,11 @@ async def get_stats():
             total_files = len(list(BASE_DIR.glob("*")))
 
         # Analyze metadata - correct path structure
-        stage2_dir = METADATA_DIR / "stage1" / "stage2" / "2025-08"
+        stage2_dir = stage2_directory()
         if stage2_dir.exists():
             for stage2_file in stage2_dir.glob("*.stage2.json"):
                 processed_files += 1
-                with open(stage2_file) as f:
+                with open(contained_path(stage2_file, INDEX_DIR)) as f:
                     data = json.load(f)
 
                     # Count vision analyzed
@@ -106,6 +156,8 @@ async def get_stats():
             "vision_analyzed": vision_analyzed,
             "categories": len(categories)
         }
+    except HTTPException:
+        raise
     except Exception as e:
         return {"error": str(e), "total_files": 0, "processed_files": 0}
 
@@ -122,10 +174,10 @@ async def search_files(
         filter_list = filters.split(",") if filters else []
 
         # Search through all stage2 metadata - correct path structure
-        stage2_dir = METADATA_DIR / "stage1" / "stage2" / "2025-08"
+        stage2_dir = stage2_directory()
         if stage2_dir.exists():
             for stage2_file in stage2_dir.glob("*.stage2.json"):
-                with open(stage2_file) as f:
+                with open(contained_path(stage2_file, INDEX_DIR)) as f:
                     data = json.load(f)
 
                     # Apply filters
@@ -170,6 +222,8 @@ async def search_files(
 
         return results[:limit]
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -178,13 +232,26 @@ async def upload_file(file: UploadFile = File(...)):
     """Upload and process a file"""
     try:
         # Save uploaded file
-        file_path = UPLOAD_DIR / file.filename
-        with open(file_path, "wb") as f:
+        filename = file.filename or ""
+        if (not filename or filename in {".", ".."} or "/" in filename
+                or "\\" in filename or any(ord(c) < 32 for c in filename)):
+            raise HTTPException(status_code=400, detail="Upload filename must be a plain name")
+        # The display name is never a storage path. Exclusive no-follow creation
+        # protects existing files, including attacker-planted symlinks.
+        upload_root = UPLOAD_DIR.resolve()
+        if upload_root != BASE_DIR.resolve() / "uploads":
+            raise HTTPException(status_code=403, detail="Upload directory is not permitted")
+        suffix = Path(filename).suffix.lower()
+        suffix = suffix if re.fullmatch(r"\.[a-z0-9]{1,16}", suffix) else ""
+        file_path = upload_root / f"{uuid.uuid4().hex}{suffix}"
+        fd = os.open(file_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as f:
             content = await file.read()
             f.write(content)
 
         # Process with Stage 1
         stage1_result = stage1.process_file(str(file_path))
+        stage1_result["original_name"] = filename
 
         # Process with Stage 2 (using smart routing)
         stage2_result = stage2.process_metadata(stage1_result)
@@ -202,6 +269,8 @@ async def upload_file(file: UploadFile = File(...)):
             "metadata": stage2_result
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         await manager.broadcast(json.dumps({
             "event": "file_error",
@@ -214,12 +283,15 @@ async def upload_file(file: UploadFile = File(...)):
 async def process_directory(directory_path: str):
     """Process all files in a directory"""
     try:
-        path = Path(directory_path)
-        if not path.exists():
+        path = contained_path(directory_path, BASE_DIR)
+        if not path.is_dir():
             raise HTTPException(status_code=404, detail="Directory not found")
 
-        # Use batch processor
-        processor = BatchProcessor(directory_path, use_smart_routing=True)
+        # BatchProcessor visits immediate children and follows file symlinks.
+        # Reject escapes before scheduling any processing/provider work.
+        for child in path.iterdir():
+            contained_path(child, BASE_DIR)
+        processor = BatchProcessor(str(path), use_smart_routing=True)
 
         # Run processing in background
         asyncio.create_task(run_batch_processing(processor))
@@ -229,6 +301,8 @@ async def process_directory(directory_path: str):
             "directory": directory_path
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -258,6 +332,9 @@ async def run_batch_processing(processor):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates"""
+    if not authenticated(websocket.headers):
+        await websocket.close(code=1008)
+        return
     await manager.connect(websocket)
     try:
         while True:
@@ -272,15 +349,17 @@ async def get_file_metadata(file_hash: str):
     """Get detailed metadata for a specific file"""
     try:
         # Search for the file by hash - correct path structure
-        stage2_dir = METADATA_DIR / "stage1" / "stage2" / "2025-08"
+        stage2_file = metadata_path(file_hash)
+        stage2_dir = stage2_directory()
         if stage2_dir.exists():
-            stage2_file = stage2_dir / f"{file_hash}.stage2.json"
             if stage2_file.exists():
-                with open(stage2_file) as f:
+                with open(contained_path(stage2_file, INDEX_DIR)) as f:
                     return json.load(f)
 
         raise HTTPException(status_code=404, detail="File metadata not found")
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -289,18 +368,22 @@ async def download_file(file_hash: str):
     """Download original file"""
     try:
         # Find file metadata - correct path structure
-        stage2_dir = METADATA_DIR / "stage1" / "stage2" / "2025-08"
+        stage2_file = metadata_path(file_hash)
+        stage2_dir = stage2_directory()
         if stage2_dir.exists():
-            stage2_file = stage2_dir / f"{file_hash}.stage2.json"
             if stage2_file.exists():
-                with open(stage2_file) as f:
+                with open(contained_path(stage2_file, INDEX_DIR)) as f:
                     data = json.load(f)
                     file_path = data.get("file_path")
-                    if file_path and Path(file_path).exists():
-                        return FileResponse(file_path)
+                    if file_path:
+                        safe_path = contained_path(file_path, BASE_DIR)
+                        if safe_path.is_file():
+                            return FileResponse(safe_path)
 
         raise HTTPException(status_code=404, detail="File not found")
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -309,8 +392,8 @@ async def clear_metadata():
     """Clear all metadata (use with caution)"""
     try:
         # Remove all metadata directories
-        stage1_dir = METADATA_DIR / "stage1" / "2025-08"
-        stage2_dir = METADATA_DIR / "stage1" / "stage2" / "2025-08"
+        stage1_dir = contained_path(METADATA_DIR / "stage1" / "2025-08", INDEX_DIR)
+        stage2_dir = stage2_directory()
         if stage1_dir.exists():
             shutil.rmtree(stage1_dir)
         if stage2_dir.exists():
@@ -318,6 +401,8 @@ async def clear_metadata():
 
         return {"message": "Metadata cleared successfully"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,10 +412,10 @@ async def get_categories():
     try:
         categories = {}
 
-        stage2_dir = METADATA_DIR / "stage1" / "stage2" / "2025-08"
+        stage2_dir = stage2_directory()
         if stage2_dir.exists():
             for stage2_file in stage2_dir.glob("*.stage2.json"):
-                with open(stage2_file) as f:
+                with open(contained_path(stage2_file, INDEX_DIR)) as f:
                     data = json.load(f)
                     category = data.get("llm_enhanced", {}).get("category")
                     subcategory = data.get("llm_enhanced", {}).get("subcategory")
@@ -345,6 +430,8 @@ async def get_categories():
         result = {k: list(v) for k, v in categories.items()}
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -352,4 +439,4 @@ if __name__ == "__main__":
     import uvicorn
     print("Starting RUDI API Server on http://localhost:8000")
     print("Frontend should connect to this server for all operations")
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

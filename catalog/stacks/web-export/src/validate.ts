@@ -1,3 +1,4 @@
+import { assertRenderBudget } from "./render-budget.js";
 import { accessSync, constants, existsSync, mkdirSync, statSync } from "fs";
 import { basename, dirname, extname, isAbsolute, join, resolve } from "path";
 import { homedir } from "os";
@@ -126,6 +127,13 @@ function parseBrowserEndpoint(value: unknown): string | undefined {
     );
   }
 
+  if (endpoint !== process.env.RUDI_WEB_EXPORT_BROWSER_ENDPOINT) {
+    throw new ValidationError("UNAPPROVED_BROWSER_ENDPOINT", "browser_ws_endpoint must match the operator-approved RUDI_WEB_EXPORT_BROWSER_ENDPOINT.");
+  }
+  const approved = new URL(endpoint);
+  if (approved.username || approved.password) {
+    throw new ValidationError("INVALID_BROWSER_ENDPOINT", "Browser endpoint must not contain URL credentials.");
+  }
   return endpoint;
 }
 
@@ -203,6 +211,7 @@ function parsePageSize(value: unknown): PageSize {
       Number.isFinite(height) &&
       height > 0
     ) {
+      assertRenderBudget([{ width, height }]);
       return {
         width,
         height,
@@ -248,6 +257,8 @@ export function validateExportRequest(
   }
 
   return {
+    deadlineAt: Date.now() + 60_000,
+    outputBytes: 0,
     format,
     inputPath,
     inputStem,

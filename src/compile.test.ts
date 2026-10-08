@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -289,6 +290,15 @@ describe("platform indexes", () => {
 // =============================================================================
 
 describe("catalog hash", () => {
+  it("binds every npm-distributed catalog payload to the hash tree", async () => {
+    const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { maxBuffer: 20 * 1024 * 1024 });
+    const [packed] = JSON.parse(stdout);
+    const hash = await readJson("dist/catalog.sha256.json") as { files: Record<string, string> };
+    const catalogFiles = packed.files.map((file: { path: string }) => file.path).filter((file: string) => file.startsWith("catalog/"));
+    expect(catalogFiles.length).toBeGreaterThan(0);
+    expect(catalogFiles.filter((file: string) => !Object.hasOwn(hash.files, file))).toEqual([]);
+  });
+
   it("should generate catalog hash file", async () => {
     await expect(fs.access("dist/catalog.sha256.json")).resolves.toBeUndefined();
   });
@@ -420,6 +430,29 @@ describe("release manifest", () => {
       expect(release.provenance.artifacts[file]).toBe(
         await hashFile(path.join("dist", file))
       );
+    }
+  });
+});
+
+
+describe("compiler policy failures", () => {
+  it("rejects an invalid target platform before writing any indexes", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "registry-policy-"));
+    try {
+      await fs.mkdir(path.join(root, "catalog/binaries"), { recursive: true });
+      await fs.writeFile(path.join(root, "catalog/binaries/demo.json"), JSON.stringify({
+        id: "binary:demo", kind: "binary", name: "Demo", version: "1.0.0", delivery: "managed",
+        install: { source: "download", platforms: {
+          "darwin-arm64": { url: "https://example.com/demo", checksum: "sha256:" + "a".repeat(64) },
+          "win32-x64": { url: "https://example.com/demo" },
+        } },
+      }));
+      await expect(execFileAsync(path.resolve("node_modules/.bin/tsx"), [path.resolve("src/compile.ts")], {
+        cwd: root, env: { ...process.env, SOURCE_REVISION: "a".repeat(40), SOURCE_DATE_EPOCH: "0" },
+      })).rejects.toThrow(/win32-x64[\s\S]*checksum/);
+      await expect(fs.access(path.join(root, "dist/index.json"))).rejects.toThrow();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
     }
   });
 });

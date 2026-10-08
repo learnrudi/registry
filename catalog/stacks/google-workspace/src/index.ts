@@ -4,6 +4,7 @@
  * Gmail, Sheets, Docs, Drive, Calendar
  */
 
+import { listStoredGoogleAccounts, readStoredGoogleToken } from "./accountStorage.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -14,7 +15,7 @@ import { google } from "googleapis";
 import { config } from "dotenv";
 import { fileURLToPath } from "url";
 import { basename, dirname, extname, join } from "path";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
 import { execSync } from "child_process";
 import { tmpdir } from "os";
 import { homedir } from "os";
@@ -107,7 +108,7 @@ type EmailAttachment = {
 function loadCurrentAccount(): string | null {
   try {
     const state = readJsonFile<AccountState>(STATE_FILE);
-    if (state?.currentAccount && existsSync(join(ACCOUNTS_DIR, state.currentAccount, "token.json"))) {
+    if (state?.currentAccount && listStoredGoogleAccounts(ACCOUNTS_DIR).includes(state.currentAccount)) {
       return state.currentAccount;
     }
   } catch {
@@ -124,21 +125,12 @@ function saveCurrentAccount(account: string | null) {
 let currentAccount: string | null = loadCurrentAccount();
 
 function getAvailableAccounts(): string[] {
-  if (!existsSync(ACCOUNTS_DIR)) return [];
-  return readdirSync(ACCOUNTS_DIR).filter((name: string) => {
-    const tokenPath = join(ACCOUNTS_DIR, name, "token.json");
-    return existsSync(tokenPath);
-  });
+  return listStoredGoogleAccounts(ACCOUNTS_DIR);
 }
 
 function loadToken(account?: string) {
-  let tokenPath = TOKEN_FILE;
-  if (account) {
-    tokenPath = join(ACCOUNTS_DIR, account, "token.json");
-  } else if (currentAccount) {
-    tokenPath = join(ACCOUNTS_DIR, currentAccount, "token.json");
-  }
-  return readJsonFile<TokenData>(tokenPath);
+  const selected = account || currentAccount;
+  return selected ? readStoredGoogleToken<TokenData>(ACCOUNTS_DIR, selected) : readJsonFile<TokenData>(TOKEN_FILE);
 }
 
 function getAuth(account?: string | null) {

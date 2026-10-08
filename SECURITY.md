@@ -21,11 +21,26 @@ The registry must never contain API keys, tokens, or credentials. All secrets ar
 
 Packages in the official registry are reviewed before inclusion. Third-party packages should be reviewed by users before installation.
 
-Changed official stacks must also pass their repository-owned offline
-verification contract. The runner invokes argv without a shell, removes parent
-tokens and provider secrets from the child environment, isolates user state,
-and refuses unlocked Node dependency preparation. Hosted bridges are checked
-statically and must not contact their provider during verification.
+Changed official stacks must pass their repository-owned verification contract.
+The runner uses macOS `sandbox-exec` or Linux `bubblewrap`, and fails closed on
+unsupported platforms or missing sandbox tools. Verification and package-owned
+preparation hooks cannot reach the network. The repository and runtime files
+are readable; only the selected stack and temporary session home are writable.
+Other user files are not exposed. Canonical stack/layout directories cannot be
+symlinks, and macOS process-information access is restricted to the same sandbox.
+The same restrictions apply to descendants.
+The runner also strips tokens/provider secrets, invokes fixed argv, and refuses
+unlocked Node dependency preparation.
+
+Dependency installation is a separate network-enabled phase (`npm ci
+--ignore-scripts`, locked Playwright Chromium provisioning, or Python requirements
+installation), with the same filesystem
+limits and fresh home. Treat dependency preparation as executing untrusted code;
+Python build backends can execute during installation. Do not place secrets in
+the checkout or runtime installation. The sandbox is a host-file and network
+boundary, not a VM or a defense against kernel vulnerabilities. Linux runners
+must support unprivileged user namespaces and have `bubblewrap` installed.
+Standalone package scripts run directly outside this runner are not sandboxed.
 
 Generated release metadata binds every index and the catalog hash tree to an
 exact SHA-256 value plus source revision context. `npm run release:verify`
@@ -80,3 +95,10 @@ This security policy covers:
 - The index.json package manifest
 
 Third-party stacks linked from external sources have their own security policies.
+
+Native Chromium verification currently fails closed under the macOS runner:
+Chromium attempts to apply an inner sandbox that macOS disallows inside the
+outer sandbox. Browser provisioning can succeed, but it does not establish
+rendering compatibility. Run those verification contracts in a separately
+validated Linux sandbox or VM; do not disable Chromium's sandbox or bypass the
+registry runner. Linux browser compatibility still requires an integration run.

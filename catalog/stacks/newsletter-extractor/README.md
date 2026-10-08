@@ -44,3 +44,16 @@ npx tsx src/index.ts --mcp
 - `google-workspace` owns Gmail OAuth, Gmail search, and Gmail message fetches.
 - Applications such as Content Engine own persistence, enrichment, queueing,
   and user-facing workflows.
+
+## RSS network limits
+
+Feed requests are restricted to public HTTP(S) destinations without URL
+credentials. Every DNS answer is checked and the selected address is pinned at
+connect; each redirect repeats validation (maximum five redirects). The total
+DNS/request/body timeout uses the bounded `timeout_ms` value (1–60 seconds).
+Responses are capped at 5 MiB while streaming, regardless of Content-Length.
+Compressed responses are rejected after requesting identity encoding. Local and
+private-network feeds are intentionally unsupported. Parsing email HTML/text and
+normalizing links does not fetch those links.
+
+Run `npm test` for isolated network-boundary tests; provider requests are mocked.

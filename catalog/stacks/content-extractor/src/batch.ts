@@ -1,16 +1,13 @@
-import { execFile } from "child_process";
 import { createHash } from "crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
-import { delimiter, dirname, join } from "path";
-import { promisify } from "util";
+import { dirname, join } from "path";
 
 import { hostnameMatches, parseHttpUrl } from "./url-policy.js";
 import { extractReddit, formatRedditResult } from "./reddit.js";
 import { extractGitHub, formatGitHubResult } from "./github.js";
 import { extractArticle, extractTikTok, extractYouTube, formatArticleResult, formatTikTokResult, formatYouTubeResult } from "./index.js";
 
-const execFileAsync = promisify(execFile);
 const DEFAULT_OUTPUT_DIR = join(homedir(), ".rudi", "outputs");
 
 function ensureOutputDir(outputPath = DEFAULT_OUTPUT_DIR): void { const dir = outputPath.includes(".") ? dirname(outputPath) : outputPath; if (!existsSync(dir)) mkdirSync(dir, { recursive: true }); }
@@ -405,194 +402,6 @@ function classifyBatchError(message: string): BatchStatus {
   return "error";
 }
 
-function isExecutableCandidate(path: string | undefined): path is string {
-  if (!path) return false;
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-}
-
-function findExecutableOnPath(name: string): string | undefined {
-  const pathEntries = (process.env.PATH || "").split(delimiter).filter(Boolean);
-  for (const entry of pathEntries) {
-    const candidate = join(entry, name);
-    if (isExecutableCandidate(candidate)) return candidate;
-  }
-  return undefined;
-}
-
-function resolvePlaywrightBinary(): string | undefined {
-  const envCandidates = [process.env.RUDI_PLAYWRIGHT_BIN, process.env.PLAYWRIGHT_BIN]
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
-    .filter(Boolean);
-
-  for (const candidate of envCandidates) {
-    if (isExecutableCandidate(candidate)) return candidate;
-  }
-
-  const rudiManagedBinary = join(homedir(), ".rudi", "bins", "playwright");
-  if (isExecutableCandidate(rudiManagedBinary)) return rudiManagedBinary;
-
-  return findExecutableOnPath("playwright");
-}
-
-function resolveTesseractBinary(): string | undefined {
-  const envCandidates = [process.env.RUDI_TESSERACT_BIN, process.env.TESSERACT_BIN]
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
-    .filter(Boolean);
-
-  for (const candidate of envCandidates) {
-    if (isExecutableCandidate(candidate)) return candidate;
-  }
-
-  const rudiManagedBinary = join(homedir(), ".rudi", "bins", "tesseract");
-  if (isExecutableCandidate(rudiManagedBinary)) return rudiManagedBinary;
-
-  return findExecutableOnPath("tesseract");
-}
-
-function processExecutionErrorMessage(error: any): string {
-  const message = batchErrorMessage(error);
-  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
-  if (!stderr) return message;
-  return `${message}: ${stderr.slice(0, 500)}`;
-}
-
-function normalizeBrowserCaptureText(value: string): string {
-  return value
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+/g, " ").trim())
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-}
-
-function browserCaptureTextSample(value: string): string {
-  const sample = value.replace(/\s+/g, " ").trim();
-  return sample.length > 500 ? `${sample.slice(0, 500)}...` : sample;
-}
-
-function classifyBrowserCaptureText(text: string): BrowserCaptureClassification {
-  const normalized = text.toLowerCase();
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
-
-  if (!text.trim()) return "empty";
-  if (/404|page not found|not found/i.test(text) && wordCount < 120) return "not_found";
-  if (
-    /not a robot|not a bot|malicious bots|security verification|verifying\.\.\.|unusual activity|access is temporarily restricted|automated \(bot\) activity|suspect that you're a robot|blocked from the new york times|press\s*&\s*hold to confirm you are a human|enable javascript and cookies|captcha|cloudflare/i.test(normalized)
-  ) {
-    return "blocked";
-  }
-  if (/sign in|log in|login|create account|register/i.test(text) && wordCount < 80) return "blocked";
-  if (wordCount >= 40) return "content";
-  return "unclassified";
-}
-
-function browserCaptureStatusForClassification(classification: BrowserCaptureClassification): BatchStatus {
-  if (classification === "content") return "browser_captured";
-  if (classification === "blocked") return "browser_blocked";
-  if (classification === "empty") return "browser_empty";
-  if (classification === "not_found") return "browser_not_found";
-  return "browser_unclassified";
-}
-
-async function classifyBrowserScreenshot(screenshotPath: string, timeoutMs: number): Promise<Pick<BrowserFallbackResult, "classification" | "classifier" | "classifierError" | "textPath" | "textSample" | "textWordCount">> {
-  const binary = resolveTesseractBinary();
-  if (!binary) {
-    return {
-      classification: "unclassified",
-      classifier: "tesseract_unavailable",
-      textWordCount: 0,
-    };
-  }
-
-  try {
-    const { stdout } = await execFileAsync(binary, [
-      screenshotPath,
-      "stdout",
-      "-l",
-      "eng",
-      "--psm",
-      "11",
-    ], {
-      timeout: Math.min(Math.max(timeoutMs, 5_000), 30_000),
-      maxBuffer: 1024 * 1024,
-    });
-    const text = normalizeBrowserCaptureText(stdout || "");
-    const textPath = join(dirname(screenshotPath), "browser_text.txt");
-    writeFileSync(textPath, text ? `${text}\n` : "", "utf8");
-    return {
-      classification: classifyBrowserCaptureText(text),
-      classifier: "tesseract",
-      textPath,
-      textSample: browserCaptureTextSample(text),
-      textWordCount: text.split(/\s+/).filter(Boolean).length,
-    };
-  } catch (error: any) {
-    return {
-      classification: "unclassified",
-      classifier: "tesseract_failed",
-      classifierError: processExecutionErrorMessage(error),
-      textWordCount: 0,
-    };
-  }
-}
-
-async function captureBrowserScreenshot(url: string, screenshotPath: string, timeoutMs: number): Promise<BrowserFallbackResult> {
-  let browserUrl: string;
-  try {
-    browserUrl = parseHttpUrl(url, "browser fallback url").toString();
-  } catch (error: any) {
-    return {
-      status: "failed",
-      error: error.message,
-    };
-  }
-
-  const binary = resolvePlaywrightBinary();
-  if (!binary) {
-    return {
-      status: "unavailable",
-      error: "Playwright binary not found. Install or expose the RUDI-managed playwright binary.",
-    };
-  }
-
-  ensureOutputDir(screenshotPath);
-
-  try {
-    await execFileAsync(binary, [
-      "screenshot",
-      "--browser",
-      "chromium",
-      "--full-page",
-      "--timeout",
-      String(timeoutMs),
-      browserUrl,
-      screenshotPath,
-    ], {
-      timeout: timeoutMs + 5_000,
-      maxBuffer: 1024 * 1024,
-    });
-
-    const classification = await classifyBrowserScreenshot(screenshotPath, timeoutMs);
-    return {
-      status: "captured",
-      binary,
-      screenshotPath,
-      ...classification,
-    };
-  } catch (error: any) {
-    return {
-      status: "failed",
-      binary,
-      error: processExecutionErrorMessage(error),
-    };
-  }
-}
-
 function shouldRunBrowserFallback(result: BatchExtractionResult, options: BrowserFallbackOptions): boolean {
   return options.enabled && options.statuses.has(result.status);
 }
@@ -631,34 +440,15 @@ async function writeBatchArtifactFiles(outputDir: string, rows: NormalizedBatchR
 
     let withArtifacts: BatchExtractionResult = { ...result, artifactDir, sourcePath };
     if (shouldRunBrowserFallback(withArtifacts, browserFallback)) {
-      const originalStatus = withArtifacts.status;
-      const screenshotPath = join(artifactDir, "page.png");
-      const fallback = await captureBrowserScreenshot(withArtifacts.url, screenshotPath, browserFallback.timeoutMs);
-
-      if (fallback.status === "captured") {
-        const browserStatus = browserCaptureStatusForClassification(fallback.classification || "unclassified");
-        withArtifacts = {
-          ...withArtifacts,
-          status: browserStatus,
-          originalStatus,
-          screenshotPath: fallback.screenshotPath,
-          browserFallback: fallback,
-        };
-      } else if (fallback.status === "unavailable") {
-        withArtifacts = {
-          ...withArtifacts,
-          status: "browser_unavailable",
-          originalStatus,
-          browserFallback: fallback,
-        };
-      } else {
-        withArtifacts = {
-          ...withArtifacts,
-          status: "browser_failed",
-          originalStatus,
-          browserFallback: fallback,
-        };
-      }
+      // A standalone browser can follow redirects and load private subresources.
+      // Preserve the extraction failure until an isolated egress transport exists.
+      withArtifacts = {
+        ...withArtifacts,
+        browserFallback: {
+          status: "unavailable",
+          error: "Browser fallback is disabled until browser network egress is guarded",
+        },
+      };
     }
 
     if (result.content) {

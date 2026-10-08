@@ -4,6 +4,8 @@
  * Screenshots HTML documents and inspects the rendered pages with Claude Vision.
  */
 
+import { prepareDocumentContext } from "./document-context.js";
+import { approvedDocumentPath } from "./document-policy.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -167,17 +169,23 @@ function parseInspectionJson(text: string): {
 }
 
 export async function screenshotHtmlPages(htmlPath: string, outputDir: string): Promise<string[]> {
-  const resolvedHtmlPath = resolve(htmlPath);
+  const resolvedHtmlPath = approvedDocumentPath(htmlPath);
   if (!existsSync(resolvedHtmlPath)) {
     throw new Error(`HTML file not found: ${resolvedHtmlPath}`);
   }
 
   mkdirSync(outputDir, { recursive: true });
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, chromiumSandbox: true,
+    args: ["--disable-background-networking", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
+  });
+  const deadline = setTimeout(() => { void browser.close().catch(() => {}); }, 60_000);
   try {
-    const page = await browser.newPage();
-    await page.goto(`file://${resolvedHtmlPath}`, { waitUntil: "networkidle" });
+    const context = await browser.newContext({ serviceWorkers: "block", acceptDownloads: false });
+    context.setDefaultTimeout(15_000);
+    const documentUrl = await prepareDocumentContext(context, resolvedHtmlPath);
+    const page = await context.newPage();
+    await page.goto(documentUrl, { waitUntil: "networkidle" });
 
     const artboards = await page.$$(".artboard");
     const screenshots: string[] = [];
@@ -197,6 +205,7 @@ export async function screenshotHtmlPages(htmlPath: string, outputDir: string): 
     await page.screenshot({ path: screenshotPath, fullPage: true });
     return [screenshotPath];
   } finally {
+    clearTimeout(deadline);
     await browser.close();
   }
 }
@@ -366,7 +375,9 @@ async function main(): Promise<void> {
   await createServer().connect(transport);
 }
 
-main().catch((error) => {
-  console.error("Fatal error:", error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === __filename) {
+  main().catch((error) => {
+    console.error("Fatal error:", error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
