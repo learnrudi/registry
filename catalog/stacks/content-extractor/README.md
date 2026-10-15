@@ -84,14 +84,29 @@ npx tsx src/index.ts --mcp
   `content.md` when content exists, and `error.json` when extraction fails.
   Blocked/rate-limited fetches are classified as `blocked`, `rate_limited`, or
   `fetch_failed` instead of being collapsed into generic `error`.
-- Batch extraction can opt into Playwright browser screenshot fallback with
-  `browser_fallback: true`. For selected failure statuses, the stack writes
-  `links/<item-id>/page.png` and records `originalStatus`, `browserFallback`,
-  and `screenshot_path` in artifacts and reports. If Tesseract is available, the
-  stack writes `links/<item-id>/browser_text.txt` and classifies the capture:
-  `browser_captured` for content-bearing screenshots, `browser_blocked` for
-  bot/security/login walls, `browser_empty` for screenshots with no readable
-  text, `browser_not_found` for visible not-found pages, or
-  `browser_unclassified` when classification is unavailable or inconclusive.
-  This captures what a browser saw; it does not bypass bot protections.
+- Playwright browser screenshot fallback is disabled until browser egress is
+  guarded. Existing `browser_fallback` arguments remain accepted for compatibility;
+  failed rows retain their original extraction status and record
+  `browserFallback.status: "unavailable"` with the security reason. No browser is
+  launched and no screenshot is produced.
 - URL arguments are validated as HTTP(S) URLs before network requests.
+
+## Public network boundary
+
+Generic article/link requests, public YouTube/TikTok page/caption fetches and raw
+GitHub text downloads accept only public HTTP(S) destinations without URL
+credentials. All DNS answers must be public; the selected address is pinned at
+connect while retaining hostname certificate validation. Every redirect is vetted
+again (maximum five). Responses have a 5 MiB streamed-byte cap and a 15-second total
+DNS/request/body timeout. Compressed responses are rejected after requesting
+identity encoding. Missing or dishonest Content-Length cannot bypass the cap.
+
+GitHub bearer credentials are attached only to the exact `https://api.github.com`
+origin, with redirects refused; raw GitHub/gist origins receive no API bearer.
+This changes private raw-content access: use a dedicated authenticated GitHub tool
+when raw files require credentials.
+
+The public transport guarantee does not cover the separate `youtube-transcript`
+library, fixed-origin authenticated provider API implementations, or manually run
+browser-provider diagnostic scripts. The production batch browser fallback is
+disabled because a generic browser can request private redirects/subresources.

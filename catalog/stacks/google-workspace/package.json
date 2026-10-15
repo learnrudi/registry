@@ -17,7 +17,8 @@
     "dev": "tsx src/index.ts",
     "auth": "tsx src/auth.ts",
     "verify": "npm run build && node ../../../scripts/verify-node-stack.mjs",
-    "test:gmail-signature": "node --import tsx --test gmail-signature.test.cjs gmail-signature-tools.test.cjs"
+    "test:gmail-signature": "node --import tsx --test gmail-signature.test.cjs gmail-signature-tools.test.cjs",
+    "test:account-boundary": "node --import tsx --test account-boundary.test.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

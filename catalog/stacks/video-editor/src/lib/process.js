@@ -6,26 +6,47 @@ export function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
+      shell: false,
       stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit'
     });
 
     let stdout = '';
     let stderr = '';
+    let capturedBytes = 0;
+    let limitError;
+    const deadline = options.timeoutMs === undefined ? undefined : setTimeout(() => {
+      limitError = new Error(`${command} timed out`);
+      child.kill('SIGKILL');
+    }, options.timeoutMs);
+    const append = (chunk, stream) => {
+      if (limitError) return;
+      capturedBytes += chunk.length;
+      if (options.maxBuffer !== undefined && capturedBytes > options.maxBuffer) {
+        limitError = new Error(`${command} exceeded output limit`);
+        child.kill('SIGKILL');
+        return;
+      }
+      if (stream === 'stdout') stdout += chunk.toString();
+      else stderr += chunk.toString();
+    };
 
     if (capture) {
       child.stdout.on('data', (chunk) => {
-        stdout += chunk.toString();
+        append(chunk, 'stdout');
       });
       child.stderr.on('data', (chunk) => {
-        stderr += chunk.toString();
+        append(chunk, 'stderr');
       });
     }
 
     child.on('error', (error) => {
+      clearTimeout(deadline);
       reject(new Error(`${command} failed to start: ${error.message}`));
     });
 
     child.on('close', (code) => {
+      clearTimeout(deadline);
+      if (limitError) { reject(limitError); return; }
       if (code === 0) {
         resolve({ stdout, stderr });
         return;

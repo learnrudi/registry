@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process";
-import { mkdtempSync, readFileSync, renameSync, rmSync } from "fs";
+import { mkdtempSync, readFileSync, renameSync, rmSync, statSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -10,6 +10,8 @@ import type {
   ValidatedExportRequest,
 } from "./types.js";
 import { createWarning } from "./types.js";
+import { RenderError } from './types.js';
+import { consumeOutputBudget, remainingRenderMs } from './render-budget.js';
 
 const ANALYSIS_DPI = 36;
 const NON_WHITE_THRESHOLD = 245;
@@ -27,17 +29,24 @@ export interface PdfReviewResult {
   warnings: DiagnosticWarning[];
 }
 
-function runRasterizer(args: string[]): { ok: boolean; missing: boolean; stderr: string } {
-  const result = spawnSync(RASTERIZER_COMMAND, args, { encoding: "utf8" });
+function runRasterizer(args: string[], request?: ValidatedExportRequest): { ok: boolean; missing: boolean; stderr: string } {
+  const result = spawnSync(RASTERIZER_COMMAND, args, {
+    encoding: 'utf8', timeout: remainingRenderMs(request), killSignal: 'SIGKILL', maxBuffer: 1024 * 1024,
+  });
 
   if (result.error) {
     const error = result.error as NodeJS.ErrnoException;
+    if (error.code === 'ETIMEDOUT' || error.code === 'ENOBUFS') {
+      throw new RenderError('RENDER_BUDGET_EXCEEDED', 'Rasterizer exceeded its time budget deadline or diagnostic output budget.');
+    }
     if (error.code === "ENOENT") {
       return { ok: false, missing: true, stderr: `${RASTERIZER_COMMAND} is not installed.` };
     }
 
     return { ok: false, missing: false, stderr: error.message };
   }
+
+  remainingRenderMs(request);
 
   if (result.status !== 0) {
     return {
@@ -50,8 +59,8 @@ function runRasterizer(args: string[]): { ok: boolean; missing: boolean; stderr:
   return { ok: true, missing: false, stderr: "" };
 }
 
-export function isPdfRasterizerAvailable(): boolean {
-  const result = runRasterizer(["-v"]);
+export function isPdfRasterizerAvailable(request?: ValidatedExportRequest): boolean {
+  const result = runRasterizer(["-v"], request);
   return result.ok;
 }
 
@@ -156,7 +165,7 @@ export async function generatePdfPreviewsAndReview(
   const warnings: DiagnosticWarning[] = [];
   const pageAnalyses: PageVisualAnalysis[] = [];
 
-  const available = isPdfRasterizerAvailable();
+  const available = isPdfRasterizerAvailable(request);
   if (!available) {
     if (persistPreviews) {
       warnings.push(
@@ -186,7 +195,7 @@ export async function generatePdfPreviewsAndReview(
         "-singlefile",
         artifactPath,
         analysisPrefix,
-      ]);
+      ], request);
 
       if (!analysisRun.ok) {
         warnings.push(
@@ -200,13 +209,19 @@ export async function generatePdfPreviewsAndReview(
         break;
       }
 
-      const analysisBuffer = readFileSync(`${analysisPrefix}.pgm`);
+      const analysisPath = `${analysisPrefix}.pgm`;
+      consumeOutputBudget(request, statSync(analysisPath).size);
+      const analysisBuffer = readFileSync(analysisPath);
+      rmSync(analysisPath);
       pageAnalyses.push(analyzePgmBuffer(analysisBuffer, pageNumber));
+      remainingRenderMs(request);
 
       if (persistPreviews) {
         const previewPrefix = join(tempDirectory, `preview-${pageNumber}`);
         const previewRun = runRasterizer([
           "-png",
+          "-r",
+          String(request.dpi),
           "-f",
           String(pageNumber),
           "-l",
@@ -214,7 +229,7 @@ export async function generatePdfPreviewsAndReview(
           "-singlefile",
           artifactPath,
           previewPrefix,
-        ]);
+        ], request);
 
         if (!previewRun.ok) {
           warnings.push(
@@ -225,6 +240,7 @@ export async function generatePdfPreviewsAndReview(
           return { previewPaths: [], pageAnalyses, warnings };
         }
 
+        consumeOutputBudget(request, statSync(`${previewPrefix}.png`).size);
         renameSync(`${previewPrefix}.png`, previewPaths[pageNumber - 1]);
       }
     }

@@ -28,7 +28,7 @@
     "catalog/agents/**/*.json",
     "catalog/binaries/**/*.json",
     "catalog/runtimes/**/*.json",
-    "catalog/stacks/**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,py,txt}",
+    "catalog/stacks/**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,py,txt,html}",
     "catalog/stacks/**/*.sql",
     "!catalog/stacks/**/node_modules/**",
     "!catalog/stacks/**/runs/**",

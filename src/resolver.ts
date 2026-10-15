@@ -493,11 +493,18 @@ export type AliasMap = Map<string, string>;
  * Maps alias IDs to their canonical package IDs
  */
 export function buildAliasMap(packages: Package[]): AliasMap {
-  const map = new AliasMap();
+  const map: AliasMap = new Map();
+  const canonicalIds = new Set(packages.map(pkg => pkg.id));
 
   for (const pkg of packages) {
     if (pkg.aliases) {
       for (const alias of pkg.aliases) {
+        if (canonicalIds.has(alias)) {
+          throw new PolicyError(pkg.id, `alias ${alias} collides with a canonical package ID`);
+        }
+        if (map.has(alias)) {
+          throw new PolicyError(pkg.id, `alias ${alias} is already declared by ${map.get(alias)}`);
+        }
         map.set(alias, pkg.id);
       }
     }

@@ -1,8 +1,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import net from "node:net";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildVerificationEnvironment,
@@ -210,6 +214,27 @@ describe("runStackVerifications", () => {
     expect(results).toEqual([
       expect.objectContaining({ packageId: "stack:demo", status: "passed" }),
     ]);
+  });
+
+  it("provisions locked Playwright Chromium before offline package hooks", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/browser");
+    await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:browser", kind: "stack", runtime: "node" });
+    await writeJson(path.join(stackDir, "package.json"), {
+      dependencies: { playwright: "1.58.0" },
+      scripts: { "verify:prepare": "npm run install-browser", verify: "npm test" },
+    });
+    await writeJson(path.join(stackDir, "package-lock.json"), { lockfileVersion: 3 });
+    const observed: Array<{ source: string; executable: string; args: string[] }> = [];
+    const [result] = await runStackVerifications(tmpDir, ["stack:browser"], {
+      prepare: true, execute: async command => { observed.push(command); },
+    });
+    expect(result.status).toBe("passed");
+    expect(observed.map(command => command.source)).toEqual([
+      "package-lock.json", "playwright-chromium", "package.json#scripts.verify:prepare", "package.json#scripts.verify",
+    ]);
+    expect(observed[1]).toMatchObject({
+      executable: "node", args: [path.join(stackDir, "node_modules/playwright/cli.js"), "install", "chromium"],
+    });
   });
 
   it("prepares locked Node dependencies before running the contract", async () => {
@@ -442,5 +467,153 @@ describe("runStackVerifications", () => {
       expect.objectContaining({ status: "passed" }),
     ]);
     expect(observed).toHaveLength(2);
+  });
+});
+
+
+describe("verification containment", () => {
+  it("returns a failed result when the OS refuses process-group cleanup", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/cleanup-error");
+    await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:cleanup-error", kind: "stack", runtime: "python" });
+    await writeText(path.join(stackDir, "verify.py"), "raise SystemExit(0)\n");
+    const originalKill = process.kill.bind(process);
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (pid < 0 && signal === "SIGKILL") throw Object.assign(new Error("synthetic kill EPERM"), { code: "EPERM" });
+      return originalKill(pid, signal);
+    });
+    try {
+      const [result] = await runStackVerifications(tmpDir, ["stack:cleanup-error"], { timeoutMs: 100 });
+      expect(result).toMatchObject({ status: "failed", error: expect.stringMatching(/cleanup.*EPERM/) });
+    } finally {
+      kill.mockRestore();
+    }
+  });
+
+  it("preserves CPU model detection used by browser dependency provisioning", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/cpu-probe");
+    await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:cpu-probe", kind: "stack", runtime: "node" });
+    await writeJson(path.join(stackDir, "package.json"), { scripts: { verify: "node verify.cjs" } });
+    await writeText(path.join(stackDir, "verify.cjs"), `require('node:assert/strict').equal(require('node:os').cpus()[0]?.model, ${JSON.stringify(os.cpus()[0].model)});`);
+    const [result] = await runStackVerifications(tmpDir, ["stack:cpu-probe"]);
+    expect(result, result.error).toMatchObject({ status: "passed" });
+  });
+
+  it.runIf(process.platform === "darwin")("denies reading a synthetic parent's environment through sysctl", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/sysctl-probe");
+    await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:sysctl-probe", kind: "stack", runtime: "python" });
+    await writeText(path.join(stackDir, "verify.py"), [
+      "import ctypes, errno, pathlib",
+      "pid = int(pathlib.Path('parent-pid.txt').read_text())",
+      "libc = ctypes.CDLL(None, use_errno=True)",
+      "mib = (ctypes.c_int * 3)(1, 49, pid)",
+      "size = ctypes.c_size_t(1024 * 1024)",
+      "buffer = ctypes.create_string_buffer(size.value)",
+      "result = libc.sysctl(mib, 3, buffer, ctypes.byref(size), None, 0)",
+      "assert result == -1 and ctypes.get_errno() in (errno.EPERM, errno.EACCES), f'parent process arguments result={result}, errno={ctypes.get_errno()}'",
+    ].join("\n"));
+    const parentScript = path.join(tmpDir, "synthetic-parent.mjs");
+    await writeText(parentScript, [
+      `import { runStackVerifications } from ${JSON.stringify(pathToFileURL(path.resolve("src/stack-verification.ts")).href)};`,
+      "import fs from 'node:fs/promises';",
+      `await fs.writeFile(${JSON.stringify(path.join(stackDir, "parent-pid.txt"))}, String(process.pid));`,
+      `const [result] = await runStackVerifications(${JSON.stringify(tmpDir)}, ['stack:sysctl-probe']);`,
+      "if (result.status !== 'passed') { console.error(result.error); process.exit(1); }",
+    ].join("\n"));
+    // This disposable parent holds no real credentials; only the synthetic marker.
+    await promisify(execFile)(process.execPath, ["--import", "tsx", parentScript], {
+      cwd: process.cwd(),
+      env: { PATH: process.env.PATH, SYNTHETIC_REVIEW_SECRET: "fake-review-only" },
+    });
+  });
+
+  it.each(["catalog", "stacks"])("rejects a symlinked %s layout before reading metadata", async (segment) => {
+    const alternate = path.join(tmpDir, "alternate");
+    const target = segment === "catalog" ? path.join(alternate, "stacks/alias") : path.join(alternate, "alias");
+    await writeText(path.join(target, "manifest.json"), "invalid JSON must not be read");
+    if (segment === "catalog") {
+      await fs.symlink(alternate, path.join(tmpDir, "catalog"));
+    } else {
+      await fs.mkdir(path.join(tmpDir, "catalog"));
+      await fs.symlink(alternate, path.join(tmpDir, "catalog/stacks"));
+    }
+    const observed: unknown[] = [];
+    const [result] = await runStackVerifications(tmpDir, ["stack:alias"], {
+      prepare: true, execute: async command => { observed.push(command); },
+    });
+    expect(result).toMatchObject({ status: "failed", error: expect.stringMatching(/symlink/i) });
+    expect(observed).toEqual([]);
+  });
+
+  it("rejects a selected-stack symlink before preparation can make the repository writable", async () => {
+    await fs.mkdir(path.join(tmpDir, "catalog/stacks"), { recursive: true });
+    await writeJson(path.join(tmpDir, "manifest.json"), { id: "stack:alias", kind: "stack", runtime: "node" });
+    await writeJson(path.join(tmpDir, "package.json"), { scripts: {
+      "verify:prepare": "node -e \"require('node:fs').writeFileSync('outside-selected-stack.txt', 'unsafe')\"",
+      verify: "node -e \"process.exit(0)\"",
+    } });
+    await fs.symlink(tmpDir, path.join(tmpDir, "catalog/stacks/alias"));
+    const [result] = await runStackVerifications(tmpDir, ["stack:alias"], { prepare: true });
+    expect(result).toMatchObject({ status: "failed", error: expect.stringMatching(/symlink/i) });
+    await expect(fs.access(path.join(tmpDir, "outside-selected-stack.txt"))).rejects.toThrow();
+  });
+
+  it("terminates verification descendants when the deadline expires", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/deadline");
+    await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:deadline", kind: "stack", runtime: "python" });
+    await writeText(path.join(stackDir, "verify.py"), [
+      "import subprocess, sys, time",
+      "subprocess.Popen([sys.executable, '-c', \"import time, pathlib; pathlib.Path('started-marker').write_text('started'); time.sleep(2); pathlib.Path('late-marker').write_text('late')\"])" ,
+      "time.sleep(5)",
+    ].join("\n"));
+    // Allow native sandbox/Python startup under the full suite's CPU load.
+    // An early macOS exec transition can reject signals with EPERM instead.
+    const [result] = await runStackVerifications(tmpDir, ["stack:deadline"], { timeoutMs: 1_000 });
+    expect(result).toMatchObject({ status: "failed", error: "verification timed out after 1000ms" });
+    await expect(fs.readFile(path.join(stackDir, "started-marker"), "utf8")).resolves.toBe("started");
+    await new Promise(resolve => setTimeout(resolve, 2_200));
+    await expect(fs.access(path.join(stackDir, "late-marker"))).rejects.toThrow();
+  }, 10_000);
+
+  it("denies host files and network to verification code and its descendants", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/contained");
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "registry-private-fixture-"));
+    const server = net.createServer(socket => socket.end());
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as net.AddressInfo).port;
+    try {
+      const privateFile = path.join(outside, "private.txt");
+      await fs.writeFile(privateFile, "synthetic private fixture");
+      await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:contained", kind: "stack", runtime: "python" });
+      await writeText(path.join(stackDir, "verify.py"), [
+        "import pathlib, socket, subprocess, sys",
+        `private_file = ${JSON.stringify(privateFile)}`,
+        "try:",
+        "    pathlib.Path(private_file).read_text()",
+        "except (PermissionError, FileNotFoundError):",
+        "    pass",
+        "else:",
+        "    raise SystemExit('host file readable')",
+        "try:",
+        "    pathlib.Path(private_file).write_text('changed')",
+        "except (PermissionError, FileNotFoundError):",
+        "    pass",
+        "else:",
+        "    raise SystemExit('host file writable')",
+        "try:",
+        `    socket.create_connection(('127.0.0.1', ${port}), timeout=0.5)`,
+        "except OSError:",
+        "    pass",
+        "else:",
+        "    raise SystemExit('network available')",
+        "result = subprocess.run([sys.executable, '-c', 'import pathlib, sys; pathlib.Path(sys.argv[1]).read_text()', private_file], capture_output=True)",
+        "assert result.returncode != 0, 'child escaped filesystem boundary'",
+      ].join("\n"));
+      const [result] = await runStackVerifications(tmpDir, ["stack:contained"]);
+      expect(result, result.error).toMatchObject({ status: "passed" });
+      expect(await fs.readFile(privateFile, "utf8")).toBe("synthetic private fixture");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      await fs.rm(outside, { recursive: true, force: true });
+    }
   });
 });

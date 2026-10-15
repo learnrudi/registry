@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { buildVerificationSandbox } from "./verification-sandbox.js";
+import { assertCanonicalStackDirectory } from "./stack-path.js";
 
 export interface StackVerificationCommand {
   packageId: string;
@@ -129,22 +131,60 @@ const DEFAULT_VERIFICATION_TIMEOUT_MS = 10 * 60 * 1000;
 async function executeVerification(
   command: StackVerificationCommand,
   timeoutMs: number,
-  isolatedHome: string
+  isolatedHome: string,
+  root: string
 ): Promise<void> {
+  const network = command.source === "package-lock.json" || command.source === "playwright-chromium"
+    || /^(?:python\/)?requirements\.txt$/.test(command.source);
+  const sandbox = await buildVerificationSandbox({
+    root,
+    cwd: command.cwd,
+    home: isolatedHome,
+    executable: command.executable,
+    args: command.args,
+    network,
+    runtime: command.runtime,
+  });
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command.executable, command.args, {
+    const child = spawn(sandbox.executable, sandbox.args, {
       cwd: command.cwd,
-      env: buildVerificationEnvironment(process.env, isolatedHome),
+      env: {
+        ...buildVerificationEnvironment(process.env, isolatedHome),
+        PATH: sandbox.path,
+        TMPDIR: isolatedHome,
+        TMP: isolatedHome,
+        TEMP: isolatedHome,
+        RUDI_VERIFY_OFFLINE: network ? "0" : "1",
+        PLAYWRIGHT_BROWSERS_PATH: path.join(isolatedHome, "browsers"),
+      },
       shell: false,
+      detached: true,
       stdio: "inherit",
     });
 
+    const signalGroup = (signal: NodeJS.Signals): Error | undefined => {
+      if (!child.pid) return;
+      try {
+        process.kill(-child.pid, signal);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+          return new Error(`verification process-group cleanup failed (${child.pid}): ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    };
     let timedOut = false;
+    let cleanupError: Error | undefined;
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), 1_000);
+      cleanupError = signalGroup("SIGTERM");
+      forceKillTimer = setTimeout(() => {
+        const error = signalGroup("SIGKILL");
+        if (error) {
+          clearTimers();
+          reject(error);
+        }
+      }, 1_000);
     }, timeoutMs);
 
     const clearTimers = () => {
@@ -157,7 +197,12 @@ async function executeVerification(
       reject(error);
     });
     child.once("close", (code, signal) => {
+      const error = signalGroup("SIGKILL") ?? cleanupError;
       clearTimers();
+      if (error) {
+        reject(error);
+        return;
+      }
       if (timedOut) {
         reject(new Error(`verification timed out after ${timeoutMs}ms`));
         return;
@@ -177,14 +222,15 @@ async function executeVerification(
 
 async function prepareVerification(
   command: StackVerificationCommand,
-  execute: (command: StackVerificationCommand) => Promise<void>
+  execute: (command: StackVerificationCommand) => Promise<void>,
+  temporaryRoot = os.tmpdir()
 ): Promise<{
   command: StackVerificationCommand;
   cleanup?: () => Promise<void>;
 }> {
   if (command.runtime === "python") {
     const virtualEnvironment = await fs.mkdtemp(
-      path.join(os.tmpdir(), "rudi-stack-venv-")
+      path.join(temporaryRoot, "rudi-stack-venv-")
     );
     const pythonExecutable = process.platform === "win32"
       ? path.join(virtualEnvironment, "Scripts", "python.exe")
@@ -263,6 +309,18 @@ async function prepareVerification(
     });
   }
 
+  if (Object.hasOwn(packageJson.dependencies ?? {}, "playwright")
+    || Object.hasOwn(packageJson.devDependencies ?? {}, "playwright")) {
+    // Fixed dependency provisioning is network-enabled; repository-owned hooks
+    // remain offline and reuse this session's browser cache.
+    await execute({
+      ...command,
+      executable: "node",
+      args: [path.join(command.cwd, "node_modules/playwright/cli.js"), "install", "chromium"],
+      source: "playwright-chromium",
+    });
+  }
+
   const prepareScript = packageJson.scripts?.["verify:prepare"];
   if (prepareScript !== undefined) {
     if (typeof prepareScript !== "string" || prepareScript.trim() === "") {
@@ -313,7 +371,8 @@ export async function runStackVerifications(
         (command: StackVerificationCommand) => executeVerification(
           command,
           timeoutMs,
-          isolatedHome as string
+          isolatedHome as string,
+          root
         )
       );
       const command = await discoverStackVerification(
@@ -325,7 +384,7 @@ export async function runStackVerifications(
         );
       }
       const prepared = options.prepare
-        ? await prepareVerification(command, execute)
+        ? await prepareVerification(command, execute, isolatedHome)
         : { command };
       try {
         await execute(prepared.command);
@@ -359,6 +418,7 @@ export async function discoverStackVerification(
   stackDir: string
 ): Promise<StackVerificationCommand> {
   const resolvedStackDir = path.resolve(stackDir);
+  await assertCanonicalStackDirectory(path.resolve(resolvedStackDir, "../../.."), resolvedStackDir);
   const manifest = await readJson(
     path.join(resolvedStackDir, "manifest.json")
   ) as StackManifest;
