@@ -44,7 +44,7 @@ describe("Python runtime catalog contract", () => {
 });
 
 describe("Node runtime catalog contract", () => {
-  it("publishes Node 20.20.2 side-by-side without replacing the shared Node runtime", async () => {
+  it("keeps versioned Node 20 separate from the verified Node 24 default", async () => {
     const [shared, versioned] = await Promise.all([
       loadRuntime("node"),
       loadRuntime("node-20-20-2"),
@@ -52,8 +52,25 @@ describe("Node runtime catalog contract", () => {
 
     expect(shared).toMatchObject({
       id: "runtime:node",
-      version: "20.10.0",
+      version: "24.21.0",
     });
+    const sharedHashes: Record<string, string> = {
+      "darwin-arm64": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+      "darwin-x64": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097",
+      "linux-arm64": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5",
+      "linux-x64": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+    };
+    expect(shared.bins).toEqual({
+      node: { path: "bin/node" }, npm: { path: "bin/npm" }, npx: { path: "bin/npx" },
+    });
+    expect(Object.keys(shared.install.platforms).sort()).toEqual(Object.keys(sharedHashes).sort());
+    for (const [platform, checksum] of Object.entries(sharedHashes)) {
+      expect(shared.install.platforms[platform]).toEqual({
+        url: `https://nodejs.org/dist/v24.21.0/node-v24.21.0-${platform}.tar.gz`,
+        checksum: { algo: "sha256", value: checksum },
+        extract: { type: "tar.gz", strip: 1 },
+      });
+    }
     expect(versioned).toMatchObject({
       id: "runtime:node-20-20-2",
       version: "20.20.2",
