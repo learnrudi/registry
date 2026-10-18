@@ -1,0 +1,4 @@
+interface:
+  display_name: "Compute Task"
+  short_description: "Review an identity-selected Compute job"
+  default_prompt: "Use $compute-task to prepare my job with an explicit identity, model and effort, then show the review before activation."
