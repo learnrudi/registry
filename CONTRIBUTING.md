@@ -143,6 +143,12 @@ rudi search my-stack
 
 - Keep one concern per change.
 - Describe user-visible behavior, validation performed, and known gaps.
+- Review the [documentation ownership map](AGENTS.md#documentation-maintenance)
+  and complete the PR template. Update the affected current guide/operator
+  references, or explain why the change does not affect documented behavior.
+- Check compatibility against the consuming package's source/release, including
+  runtime requirements. Catalog validation alone does not prove that consumer
+  can execute the selected runtime.
 - Add or update tests for install, resolution, and failure behavior.
 - Never mix catalog source with local generated/runtime state.
 - Do not add packages to `index.json` manually.

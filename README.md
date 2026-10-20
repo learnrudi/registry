@@ -159,6 +159,21 @@ node -e "const i=require('./index.json'); console.log(Object.keys(i.packages).jo
 
 ## Required Checks
 
+### Runtime compatibility
+
+Catalog runtimes and consuming applications have independent release contracts.
+Read `catalog/runtimes/node.json` and the consumer's declared `engines` before
+selecting an execution runtime; a validated catalog download is not application
+compatibility proof.
+
+At the October 20, 2026 source review, Registry `2ad101b` selects Node 24.21.0,
+while CLI `22d5c1d` requires Node 22 or 24.22+. That combination is incompatible
+with the CLI's Node 24 requirement. Use a consumer-supported runtime and retain
+the compatibility gap until a separately verified runtime update is accepted.
+This documentation review does not update the manifest or installed runtimes.
+
+### Repository verification
+
 ```bash
 npm test
 npm run validate
@@ -193,3 +208,6 @@ MIT
 
 Skill category, naming, facet and dependency conventions are defined in
 [Skill catalog organization](docs/skill-catalog.md).
+
+Documentation ownership and the review requirements are in
+[AGENTS.md](AGENTS.md#documentation-maintenance).
