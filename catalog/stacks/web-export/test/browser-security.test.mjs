@@ -30,7 +30,9 @@ test('local Chromium renders a document with its native sandbox enabled', async 
   }
 });
 
-test('active HTML cannot reach loopback services during rendering', { skip: process.env.RUDI_VERIFY_OFFLINE === '1' ? 'Host listener fixture is forbidden by the offline verifier; run npm test outside it for browser egress proof.' : false }, async () => {
+// Linux bubblewrap supplies a private network namespace, so its listener is
+// namespace-local. macOS's offline verifier forbids binding the host fixture.
+test('active HTML cannot reach loopback services during rendering', { skip: process.env.RUDI_VERIFY_OFFLINE === '1' && process.platform !== 'linux' ? 'Host listener fixture is forbidden by the offline verifier; run npm test outside it for browser egress proof.' : false }, async () => {
   let requests = 0;
   const server = createServer((_req, res) => { requests++; res.end('private'); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');

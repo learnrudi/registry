@@ -35,7 +35,10 @@ permissions:
 jobs:
   validate:
     name: Test, Build & Verify
-    runs-on: ubuntu-24.04
+    # Ubuntu 24's restricted bubblewrap AppArmor child profile blocks Chromium's
+    # nested native sandbox. Qualify both sandboxes on this supported runner;
+    # do not disable either sandbox or weaken the host's AppArmor settings.
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -60,13 +63,7 @@ jobs:
       - name: Install verification sandbox
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap apparmor-profiles apparmor-utils ffmpeg
-          # Grant namespace setup to distro bubblewrap, then strip capabilities
-          # from its children. Keep the host-wide AppArmor restriction enabled.
-          sudo install -m 0644 \
-            /usr/share/apparmor/extra-profiles/bwrap-userns-restrict \
-            /etc/apparmor.d/bwrap-userns-restrict
-          sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+          sudo apt-get install --yes bubblewrap ffmpeg poppler-utils
 
       - name: Run tests
         run: npm test
