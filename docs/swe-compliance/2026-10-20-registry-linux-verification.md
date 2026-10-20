@@ -35,6 +35,10 @@
 - Run the active-HTML loopback denial fixture inside Linux's private network namespace. Retain the offline skip on macOS, where the verifier forbids binding the host listener fixture. Assert that script execution completes and no loopback request arrives.
 - Status: bounded workflow/fixture correction implemented; Linux verification pending. No refactor or dependency-version change.
 
+### First qualified-runner execution
+
+Run [39439454371](https://github.com/learnrudi/registry/actions/runs/39439454371), head `2e3b5c678b1cdb7de9a7ad3383ad2150ad93da47`, passed the manifest matrix and OS containment tests but stopped at the new main-branch Compute skill test: `spawn python3.12 ENOENT` (371 passed, one failed, two skipped). Ubuntu 22's default PATH does not supply that explicit interpreter. Add SHA-pinned `actions/setup-python` v7.0.0 with Python 3.12 before root/package verification; keep the test and required interpreter unchanged. This observed integration failure supplies red evidence; the next full Linux execution must supply green. Source and tag were resolved from the action's official GitHub repository.
+
 ## Phase 4: Green tests and refactor
 
 - Root tests; workflow/security-focused tests; required validation, deterministic index sync/check, clean-catalog check, build and package dry-run.

@@ -53,6 +53,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Setup Python for package verification
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
       - name: Configure deterministic source date
         run: |
           node -e 'const fs = require("node:fs"); const { generatedAt } = JSON.parse(fs.readFileSync("index.json", "utf8")); const epoch = Date.parse(generatedAt) / 1000; if (typeof generatedAt !== "string" || !Number.isInteger(epoch) || new Date(epoch * 1000).toISOString() !== generatedAt) throw new Error("index.json generatedAt must be an ISO timestamp with whole-second precision"); process.stdout.write("SOURCE_DATE_EPOCH=" + epoch + "\n");' >> "$GITHUB_ENV"

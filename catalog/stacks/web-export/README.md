@@ -30,5 +30,7 @@ Each local asset is capped at 16 MiB; a document session can load 64 MiB across
 a later failure may remain and are not reported as successful artifacts.
 
 `npm test` exercises a real loopback listener to prove renderer egress is blocked.
-That one test explicitly skips inside the OS-contained offline stack verifier,
-where creating its listener is itself forbidden; run the normal suite separately.
+On Linux it also runs inside the OS-contained offline stack verifier, using a
+listener in bubblewrap's private network namespace. On macOS that fixture skips
+inside the verifier because creating its host listener is forbidden; run the
+normal suite separately for that application-level proof.
