@@ -1,3 +1,4 @@
+import { publicHttp } from "./public-http.js";
 import * as cheerio from "cheerio";
 
 import { parseHttpUrl } from "./url-policy.js";
@@ -107,7 +108,7 @@ export async function extractLinks(url: string, maxLinks = 250): Promise<LinksRe
   const pageUrl = parseHttpUrl(url).toString();
   const boundedMaxLinks = Math.min(Math.max(Math.floor(maxLinks || 250), 1), 1000);
 
-  const response = await fetch(pageUrl, {
+  const response = await publicHttp.fetch(pageUrl, {
     headers: { "User-Agent": ARTICLE_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
     redirect: "follow",
   });

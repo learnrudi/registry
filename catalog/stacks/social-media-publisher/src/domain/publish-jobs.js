@@ -2,7 +2,7 @@ import {
   claimPublishJobById,
   claimNextPublishJob,
   insertPublishAttempt,
-  listPostTargets,
+  claimPostTarget,
   updatePostStatus,
   updatePostTargetStatus,
   updatePublishJobStatus,
@@ -40,24 +40,16 @@ export async function markPostPublishing(client, input) {
 }
 
 export async function beginTargetPublishAttempt(client, input) {
-  const currentTargets = await listPostTargets(client, {
+  if (input.dryRun === true || input.job.metadata?.dry_run === true) {
+    throw new Error('Dry runs cannot create publication attempts');
+  }
+  const claimedTarget = await claimPostTarget(client, {
     organizationId: input.job.organization_id,
     postId: input.job.post_id,
-  });
-  const currentTarget = currentTargets.find((item) => item.id === input.target.id);
-
-  if (!currentTarget || currentTarget.status !== TARGET_STATUSES.QUEUED) {
-    return null;
-  }
-
-  await updatePostTargetStatus(client, {
-    organizationId: input.job.organization_id,
     postTargetId: input.target.id,
-    status: TARGET_STATUSES.PUBLISHING,
-    metadata: {
-      publish_job_id: input.job.id,
-    },
+    publishJobId: input.job.id,
   });
+  if (!claimedTarget) return null;
 
   return insertPublishAttempt(client, {
     organizationId: input.job.organization_id,
@@ -72,6 +64,9 @@ export async function beginTargetPublishAttempt(client, input) {
 }
 
 export async function markTargetPublishSucceeded(client, input) {
+  if (input.dryRun === true || input.job.metadata?.dry_run === true) {
+    throw new Error('Dry runs cannot record publication success');
+  }
   await markAttemptSucceeded(client, {
     organizationId: input.job.organization_id,
     publishAttemptId: input.attempt.id,
@@ -161,8 +156,22 @@ export async function markPublishJobFailed(client, input) {
     },
   });
 
-  await deriveAndPersistPostStatus(client, {
-    organizationId: input.job.organization_id,
-    postId: input.job.post_id,
+  if (input.job.metadata?.dry_run !== true) {
+    await deriveAndPersistPostStatus(client, {
+      organizationId: input.job.organization_id,
+      postId: input.job.post_id,
+    });
+  }
+}
+
+export async function completePublishPreview(client, { job, results }) {
+  const failed = results.some((result) => !result.ok);
+  const status = failed ? PUBLISH_JOB_STATUSES.FAILED : PUBLISH_JOB_STATUSES.COMPLETED;
+  await updatePublishJobStatus(client, {
+    organizationId: job.organization_id,
+    publishJobId: job.id,
+    status,
+    metadata: { preview_results: results },
   });
+  return { jobStatus: status, dryRun: true, results };
 }

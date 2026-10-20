@@ -596,3 +596,11 @@ Early validated runs (May 2026 vertical slice) are archived in
 [docs/archive/2026-05-first-runs-vertical-slice.md](docs/archive/2026-05-first-runs-vertical-slice.md);
 those run folders no longer exist. Current work lives under `runs/` and is
 logged in [CHANGELOG.md](CHANGELOG.md).
+
+### Quick-operation safety
+
+Quick MCP/CLI operations pass arguments directly to ffmpeg/ffprobe without a
+shell. Shell punctuation in filenames is literal. Timestamps, presets, formats,
+bitrate/filter numbers and frame counts are validated before media access.
+Captured subprocess output is limited to 50 MiB and each media command to ten
+minutes. Temporary concat manifests contain only generated relative filenames.

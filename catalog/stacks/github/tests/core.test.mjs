@@ -420,3 +420,24 @@ test("mergePullRequest dry-runs and posts merge options when confirmed", async (
   });
   assert.equal(merged.merge.merged, true);
 });
+
+test("REST paths cannot send credentials outside the configured API origin", async () => {
+  const { calls, fetchImpl } = makeFetch();
+  await assert.rejects(
+    () => githubRestRequest(
+      { path: '/' + '\\'.repeat(2) + 'example.invalid/probe' },
+      { env: { GITHUB_TOKEN: 'synthetic-test-token' }, fetchImpl }
+    ),
+    /relative|origin/
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("REST requests keep enterprise paths and prohibit automatic redirects", async () => {
+  const { calls, fetchImpl } = makeFetch();
+  await githubRestRequest({ path: '/repos/example/repo' }, {
+    env: { GITHUB_TOKEN: 'synthetic-test-token', GITHUB_API_BASE_URL: 'https://github.example/api/v3' }, fetchImpl,
+  });
+  assert.equal(calls[0].url, 'https://github.example/api/v3/repos/example/repo');
+  assert.equal(calls[0].init.redirect, 'error');
+});

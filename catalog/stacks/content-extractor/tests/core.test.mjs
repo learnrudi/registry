@@ -1,3 +1,9 @@
+import { beforeEach, afterEach } from 'node:test';
+import { publicHttp } from '../src/public-http.js';
+const originalPublicFetch = publicHttp.fetch;
+// Parser fixtures replace the HTTP boundary; public-http.test.mjs exercises the transport.
+beforeEach(() => { publicHttp.fetch = (...args) => globalThis.fetch(...args); });
+afterEach(() => { publicHttp.fetch = originalPublicFetch; });
 import assert from "node:assert/strict";
 import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -644,145 +650,33 @@ test("extractBatch writes per-link artifact folders and classifies blocked failu
   }
 });
 
-test("extractBatch captures a browser screenshot for blocked URLs when Playwright is available", async () => {
+test("extractBatch preserves blocked errors and never spawns an unguarded browser fallback", async () => {
   const originalFetch = globalThis.fetch;
-  const originalPlaywrightBin = process.env.RUDI_PLAYWRIGHT_BIN;
-  const originalTesseractBin = process.env.RUDI_TESSERACT_BIN;
-  const outputDir = await mkdtemp(join(tmpdir(), "content-extractor-browser-fallback-"));
-  const binDir = await mkdtemp(join(tmpdir(), "content-extractor-playwright-bin-"));
-  const playwrightBin = join(binDir, "playwright");
-  const tesseractBin = join(binDir, "tesseract");
-
-  await writeFile(playwrightBin, `#!/usr/bin/env node
-const { writeFileSync } = require("node:fs");
-const args = process.argv.slice(2);
-const outputPath = args[args.length - 1];
-writeFileSync(outputPath, "fake png");
-`, "utf8");
-  await chmod(playwrightBin, 0o755);
-  await writeFile(tesseractBin, `#!/usr/bin/env node
-process.stdout.write("Article headline\\nThis rendered article page contains enough body text to classify the browser screenshot as content. It includes multiple sentences about the topic, context for the reader, and visible article copy from the body of the page. The classifier should treat this page as content-bearing evidence.");
-`, "utf8");
-  await chmod(tesseractBin, 0o755);
-
-  process.env.RUDI_PLAYWRIGHT_BIN = playwrightBin;
-  process.env.RUDI_TESSERACT_BIN = tesseractBin;
-  globalThis.fetch = async (url) => makeJsonResponse("<html>challenge</html>", {
-    ok: false,
-    status: 403,
-    statusText: "Forbidden",
-    url: String(url),
-    headers: { "content-type": "text/html" },
-  });
-
+  const originalBinary = process.env.RUDI_PLAYWRIGHT_BIN;
+  const directory = await mkdtemp(join(tmpdir(), "content-extractor-browser-disabled-"));
+  const marker = join(directory, "browser-executed");
+  const binary = join(directory, "playwright");
+  await writeFile(binary, `#!/usr/bin/env node
+require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'unsafe browser launched');\n`);
+  await chmod(binary, 0o755);
+  process.env.RUDI_PLAYWRIGHT_BIN = binary;
+  globalThis.fetch = async url => makeJsonResponse('blocked', { ok: false, status: 403, statusText: 'Forbidden', url: String(url) });
   try {
-    const result = await extractBatch({
-      output_dir: outputDir,
-      max_concurrency: 1,
-      browser_fallback: true,
-      browser_timeout_ms: 5000,
-      items: [
-        { id: "blocked-story", url: "https://blocked.example.com/story", metadata: { source: "newsletter" } },
-      ],
-    });
-
-    assert.deepEqual(result.statusCounts, { browser_captured: 1 });
-    assert.equal(result.results[0].status, "browser_captured");
-    assert.equal(result.results[0].originalStatus, "blocked");
-    assert.ok(result.results[0].screenshotPath.endsWith("/links/blocked-story/page.png"));
-    assert.equal(await readFile(result.results[0].screenshotPath, "utf8"), "fake png");
-
-    const report = await readFile(result.reportCsvPath, "utf8");
-    assert.match(report.split("\n")[0], /screenshot_path/);
-    assert.match(report, /browser_captured/);
-
-    const resultJson = JSON.parse(await readFile(join(outputDir, "links", "blocked-story", "result.json"), "utf8"));
-    assert.equal(resultJson.status, "browser_captured");
-    assert.equal(resultJson.browserFallback.status, "captured");
-    assert.equal(resultJson.browserFallback.classification, "content");
-    assert.ok(resultJson.browserFallback.textPath.endsWith("/links/blocked-story/browser_text.txt"));
+    const result = await extractBatch({ output_dir: directory, browser_fallback: true,
+      items: [{ id: 'blocked-story', url: 'https://blocked.example.com/story' }] });
+    assert.deepEqual(result.statusCounts, { blocked: 1 });
+    assert.equal(result.results[0].status, 'blocked');
+    assert.match(result.results[0].error, /403/);
+    assert.equal(result.results[0].browserFallback.status, 'unavailable');
+    assert.match(result.results[0].browserFallback.error, /network|egress/i);
+    await assert.rejects(readFile(marker), { code: 'ENOENT' });
+    const persisted = JSON.parse(await readFile(join(directory, 'links', 'blocked-story', 'result.json')));
+    assert.equal(persisted.status, 'blocked');
+    assert.equal(persisted.browserFallback.status, 'unavailable');
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalPlaywrightBin === undefined) {
-      delete process.env.RUDI_PLAYWRIGHT_BIN;
-    } else {
-      process.env.RUDI_PLAYWRIGHT_BIN = originalPlaywrightBin;
-    }
-    if (originalTesseractBin === undefined) {
-      delete process.env.RUDI_TESSERACT_BIN;
-    } else {
-      process.env.RUDI_TESSERACT_BIN = originalTesseractBin;
-    }
-  }
-});
-
-test("extractBatch classifies browser fallback bot walls instead of treating any screenshot as captured content", async () => {
-  const originalFetch = globalThis.fetch;
-  const originalPlaywrightBin = process.env.RUDI_PLAYWRIGHT_BIN;
-  const originalTesseractBin = process.env.RUDI_TESSERACT_BIN;
-  const outputDir = await mkdtemp(join(tmpdir(), "content-extractor-browser-blocked-"));
-  const binDir = await mkdtemp(join(tmpdir(), "content-extractor-browser-blocked-bin-"));
-  const playwrightBin = join(binDir, "playwright");
-  const tesseractBin = join(binDir, "tesseract");
-
-  await writeFile(playwrightBin, `#!/usr/bin/env node
-const { writeFileSync } = require("node:fs");
-const args = process.argv.slice(2);
-const outputPath = args[args.length - 1];
-writeFileSync(outputPath, "fake png");
-`, "utf8");
-  await chmod(playwrightBin, 0o755);
-  await writeFile(tesseractBin, `#!/usr/bin/env node
-process.stdout.write("Just a moment... Performing security verification. This website uses a security service to protect against malicious bots.");
-`, "utf8");
-  await chmod(tesseractBin, 0o755);
-
-  process.env.RUDI_PLAYWRIGHT_BIN = playwrightBin;
-  process.env.RUDI_TESSERACT_BIN = tesseractBin;
-  globalThis.fetch = async (url) => makeJsonResponse("<html>challenge</html>", {
-    ok: false,
-    status: 403,
-    statusText: "Forbidden",
-    url: String(url),
-    headers: { "content-type": "text/html" },
-  });
-
-  try {
-    const result = await extractBatch({
-      output_dir: outputDir,
-      max_concurrency: 1,
-      browser_fallback: true,
-      browser_timeout_ms: 5000,
-      items: [
-        { id: "bot-wall-story", url: "https://blocked.example.com/story", metadata: { source: "newsletter" } },
-      ],
-    });
-
-    assert.deepEqual(result.statusCounts, { browser_blocked: 1 });
-    assert.equal(result.results[0].status, "browser_blocked");
-    assert.equal(result.results[0].originalStatus, "blocked");
-    assert.ok(result.results[0].screenshotPath.endsWith("/links/bot-wall-story/page.png"));
-
-    const report = await readFile(result.reportCsvPath, "utf8");
-    assert.match(report, /browser_blocked/);
-
-    const resultJson = JSON.parse(await readFile(join(outputDir, "links", "bot-wall-story", "result.json"), "utf8"));
-    assert.equal(resultJson.status, "browser_blocked");
-    assert.equal(resultJson.browserFallback.status, "captured");
-    assert.equal(resultJson.browserFallback.classification, "blocked");
-    assert.match(resultJson.browserFallback.textSample, /security verification/i);
-  } finally {
-    globalThis.fetch = originalFetch;
-    if (originalPlaywrightBin === undefined) {
-      delete process.env.RUDI_PLAYWRIGHT_BIN;
-    } else {
-      process.env.RUDI_PLAYWRIGHT_BIN = originalPlaywrightBin;
-    }
-    if (originalTesseractBin === undefined) {
-      delete process.env.RUDI_TESSERACT_BIN;
-    } else {
-      process.env.RUDI_TESSERACT_BIN = originalTesseractBin;
-    }
+    if (originalBinary === undefined) delete process.env.RUDI_PLAYWRIGHT_BIN;
+    else process.env.RUDI_PLAYWRIGHT_BIN = originalBinary;
   }
 });
 

@@ -66,7 +66,13 @@ verification entrypoint:
 Verification must not require credentials, paid calls, or live provider
 access. The registry runner removes token/provider variables, supplies an
 isolated home, disables Python bytecode writes, and invokes commands without a
-shell at the runner boundary. Existing oversized stack source modules are also
+shell at the runner boundary. macOS requires `sandbox-exec`; Linux requires
+`bubblewrap` and usable user namespaces. Other platforms fail closed. Run the
+runner from a dedicated checkout: it exposes that checkout read-only except for
+the selected stack, plus a writable temporary home. Dependency downloads during
+`--prepare` have network access; package preparation hooks and verification do
+not. Direct Playwright dependencies receive Chromium provisioning into the
+session browser cache before those offline hooks. Running `npm run verify` directly bypasses these controls. Existing oversized stack source modules are also
 held to the line counts in `.stack-debt-baseline.json`; they may shrink, but
 growth requires decomposition rather than raising the baseline casually. Run a
 selected stack or the changed set with:
@@ -152,3 +158,10 @@ License.
 
 Skill category, naming, facet and dependency conventions are defined in
 [Skill catalog organization](docs/skill-catalog.md).
+
+Native Chromium verification currently fails closed under the macOS runner:
+Chromium attempts to apply an inner sandbox that macOS disallows inside the
+outer sandbox. Browser provisioning can succeed, but it does not establish
+rendering compatibility. Run those verification contracts in a separately
+validated Linux sandbox or VM; do not disable Chromium's sandbox or bypass the
+registry runner. Linux browser compatibility still requires an integration run.

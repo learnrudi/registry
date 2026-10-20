@@ -35,19 +35,28 @@ permissions:
 jobs:
   validate:
     name: Test, Build & Verify
-    runs-on: ubuntu-latest
+    # Ubuntu 24's restricted bubblewrap AppArmor child profile blocks Chromium's
+    # nested native sandbox. Qualify both sandboxes on this supported runner;
+    # do not disable either sandbox or weaken the host's AppArmor settings.
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
           cache: 'npm'
+
+      - name: Setup Python for package verification
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
 
       - name: Configure deterministic source date
         run: |
@@ -55,6 +64,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install verification sandbox
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap ffmpeg poppler-utils
 
       - name: Run tests
         run: npm test
@@ -85,7 +99,7 @@ jobs:
         run: npm pack --dry-run --json
 
       - name: Upload dist artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: registry-dist
           path: dist/
@@ -98,14 +112,16 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
           cache: 'npm'
@@ -139,6 +155,7 @@ jobs:
         run: |
           mkdir -p release
           tar -czf release/registry.tgz \
+            --exclude='*/.DS_Store' \
             --exclude='*/node_modules/*' \
             --exclude='*/runs/*' \
             --exclude='*/downloads/*' \
@@ -156,23 +173,11 @@ jobs:
           sha256sum release/registry.tgz > release/registry.tgz.sha256
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: registry-release
           path: release/
           retention-days: 90
-
-      # Optional: Create GitHub Release on tags
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            release/registry.tgz
-            release/registry.tgz.sha256
-            dist/index.json
-            dist/release.json
-          generate_release_notes: true
 
   # Cross-platform validation
   validate-platforms:
@@ -184,10 +189,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
           cache: 'npm'

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { downloadPublicMedia } from '../security/media-download.js';
 import { TwitterApi } from 'twitter-api-v2';
 
 import { PlatformAdapterError } from './platform-errors.js';
@@ -260,15 +260,10 @@ function assertHttpsUrl(value) {
   );
 }
 
-async function downloadImage(item) {
+export async function downloadImage(item) {
   const mimeType = String(item.mime_type ?? '').toLowerCase();
   const maxBytes = mimeType === 'image/gif' ? MAX_TWITTER_GIF_BYTES : MAX_TWITTER_IMAGE_BYTES;
-  const response = await axios.get(assertHttpsUrl(item.source_url), {
-    responseType: 'arraybuffer',
-    timeout: 60_000,
-    maxContentLength: maxBytes,
-  });
-  const buffer = Buffer.from(response.data);
+  const buffer = await downloadPublicMedia(assertHttpsUrl(item.source_url), maxBytes);
 
   if (buffer.length > maxBytes) {
     throw new PlatformAdapterError(

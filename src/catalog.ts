@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import fg from "fast-glob";
 
-import type { Package } from "./resolver.js";
+import { buildAliasMap, type Package } from "./resolver.js";
 
 export interface CatalogPackageFile {
   path: string;
@@ -529,6 +529,8 @@ export function assertCatalogReferences(
     }
     byId.set(item.manifest.id, item);
   }
+
+  buildAliasMap(packages.map(item => item.manifest));
 
   const skillIds = new Set(
     packages.filter((item) => item.manifest.kind === "skill").map((item) => item.manifest.id)

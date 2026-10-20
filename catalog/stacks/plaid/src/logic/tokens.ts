@@ -1,5 +1,7 @@
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { chmod, mkdir, open, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
   TokenRecordSchema,
@@ -42,8 +44,10 @@ function emptyStore(): TokenStore {
 }
 
 export async function loadTokenStore(): Promise<TokenStore> {
-  const storePath = getTokenStorePath();
+  return readTokenStore(getTokenStorePath());
+}
 
+async function readTokenStore(storePath: string): Promise<TokenStore> {
   try {
     const raw = await readFile(storePath, "utf8");
     return TokenStoreSchema.parse(JSON.parse(raw));
@@ -56,19 +60,52 @@ export async function loadTokenStore(): Promise<TokenStore> {
   }
 }
 
-export async function saveTokenStore(store: TokenStore): Promise<void> {
-  const parsed = TokenStoreSchema.parse(store);
-  const storePath = getTokenStorePath();
-  const storeDir = dirname(storePath);
-  const tmpPath = `${storePath}.${process.pid}.tmp`;
+// The lock covers the entire read/modify/replace transaction across processes.
+// Never steal a lock by age: a paused live writer could otherwise overwrite data.
+async function mutateTokenStore<T>(mutate: (store: TokenStore) => T): Promise<T> {
+  const requestedPath = getTokenStorePath();
+  await mkdir(dirname(requestedPath), { recursive: true, mode: 0o700 });
+  const storePath = join(await realpath(dirname(requestedPath)), basename(requestedPath));
+  const lockPath = `${storePath}.lock`;
+  const deadline = Date.now() + 10_000;
+  let lock;
+  while (!lock) {
+    try {
+      lock = await open(lockPath, "wx", 0o600);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (Date.now() >= deadline) {
+        throw new Error("Plaid token store is locked. If a writer crashed, stop all Plaid processes before removing the .lock file.");
+      }
+      await delay(25);
+    }
+  }
+  try {
+    const store = await readTokenStore(storePath);
+    const result = mutate(store);
+    await saveTokenStore(storePath, store);
+    return result;
+  } finally {
+    await lock.close();
+    await unlink(lockPath);
+  }
+}
 
-  await mkdir(storeDir, { recursive: true, mode: 0o700 });
-  await writeFile(tmpPath, `${JSON.stringify(parsed, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  await chmod(tmpPath, 0o600);
-  await rename(tmpPath, storePath);
-  await chmod(storePath, 0o600);
+async function saveTokenStore(storePath: string, store: TokenStore): Promise<void> {
+  const parsed = TokenStoreSchema.parse(store);
+  const tmpPath = `${storePath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tmpPath, `${JSON.stringify(parsed, null, 2)}\n`, {
+      mode: 0o600,
+      flag: "wx",
+    });
+    await rename(tmpPath, storePath);
+    await chmod(storePath, 0o600);
+  } finally {
+    await unlink(tmpPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
 }
 
 function toPublicRecord(record: TokenRecord): PublicTokenRecord {
@@ -99,21 +136,20 @@ export async function saveLinkedItem(
   input: Omit<TokenRecord, "linkedAt" | "updatedAt"> &
     Partial<Pick<TokenRecord, "linkedAt" | "updatedAt">>
 ): Promise<PublicTokenRecord> {
-  const store = await loadTokenStore();
-  const now = new Date().toISOString();
-  const existing = store.items[input.itemId];
-  const record = TokenRecordSchema.parse({
-    ...existing,
-    ...input,
-    linkedAt: input.linkedAt || existing?.linkedAt || now,
-    updatedAt: now,
+  return mutateTokenStore((store) => {
+    const now = new Date().toISOString();
+    const existing = store.items[input.itemId];
+    const record = TokenRecordSchema.parse({
+      ...existing,
+      ...input,
+      linkedAt: input.linkedAt || existing?.linkedAt || now,
+      updatedAt: now,
+    });
+
+    store.items[record.itemId] = record;
+    store.defaultItemId = store.defaultItemId || record.itemId;
+    return toPublicRecord(record);
   });
-
-  store.items[record.itemId] = record;
-  store.defaultItemId = store.defaultItemId || record.itemId;
-  await saveTokenStore(store);
-
-  return toPublicRecord(record);
 }
 
 export async function getLinkedItem(itemId?: string): Promise<TokenRecord> {
@@ -139,18 +175,17 @@ export async function updateTransactionsCursor(
   itemId: string,
   cursor: string | null
 ): Promise<PublicTokenRecord> {
-  const store = await loadTokenStore();
-  const record = store.items[itemId];
-  if (!record) {
-    throw new Error(`Plaid Item not found in local token store: ${itemId}`);
-  }
+  return mutateTokenStore((store) => {
+    const record = store.items[itemId];
+    if (!record) {
+      throw new Error(`Plaid Item not found in local token store: ${itemId}`);
+    }
 
-  record.transactionsCursor = cursor;
-  record.updatedAt = new Date().toISOString();
-  store.items[itemId] = TokenRecordSchema.parse(record);
-  await saveTokenStore(store);
-
-  return toPublicRecord(store.items[itemId]);
+    record.transactionsCursor = cursor;
+    record.updatedAt = new Date().toISOString();
+    store.items[itemId] = TokenRecordSchema.parse(record);
+    return toPublicRecord(store.items[itemId]);
+  });
 }
 
 export function redactItem(record: TokenRecord): PublicTokenRecord {

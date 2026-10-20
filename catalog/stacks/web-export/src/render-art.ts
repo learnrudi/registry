@@ -1,3 +1,5 @@
+import { assertRenderBudget, assertOutputBudget, consumeOutputBudget } from "./render-budget.js";
+import { freezeDocumentLayout, preparePrintLayout } from './print-layout.js';
 import { writeFileSync } from "fs";
 
 import { PDFDocument } from "pdf-lib";
@@ -135,7 +137,9 @@ export async function renderArtboardPdf(
   request: ValidatedExportRequest,
 ): Promise<RenderArtifact> {
   const startedAt = Date.now();
+  await preparePrintLayout(page);
   const metrics = await getArtboardMetrics(page, request.pageSelector);
+  assertRenderBudget(metrics, Math.max(request.scale, request.dpi / 96));
 
   if (metrics.length === 0) {
     throw new RenderError(
@@ -148,8 +152,7 @@ export async function renderArtboardPdf(
   const { mergedPath, splitPaths } = resolveArtboardPdfPaths(request, metrics.length);
   const previewPaths = request.preview ? resolvePreviewPaths(request, metrics.length) : [];
   const pageBuffers: Uint8Array[] = [];
-
-  await page.emulateMedia({ media: "print" });
+  let outputBytes = 0;
 
   for (const metric of metrics) {
     const snapshot = await isolateArtboard(page, request.pageSelector, metric.index);
@@ -158,18 +161,22 @@ export async function renderArtboardPdf(
       await page.waitForTimeout(25);
 
       if (request.preview) {
-        await page.screenshot({
-          path: previewPaths[metric.index],
-          clip: { x: 0, y: 0, width: metric.width, height: metric.height },
-        });
+        const preview = await page.screenshot({ clip: { x: 0, y: 0, width: metric.width, height: metric.height } });
+        outputBytes += preview.length;
+        assertOutputBudget(outputBytes);
+        consumeOutputBudget(request, preview.length);
+        writeFileSync(previewPaths[metric.index], preview);
       }
 
       const pageBytes = await page.pdf({
+        pageRanges: "1",
         width: `${metric.width}px`,
         height: `${metric.height}px`,
         printBackground: true,
         margin: { top: "0", right: "0", bottom: "0", left: "0" },
       });
+      outputBytes += pageBytes.length;
+      assertOutputBudget(outputBytes);
       pageBuffers.push(pageBytes);
     } finally {
       await restoreArtboard(page, snapshot);
@@ -178,6 +185,7 @@ export async function renderArtboardPdf(
 
   if (request.splitOutput) {
     for (const [index, buffer] of pageBuffers.entries()) {
+      consumeOutputBudget(request, buffer.length);
       writeFileSync(splitPaths[index], Buffer.from(buffer));
     }
 
@@ -196,7 +204,9 @@ export async function renderArtboardPdf(
     copiedPages.forEach((copiedPage) => merged.addPage(copiedPage));
   }
 
-  writeFileSync(mergedPath, Buffer.from(await merged.save()));
+  const mergedBytes = Buffer.from(await merged.save());
+  consumeOutputBudget(request, mergedBytes.length);
+  writeFileSync(mergedPath, mergedBytes);
 
   return {
     artifactPaths: [mergedPath],
@@ -210,7 +220,9 @@ export async function renderArtboardPng(
   request: ValidatedExportRequest,
 ): Promise<RenderArtifact> {
   const startedAt = Date.now();
+  await freezeDocumentLayout(page);
   const metrics = await getArtboardMetrics(page, request.pageSelector);
+  assertRenderBudget(metrics, request.scale);
 
   if (metrics.length === 0) {
     throw new RenderError(
@@ -223,16 +235,18 @@ export async function renderArtboardPng(
   }
 
   const artifactPaths = resolveArtboardPngPaths(request, metrics.length);
+  let outputBytes = 0;
 
   for (const metric of metrics) {
     const snapshot = await isolateArtboard(page, request.pageSelector, metric.index);
 
     try {
       await page.waitForTimeout(25);
-      await page.screenshot({
-        path: artifactPaths[metric.index],
-        clip: { x: 0, y: 0, width: metric.width, height: metric.height },
-      });
+      const bytes = await page.screenshot({ clip: { x: 0, y: 0, width: metric.width, height: metric.height } });
+      outputBytes += bytes.length;
+      assertOutputBudget(outputBytes);
+      consumeOutputBudget(request, bytes.length);
+      writeFileSync(artifactPaths[metric.index], bytes);
     } finally {
       await restoreArtboard(page, snapshot);
     }
