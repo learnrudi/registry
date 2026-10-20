@@ -38,6 +38,13 @@ npx tsx src/index.ts links https://example.com
 npx tsx src/index.ts https://github.com/openai/openai-node
 ```
 
+The public HTTP parity test compares this stack's transport with the copies in
+installed `audio-tools`, `newsletter-extractor`, and `social-media-publisher`
+sibling stacks. Uninstalled siblings are optional; a missing transport file in
+an installed stack or a differing copy fails the test. A standalone installation
+skips the comparison after checking its own transport file. In Registry's
+canonical `catalog/stacks` source tree, all four copies are required.
+
 To compare capture providers for a difficult URL:
 
 ```bash
