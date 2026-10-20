@@ -1,7 +1,7 @@
 ---
 name: "Content Extractor Operator"
 description: "Extract content from YouTube, Reddit, TikTok, web articles, GitHub, and link batches"
-version: 1.0.1
+version: 1.1.0
 category: "data"
 tags:
   - rudi
@@ -41,6 +41,40 @@ truncation before summarizing. Report partial extraction and failed URLs explici
 never present a title, metadata-only response or sample as complete source coverage.
 
 ## Workflow
+
+### TikTok Caption Recovery
+
+With stack 1.1.0 or later, inspect `status`, `hasTranscript`, `segments` and
+`coverage`. `captions_not_found` means the initial page did not expose tracks;
+it is not proof that captions are absent. Page challenges, HTTP errors and
+malformed responses are failures, never successful extraction. Avoid repeating
+the same failed page fetch without new evidence.
+
+If needed, inspect the exact video in the host browser, resolve its canonical
+`/@creator/video/id` URL, and find its caption resource in page metadata or
+network requests. Observe the resource/video association directly. Do not guess
+URLs or export cookies. Caption resources may lack a `.vtt` suffix and may use
+`mime_type=video_mp4`; validate their content rather than their filename.
+
+Pass the canonical video `url` and exact observed `caption_url` to
+`extract_tiktok` only if the live schema supports it. This route skips the page
+fetch and reports `retrievalMethod: supplied_caption`; its association is
+operator-provided, not independently verified by the stack. Reinspect expired
+resources rather than modifying signed query strings or retrying blindly.
+
+Use `output` to preserve timestamped Markdown and `<output>.json` containing raw
+VTT, cue segments and coverage. Report cue count and first/last cue times;
+compare with observed video duration when available. Flag gaps over three
+seconds as uncaptioned intervals, not proven missing speech. Do not claim full
+coverage from a track endpoint alone. Keep uncertain wording unchanged in the
+raw evidence, separate suggested corrections, and do not invent speakers.
+
+Only summarize or fact-check claims actually recovered from the source.
+Separate extraction quality from claim accuracy. If no caption resource is
+accessible, report the limitation; use an available audio transcription skill
+when appropriate and label that result as a separate transcription method.
+
+### General Operation
 
 1. Identify the user's requested outcome, inputs, constraints, and whether the
    action changes external state.

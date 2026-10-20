@@ -1,7 +1,7 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-18T00:39:44.000Z",
+  "generatedAt": "2026-10-20T16:02:34.000Z",
   "stats": {
     "total": 175,
     "byKind": {
@@ -1956,7 +1956,7 @@
       "id": "skill:content-extractor",
       "kind": "skill",
       "name": "Content Extractor Operator",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -4268,7 +4268,7 @@
       "id": "stack:content-extractor",
       "kind": "stack",
       "name": "Content Extractor",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "lifecycle": {
         "maturity": "stable",
         "support": "supported"

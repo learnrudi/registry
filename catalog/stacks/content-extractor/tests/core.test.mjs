@@ -25,6 +25,7 @@ function makeJsonResponse(body, init = {}) {
     ok: init.ok ?? true,
     status: init.status ?? 200,
     statusText: init.statusText ?? "OK",
+    body: new Response(typeof body === "string" ? body : JSON.stringify(body)).body,
     url: init.url ?? "https://example.test/",
     headers: {
       get(name) {
@@ -245,7 +246,7 @@ test("extractTikTok extracts caption VTT text from TikTok page data", async () =
 Hello there
 
 00:00:01.000 --> 00:00:02.000
-general kenobi`);
+general kenobi`, { url: requestUrl });
     }
 
     throw new Error(`unexpected request: ${requestUrl}`);

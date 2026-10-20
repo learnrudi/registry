@@ -359,7 +359,8 @@ async function extractBatchUrl(row: NormalizedBatchRow): Promise<BatchExtraction
       }
       case "tiktok": {
         const data = await extractTikTok(row.normalizedUrl);
-        return { url: data.url, platform, status: data.hasTranscript ? "success" : "no_transcript", title: data.metadata.description || `@${data.metadata.user}`, content: formatTikTokResult(data), metadata: data.metadata as unknown as Record<string, unknown> };
+        const { status, retrievalMethod, rawVtt, segments, coverage } = data;
+        return { url: data.url, platform, status: data.hasTranscript ? "success" : "no_transcript", title: data.metadata.description || `@${data.metadata.user}`, content: formatTikTokResult(data), metadata: { ...data.metadata, captionEvidence: { status, retrievalMethod, rawVtt, segments, coverage } } };
       }
       case "github": {
         const data = await extractGitHub(row.normalizedUrl);
