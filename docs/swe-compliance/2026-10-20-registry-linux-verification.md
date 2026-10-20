@@ -66,6 +66,12 @@ Correction contract: add small real-browser fixtures that shadow dimensions and 
 - Task-generated Web Export node_modules/dist are removed through the repository hygiene runner only after an exact two-target dry-run allowlist check. All retained worktrees and pre-existing root artifacts are preserved.
 - Correction root gates pass: 373 tests with the one explicit smoke skip; validate, indexes:sync/check, catalog hygiene, build, seven provenance hashes, public readiness, root debt scan and package dry-run. Final-head Linux CI and focused Astra confirmation remain pending publication evidence. No release or merge acceptance is implied by the earlier green run.
 
+### Deadline fixture readiness follow-up
+
+Run [39442376979](https://github.com/learnrudi/registry/actions/runs/39442376979), correction head `9361413...`, passed the manifest matrix but stopped before stack hooks: the existing one-second descendant test timed out before its real grandchild wrote `started-marker` (ENOENT). Production timeout behavior was correct; the fixture assumed startup would finish within its deadline under runner CPU load. Preserve that red log. The test now uses a bounded real startup handshake, then advances only the verifier's test clock by the unchanged 1000ms. A real descendant waits for a post-timeout arm file, and must still fail to write the late marker over the original 2200ms observation period. Real process-group termination and explicit cleanup-permission failure remain asserted. No production timer, signal or sandbox code changes. This additional task-owned test path requires root debt/full-suite verification and Astra focused confirmation before acceptance.
+
+Focused cleanup tests pass; the unchanged complete root suite passes 373 tests with one explicit smoke skip. The one-file root SWE scan reports 54 graph files / one reported / zero findings. Final Linux run and focused reviewer acceptance remain separate publication gates.
+
 ## Phase 6: Documentation, limitations and closure
 
 - Ubuntu 24 strict AppArmor rendering remains unsupported and fail-closed. This fix qualifies Ubuntu 22.04 CI, not all Linux distributions or arbitrary hosts. Reassess before the runner's retirement or expanding the supported environment.

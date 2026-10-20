@@ -5,6 +5,7 @@ import net from "node:net";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
+import { setTimeout as realDelay } from "node:timers/promises";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -560,18 +561,44 @@ describe("verification containment", () => {
   it("terminates verification descendants when the deadline expires", async () => {
     const stackDir = path.join(tmpDir, "catalog/stacks/deadline");
     await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:deadline", kind: "stack", runtime: "python" });
+    const descendant = [
+      "import pathlib, time",
+      "pathlib.Path('started-marker').write_text('started')",
+      "while not pathlib.Path('armed-marker').exists(): time.sleep(0.01)",
+      "pathlib.Path('late-marker').write_text('late')",
+    ].join("\n");
     await writeText(path.join(stackDir, "verify.py"), [
       "import subprocess, sys, time",
-      "subprocess.Popen([sys.executable, '-c', \"import time, pathlib; pathlib.Path('started-marker').write_text('started'); time.sleep(2); pathlib.Path('late-marker').write_text('late')\"])" ,
-      "time.sleep(5)",
+      `subprocess.Popen([sys.executable, '-c', ${JSON.stringify(descendant)}])`,
+      "time.sleep(30)",
     ].join("\n"));
-    // Allow native sandbox/Python startup under the full suite's CPU load.
-    // An early macOS exec transition can reject signals with EPERM instead.
-    const [result] = await runStackVerifications(tmpDir, ["stack:deadline"], { timeoutMs: 1_000 });
-    expect(result).toMatchObject({ status: "failed", error: "verification timed out after 1000ms" });
-    await expect(fs.readFile(path.join(stackDir, "started-marker"), "utf8")).resolves.toBe("started");
-    await new Promise(resolve => setTimeout(resolve, 2_200));
-    await expect(fs.access(path.join(stackDir, "late-marker"))).rejects.toThrow();
+    // Advance only the verifier clock after real sandbox/descendant startup.
+    // The descendant waits for a post-deadline signal, avoiding CPU-speed races.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const verification = runStackVerifications(tmpDir, ["stack:deadline"], { timeoutMs: 1_000 });
+    try {
+      const readyBy = Date.now() + 5_000;
+      let started = false;
+      while (!started && Date.now() < readyBy) {
+        try {
+          started = await fs.readFile(path.join(stackDir, "started-marker"), "utf8") === "started";
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+        if (!started) await realDelay(10);
+      }
+      expect(started, "real verification descendant must start before exercising its deadline").toBe(true);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const [result] = await verification;
+      expect(result).toMatchObject({ status: "failed", error: "verification timed out after 1000ms" });
+      await fs.writeFile(path.join(stackDir, "armed-marker"), "armed");
+      await realDelay(2_200);
+      await expect(fs.access(path.join(stackDir, "late-marker"))).rejects.toThrow();
+    } finally {
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+      await verification;
+    }
   }, 10_000);
 
   it("denies host files and network to verification code and its descendants", async () => {
