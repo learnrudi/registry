@@ -68,6 +68,37 @@ test('redirect hops are independently vetted with a finite redirect budget', asy
   assert.equal(loopCalls.length, 6);
 });
 
+test('manual redirects return the vetted response without connecting to the next host', async () => {
+  const calls = [];
+  const lookedUp = [];
+  const fetchPublic = publicHttpModule.createPublicFetcher({
+    resolve: async hostname => {
+      lookedUp.push(hostname);
+      return [{ address: '93.184.216.34', family: 4 }];
+    },
+    request: transport([
+      { status: 302, headers: { location: 'https://outside.example/caption' } },
+      { status: 200 },
+    ], calls),
+  });
+  const response = await fetchPublic('https://example.com/start', { redirect: 'manual' });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('location'), 'https://outside.example/caption');
+  assert.deepEqual(lookedUp, ['example.com']);
+  assert.equal(calls.length, 1);
+});
+
+test('unsupported redirect modes fail before DNS or a request', async () => {
+  let lookups = 0;
+  const fetchPublic = publicHttpModule.createPublicFetcher({
+    resolve: async () => { lookups++; throw new Error('Must not resolve'); },
+  });
+  for (const redirect of ['error', '', 42]) {
+    await assert.rejects(fetchPublic('https://example.com/', { redirect }), /redirect must/);
+  }
+  assert.equal(lookups, 0);
+});
+
 test('streamed byte cap stops missing or dishonest lengths before buffering the full body', async () => {
   let consumed = 0;
   async function* body() {
@@ -92,6 +123,31 @@ test('total timeout bounds DNS and forbids a later connection', { timeout: 1000 
   finishLookup([{ address: '93.184.216.34', family: 4 }]);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.length, 0);
+});
+
+test('total timeout aborts a stalled response body', { timeout: 1000 }, async () => {
+  let body;
+  let requestSignal;
+  const fetchPublic = publicHttpModule.createPublicFetcher({
+    resolve: async () => [{ address: '93.184.216.34', family: 4 }],
+    request: (_url, options, callback) => {
+      requestSignal = options.signal;
+      const request = new EventEmitter();
+      request.end = () => {
+        body = new Readable({ read() {} });
+        Object.assign(body, { statusCode: 200, headers: {} });
+        options.signal.addEventListener('abort', () => {
+          body.destroy(options.signal.reason);
+          request.emit('error', options.signal.reason);
+        }, { once: true });
+        callback(body);
+      };
+      return request;
+    },
+  });
+  await assert.rejects(fetchPublic('https://example.com/', { timeoutMs: 20 }), /timeout/i);
+  assert.equal(requestSignal.aborted, true);
+  assert.equal(body.destroyed, true);
 });
 
 test('all blocked address classes make zero transport requests', async () => {

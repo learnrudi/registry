@@ -102,6 +102,10 @@ function withDeadline(promise, signal) {
 
 export function createPublicFetcher({ resolve = lookup, request = nativeRequest } = {}) {
   return async function fetchPublic(rawUrl, options = {}) {
+    const redirect = options.redirect ?? 'follow';
+    if (!['follow', 'manual'].includes(redirect)) {
+      throw new Error('redirect must be follow or manual');
+    }
     const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 512 * 1024 * 1024) {
       throw new Error('maxBytes must be between 1 and 536870912');
@@ -122,6 +126,8 @@ export function createPublicFetcher({ resolve = lookup, request = nativeRequest 
       for (let redirects = 0; ; redirects += 1) {
         const address = await withDeadline(vettedAddress(url, resolve), controller.signal);
         const response = await withDeadline(requestOne(url, address, settings, request), controller.signal);
+        // Manual callers must validate and bound each next hop before requesting it.
+        if (redirect === 'manual') return response;
         if (![301, 302, 303, 307, 308].includes(response.status)) return response;
         if (redirects >= 5) throw new Error('Too many HTTP redirects');
         const location = response.headers.get('location');

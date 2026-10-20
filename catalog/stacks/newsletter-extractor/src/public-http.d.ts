@@ -2,7 +2,7 @@ export interface PublicFetchOptions {
   headers?: Record<string, string>;
   maxBytes?: number;
   timeoutMs?: number;
-  redirect?: "follow";
+  redirect?: "follow" | "manual";
 }
 export function isPublicAddress(address: string): boolean;
 export function parsePublicUrl(rawUrl: string): URL;
