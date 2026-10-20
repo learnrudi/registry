@@ -1,6 +1,6 @@
 {
   "name": "content-extractor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Content extraction MCP - YouTube, Reddit, TikTok, articles, and link pages",
   "type": "module",
   "main": "src/index.ts",
