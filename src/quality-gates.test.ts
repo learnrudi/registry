@@ -62,7 +62,7 @@ describe("registry quality workflow", () => {
     );
 
     expect(packageJson.files).toContain(
-      "catalog/stacks/**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,py,txt}"
+      "catalog/stacks/**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,py,txt,html}"
     );
   });
 });

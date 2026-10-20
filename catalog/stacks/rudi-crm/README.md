@@ -43,6 +43,12 @@ PostgreSQL advisory lock, applies each migration transactionally, and records
 its SHA-256 checksum in `public.rudi_crm_schema_migrations`. Re-running it skips
 unchanged migrations and fails closed if an applied migration was edited.
 
+Version 0.4.0 requires migration `0004_contact_address_classification.sql`.
+`rudi_crm_setup_status` reports the missing classification table and function
+until that migration is applied; a pre-classification database is not ready
+for the new tool. Reconciliation with Registry main does not apply migrations
+to any installed or production database.
+
 Restart the agent host after integration so the MCP router reloads the stack.
 Run `rudi_crm_setup_status` before using the CRM; every required table,
 function, view, and validator must be healthy.

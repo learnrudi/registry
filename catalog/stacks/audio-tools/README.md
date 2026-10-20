@@ -192,3 +192,24 @@ or local caches.
 rudi install stack:audio-tools
 rudi index --json
 ```
+
+## URL and input resource limits
+
+Direct HTTP(S) media downloads require public destinations, reject URL credentials,
+validate every DNS answer and pin a vetted address for each connection/redirect.
+There are at most five redirects and a 120-second total DNS/request/body timeout.
+Streamed byte accounting rejects oversized bodies even without Content-Length.
+Compressed HTTP bodies are rejected after requesting identity encoding.
+
+`AUDIO_TOOLS_MAX_INPUT_BYTES` is a trusted process configuration: default 64 MiB,
+integer range 1 through 512 MiB. It caps direct downloads and padded base64 inputs;
+base64 length is checked before decoding, so an oversized encoded value does not
+allocate a second decoded buffer. The MCP envelope itself has already received
+that encoded input; this does not bound the upstream host's JSON parser.
+Local file inputs retain their existing local-file behavior.
+
+Recognized video-page domains still use the external `yt-dlp` binary, with an
+advertised maximum file size and socket timeout. Its internal requests, redirects,
+and extraction dependencies are outside the pinned Node HTTP transport; the
+platform host allowlist is not a complete network sandbox. Generic URLs always
+use the guarded direct downloader.

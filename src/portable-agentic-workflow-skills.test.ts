@@ -209,6 +209,247 @@ describe("RUDI Decision Canvas", () => {
 });
 
 describe("portable skill contracts", () => {
+  it.each([
+    ["rudi-decision-frontier", "promot"],
+    ["rudi-diagnose", "hypothes"],
+    ["rudi-prototype", "throwaway"],
+    ["rudi-stakeholder-questionnaire", "unknown"],
+    ["rudi-code-review", "Proof"],
+    ["rudi-human-runbook", "secret"],
+    ["publish-task-changes", "explicitly requested"],
+  ])("publishes the bounded %s workflow", async (skillName, contractSignal) => {
+    const [skill, metadata] = await Promise.all([
+      fs.readFile(
+        path.join(repoRoot, "catalog/skills", skillName, "SKILL.md"),
+        "utf8"
+      ),
+      fs.readFile(
+        path.join(
+          repoRoot,
+          "catalog/skills",
+          skillName,
+          "agents/openai.yaml"
+        ),
+        "utf8"
+      ),
+    ]);
+
+    expect(skill).not.toContain("[TODO");
+    expect(skill).not.toMatch(/mcp__rudi__|spawn_agent|\/goal|\/review/);
+    expect(skill).not.toMatch(/\/Users\/|[A-Z]:\\/);
+    expect(skill).toContain("## Authority Boundaries");
+    expect(skill).toContain("## Host Adaptation");
+    expect(skill).toMatch(new RegExp(contractSignal, "i"));
+    expect(metadata).toContain(`$${skillName}`);
+  });
+
+  it("documents Decision Frontier record introduction revisions for durable authoring", async () => {
+    const [skill, contract] = await Promise.all([
+      fs.readFile(
+        path.join(repoRoot, "catalog/skills/rudi-decision-frontier/SKILL.md"),
+        "utf8"
+      ),
+      fs.readFile(
+        path.join(
+          repoRoot,
+          "catalog/skills/rudi-decision-frontier/references/frontier-contract.md"
+        ),
+        "utf8"
+      ),
+    ]);
+
+    expect(skill).toContain("introducedAtFrontierRevision");
+    expect(contract).toContain("introducedAtFrontierRevision");
+    expect(contract).toMatch(/missing.*revision 1/is);
+  });
+
+  it("publishes the accepted cross-host skill baseline", async () => {
+    const index = JSON.parse(
+      await fs.readFile(path.join(repoRoot, "index.json"), "utf8")
+    );
+
+    expect(index.packages["skill:map-change-impact"]).toMatchObject({
+      version: "1.1.1",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/map-change-impact",
+      },
+    });
+    expect(index.packages["skill:grill-with-docs-loop"]).toMatchObject({
+      version: "2.2.1",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/grill-with-docs-loop",
+      },
+    });
+    expect(index.packages["skill:swe-compliance-checklist"]).toMatchObject({
+      version: "1.5.1",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/swe-compliance-checklist",
+      },
+    });
+    expect(index.packages["skill:horizontal-engineering-review"]).toMatchObject({
+      version: "1.1.1",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/horizontal-engineering-review",
+      },
+      requires: {
+        stacks: ["stack:swe-engineering"],
+      },
+    });
+    expect(index.packages["skill:rudi-chief-of-staff"]).toMatchObject({
+      version: "1.2.2",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/rudi-chief-of-staff",
+      },
+    });
+
+    for (const skillName of [
+      "rudi-decision-frontier",
+      "rudi-diagnose",
+      "rudi-prototype",
+      "rudi-stakeholder-questionnaire",
+      "rudi-code-review",
+      "rudi-human-runbook",
+      "publish-task-changes",
+    ]) {
+      expect(index.packages[`skill:${skillName}`]).toMatchObject({
+        version: skillName === "rudi-code-review" ? "1.0.2" : "1.0.1",
+        install: {
+          source: "catalog",
+          path: `catalog/skills/${skillName}`,
+        },
+      });
+    }
+    expect(index.packages["skill:rudi-repo-steward"]).toMatchObject({
+      version: "0.3.2",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/rudi-repo-steward",
+      },
+    });
+    expect(index.packages["skill:rudi-worktree-closeout"]).toMatchObject({
+      version: "1.0.1",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/rudi-worktree-closeout",
+      },
+      requires: {
+        stacks: ["stack:repo-steward"],
+      },
+    });
+    expect(index.packages["skill:set-goal-and-execute"]).toMatchObject({
+      version: "1.0.1",
+      install: {
+        source: "catalog",
+        path: "catalog/skills/set-goal-and-execute",
+      },
+    });
+
+    await expect(
+      fs.access(
+        path.join(
+          repoRoot,
+          "catalog/skills/map-change-impact/agents/openai.yaml"
+        )
+      )
+    ).resolves.toBeUndefined();
+    await expect(
+      fs.access(
+        path.join(
+          repoRoot,
+          "catalog/skills/rudi-worktree-closeout/agents/openai.yaml"
+        )
+      )
+    ).resolves.toBeUndefined();
+    await expect(
+      fs.access(
+        path.join(
+          repoRoot,
+          "catalog/skills/horizontal-engineering-review/agents/openai.yaml"
+        )
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps a diagnosis-only request strictly read-only", async () => {
+    const skill = await fs.readFile(
+      path.join(repoRoot, "catalog/skills/rudi-diagnose/SKILL.md"),
+      "utf8"
+    );
+
+    expect(skill).toMatch(/diagnos(?:e|is).*authorizes (?:only )?read-only/i);
+    expect(skill).toMatch(/explicit.*authorit.*(?:test|instrument|edit|write)/i);
+    expect(skill).not.toMatch(/diagnos(?:e|is).*authorizes[^.]*instrumentation/i);
+  });
+
+  it("keeps the human-readable engineering lifecycle aligned with registered packages", async () => {
+    const [index, catalog] = await Promise.all([
+      fs
+        .readFile(path.join(repoRoot, "index.json"), "utf8")
+        .then((value) => JSON.parse(value)),
+      fs.readFile(path.join(repoRoot, "docs/rudi-engineering-skills.md"), "utf8"),
+    ]);
+    const lifecycleSkills = [
+      "set-goal-and-execute",
+      "rudi-decision-frontier",
+      "grill-with-docs-loop",
+      "rudi-decision-canvas",
+      "rudi-stakeholder-questionnaire",
+      "rudi-prototype",
+      "rudi-diagnose",
+      "trace-feature-lineage",
+      "map-change-impact",
+      "rudi-chief-of-staff",
+      "swe-compliance-checklist",
+      "rudi-swe-issue-loop",
+      "rudi-code-review",
+      "horizontal-engineering-review",
+      "repo-red-team-review",
+      "rudi-context-gardener",
+      "publish-task-changes",
+      "rudi-worktree-closeout",
+      "rudi-repo-steward",
+    ];
+
+    for (const skillName of lifecycleSkills) {
+      expect(index.packages).toHaveProperty(`skill:${skillName}`);
+      expect(catalog).toContain(`\`skill:${skillName}\``);
+    }
+  });
+
+  it("keeps set-goal-and-execute durable, portable, and authority bounded", async () => {
+    const [skill, openai] = await Promise.all([
+      fs.readFile(
+        path.join(repoRoot, "catalog/skills/set-goal-and-execute/SKILL.md"),
+        "utf8"
+      ),
+      fs.readFile(
+        path.join(
+          repoRoot,
+          "catalog/skills/set-goal-and-execute/agents/openai.yaml"
+        ),
+        "utf8"
+      ),
+    ]);
+
+    expect(skill).not.toContain("[TODO");
+    expect(skill).not.toMatch(/mcp__rudi__|spawn_agent|\/goal|\/review/);
+    expect(skill).not.toMatch(/\/Users\/|[A-Z]:\\/);
+    expect(skill).toContain("## Establish The Goal");
+    expect(skill).toContain("## Keep Authority Gates Separate");
+    expect(skill).toContain("## Host Adaptation");
+    expect(skill).toMatch(/matching active goal.*continue/is);
+    expect(skill).toMatch(/different unfinished goal.*preserv/is);
+    expect(skill).toMatch(/does not itself authorize/is);
+    expect(skill).toMatch(/RUDI Delivery Loop/i);
+    expect(openai).toContain('display_name: "Set Goal and Execute"');
+    expect(openai).toContain("$set-goal-and-execute");
+  });
+
   it.each(["rudi-context-gardener", "rudi-decision-canvas"])(
     "%s keeps its core workflow host-neutral",
     async (skillName) => {
@@ -223,14 +464,56 @@ describe("portable skill contracts", () => {
     }
   );
 
+  it("keeps horizontal engineering review bounded and evidence-led", async () => {
+    const skill = await fs.readFile(
+      path.join(
+        repoRoot,
+        "catalog/skills/horizontal-engineering-review/SKILL.md"
+      ),
+      "utf8"
+    );
+
+    expect(skill).not.toContain("[TODO");
+    expect(skill).not.toMatch(/mcp__rudi__|spawn_agent|\/goal|\/review/);
+    expect(skill).toContain("## Host Adaptation");
+    expect(skill).toMatch(/Default to \*\*Assess\*\*/);
+    expect(skill).toMatch(/SWE compliance checklist/);
+    expect(skill).toMatch(/Repo Steward/);
+    expect(skill).toMatch(/third semantic implementation triggers a review, not automatic extraction/i);
+  });
+
+  it("keeps worktree closeout evidence-led and non-destructive", async () => {
+    const skill = await fs.readFile(
+      path.join(repoRoot, "catalog/skills/rudi-worktree-closeout/SKILL.md"),
+      "utf8"
+    );
+    const contract = await fs.readFile(
+      path.join(
+        repoRoot,
+        "catalog/skills/rudi-worktree-closeout/references/receipt-contract.md"
+      ),
+      "utf8"
+    );
+
+    expect(skill).not.toContain("[TODO");
+    expect(skill).not.toMatch(/mcp__rudi__|spawn_agent|\/goal|\/review/);
+    expect(skill).toContain("## Host Adaptation");
+    expect(skill).toMatch(/never performs.*cleanup/is);
+    expect(skill).toMatch(/explicit approval reference/i);
+    expect(contract).toMatch(/repository identity/i);
+    expect(contract).toMatch(/task and agent lineage/i);
+    expect(contract).toMatch(/cleanup_approved/);
+    expect(contract).not.toMatch(/cleanup_verified/);
+  });
+
   it("keeps the delivery workflow host-neutral and evidence-gated", async () => {
     const [issueLoop, complianceChecklist] = await Promise.all([
       fs.readFile(
-        path.join(repoRoot, "catalog/skills/rudi-swe-issue-loop.md"),
+        path.join(repoRoot, "catalog/skills/rudi-swe-issue-loop/SKILL.md"),
         "utf8"
       ),
       fs.readFile(
-        path.join(repoRoot, "catalog/skills/swe-compliance-checklist.md"),
+        path.join(repoRoot, "catalog/skills/swe-compliance-checklist/SKILL.md"),
         "utf8"
       ),
     ]);
@@ -242,7 +525,14 @@ describe("portable skill contracts", () => {
       expect(skill).toMatch(/evidence bundle/i);
     }
     expect(issueLoop).not.toContain("RUDI or Codex engineering work");
-    expect(issueLoop).toContain("version: 1.1.0");
-    expect(complianceChecklist).toContain("version: 1.1.0");
+    expect(issueLoop).toContain("version: 1.2.1");
+    expect(issueLoop).toMatch(/Standalone mode/i);
+    expect(issueLoop).toMatch(/Composed mode/i);
+    expect(issueLoop).toMatch(/Issue or PR state never.*plan dependency/is);
+    expect(complianceChecklist).toContain("version: 1.5.1");
+    expect(complianceChecklist).toMatch(/Standards, Spec, and Proof/i);
+    expect(complianceChecklist).toContain("Horizontal-pattern scan:");
+    expect(complianceChecklist).toContain("Horizontal-obligation disposition:");
+    expect(complianceChecklist).toMatch(/worktree closeout receipt/i);
   });
 });

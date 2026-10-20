@@ -1,6 +1,10 @@
 ---
-name: rudi-chief-of-staff
+name: RUDI Chief of Staff
 description: Coordinate complex single- or multi-project objectives from the initiating agent through an acceptance-led task graph, exact provider/model routing, durable run lifecycle, resource and review limits, explicit handoffs, bounded workers, and evidence-backed integration with human oversight. Use when the user asks to delegate dependent work, run a crew, act as a chief of staff or first mate, coordinate multiple agents or desktop tasks, or keep a long-running project moving predictably across worktrees, projects, or hosts.
+version: 1.2.2
+category: agents
+tags:
+  - capability:coordinate
 ---
 
 # RUDI Chief of Staff
@@ -29,13 +33,40 @@ The durable layout is:
 .rudi/orchestration/
 ├── plan.json          # portable canonical DAG and acceptance ledger
 ├── graph.mmd          # deterministic generated view
-├── decisions.json     # durable accepted decisions, only when needed
+├── decisions.json     # optional derived accepted-decision index
 └── runs/*.json        # noncanonical host and attempt transport state
 ```
 
 Ignore `runs/*.json` in Git by default, but retain the records while reconciling
 an attempt or recovering an indeterminate dispatch. Keep native project, host,
 task, thread, checkout, and worktree IDs only in run transport.
+
+Treat `run.planRevision` as the plan revision observed by the run's last
+accepted write. A run may temporarily lag after a plan-only mutation, but it
+may never lead the plan or contradict the current plan's lifecycle, binding,
+history, reconciliation, or evidence state. No attempt may claim preparation
+at a revision newer than the run has observed. Do not hand-edit either ledger to
+repair lag. The next accepted run mutation catches up to the current plan; if a
+reconciliation was interrupted after its plan write, replay the exact same
+input so the CLI can repair only the matching run reference and revision.
+
+## Resolve discovery before execution
+
+When the objective is not stable enough to decompose responsibly, compose
+`rudi-decision-frontier` before creating executable nodes. Schema-v1 plans
+remain the ordinary execution contract. A schema-v2 plan may also carry the
+authoritative decision frontier: unresolved areas, proposed or approved
+decision records, frontier revision, and append-only promotion receipts.
+
+Do not dispatch discovery artifacts as if they were accepted tasks. A
+recommendation, Decision Canvas selection, stakeholder response, prototype
+verdict, or Grill result becomes execution scope only after the manager has
+validated it, recorded the required human approval, and confirmed separate
+implementation authorization. Use the portable `promote` operation to bind the
+exact plan/frontier revisions, complete area/decision snapshot digests, and
+created nodes. The manager serializes plan mutations, so a concurrent stale
+promotion fails without state loss. Promotion creates only `proposed` nodes; it
+does not activate them. Promotion is not readiness or dispatch.
 
 ## Establish the operating contract
 
@@ -108,6 +139,9 @@ or sequential execution mode.
 
 ## Compose specialized workflows
 
+- For ambiguous initiatives, compose `rudi-decision-frontier`. It may use
+  questionnaires, canvases, prototypes, diagnosis, and Grill results as
+  evidence, but this plan remains the only durable execution authority.
 - For unresolved repository contract, terminology, or architecture questions,
   compose `grill-with-docs-loop` repo-first. Let that workflow run its isolated
   questioner, answerer, skeptic, writer, and reviewer roles; consume its
@@ -116,6 +150,15 @@ or sequential execution mode.
   `swe-compliance-checklist`. Treat its checklist, verification, independent
   review, and evidence bundle as node deliverables instead of copying its
   phases into this skill.
+- Use `rudi-repo-steward` for durable repository identity, worktree status,
+  leases, and lifecycle ledgers. After accepted integration and verification,
+  trigger `rudi-worktree-closeout` for every material task worktree. The
+  coordinator owns sequencing and acceptance, not Git cleanup or closeout
+  receipt persistence.
+- Keep `.rudi/orchestration/plan.json` as the acceptance DAG and Repo Steward's
+  closeout ledger as repository lifecycle evidence. Link their task, agent,
+  attempt, acceptance, and revision identifiers; do not merge the records or
+  let either silently overwrite the other's authority.
 
 ## Prepare before dispatch
 
@@ -157,6 +200,10 @@ has terminated.
    Validate its project, run, node, attempt, and result identity and reject
    unknown, stale, conflicting, extra, or authority-expanding input without
    mutating the plan. Exact duplicates are idempotent.
+   Reconciliation serializes both ledgers, writes the authoritative plan first,
+   then writes the matching run reference. If the second write is interrupted,
+   replay only the byte-identical accepted input; a stale, conflicting, or
+   ambiguous replay fails closed.
 3. A complete result may move `running` to `review`. Only the manager may move
    `review` to `done`, and only after all criterion, verification, deliverable,
    and handoff evidence is complete and retrievable.
@@ -188,6 +235,12 @@ discovered host supports reversible archive. Never archive a waiting node or
 an unreconciled or indeterminate worker. After the native archive attempt, use
 `record-archive` to preserve its success or failure in run history.
 
+Before declaring the objective complete, obtain a read-back of each required
+worktree closeout receipt. A receipt may require preservation, retention, or a
+future cleanup decision; it need not claim cleanup. Never treat archive
+eligibility or a cleanup approval reference as proof that a worktree was
+cleaned, deleted, moved, or archived.
+
 Return:
 
 - the objective and material behavior achieved;
@@ -196,7 +249,8 @@ Return:
 - review and verification evidence;
 - unresolved risks, decisions, and known proof gaps;
 - retained indeterminate attempts or locks; and
-- publication, deployment, merge, archive, and cleanup state.
+- publication, deployment, merge, archive, cleanup-approval state, and the
+  closeout receipt ID and version for each material worktree.
 
 Do not mark the objective complete while required nodes, reconciliation,
 integration, verification, or user-authorized publication work remains.

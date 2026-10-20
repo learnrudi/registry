@@ -11,7 +11,12 @@ RUDI CLI. The catalog uses schema version 2 with unversioned canonical paths.
 | Binary | Standalone binaries and CLIs | `catalog/binaries/{id}.json` |
 | Agent | AI coding assistants | `catalog/agents/{id}.json` |
 | Runtime | Language interpreters | `catalog/runtimes/{id}.json` |
-| Skill | Reusable agent workflows | `catalog/skills/{id}.md` or `catalog/skills/{id}/SKILL.md` |
+| Skill | Reusable agent workflows | `catalog/skills/{id}/SKILL.md` |
+
+[Workers](catalog/workers/README.md) compose goals, processes, stacks and skills,
+context, operating boundaries, and completion criteria. The workers authoring
+area currently contains manually loaded Markdown definitions and a synthetic
+Client Meeting Update example; it is not an installable package type.
 
 `index.json` is the single generated package index. Do not add parallel
 version-suffixed files or directories; the schema version belongs inside the
@@ -34,7 +39,8 @@ catalog/
 ├── stacks/{id}/
 │   ├── manifest.json         # Canonical stack metadata
 │   └── src/, node/, python/  # Stack implementation
-├── skills/                   # Flat or bundled skill packages
+├── skills/                   # Same-ID skill folders
+├── workers/                  # Markdown worker definitions; authoring only
 ├── binaries/{id}.json        # Canonical binary metadata
 ├── agents/{id}.json          # Canonical agent metadata
 └── runtimes/{id}.json        # Canonical runtime metadata
@@ -73,6 +79,7 @@ Minimal manifest:
     "path": "catalog/stacks/my-stack"
   },
   "runtime": "node",
+  "surface": "local-only",
   "requires": {
     "binaries": [],
     "secrets": [
@@ -93,8 +100,8 @@ Minimal manifest:
     "description": "What the stack does",
     "author": "Your Name",
     "license": "MIT",
-    "category": "productivity",
-    "tags": ["example"]
+    "category": "data",
+    "tags": ["example", "capability:query"]
   }
 }
 ```
@@ -105,6 +112,16 @@ skill, declare the stack in that skill's `requires.stacks`, set
 `related.skills` entries are optional companion workflows. `provides.tools` is
 only for MCP tools exposed by the stack.
 
+Stacks share the seven primitive categories and capability/domain/provider tags
+with their primary operators. See [Stack catalog organization](docs/stack-catalog.md)
+for naming, discovery, verification and reproducible index checks.
+
+`surface` classifies hosted eligibility as `local-only`, `cloud-hosted`, or
+`both`; omission fails closed to `local-only`. A `both` stack uses exact
+`toolSurfaces` overrides to opt individual tools into hosted execution. See
+[SCHEMA.md](SCHEMA.md#surface-and-toolsurfaces) for the no-elevation and
+allowlist rules.
+
 `lifecycle` is optional and omission means unclassified. Do not claim
 `stable` or `supported` without evidence. Deprecated packages carry an
 announcement date and migration message; retired packages are removed from the
@@ -113,8 +130,8 @@ canonical catalog rather than left as installable placeholders. See
 
 ## Creating a Skill
 
-Use either a flat file at `catalog/skills/{skill-id}.md` or a bundle rooted at
-`catalog/skills/{skill-id}/SKILL.md`. Bundles may include `scripts/`,
+Author each skill in `catalog/skills/{skill-id}/SKILL.md`. Legacy flat files
+remain readable for compatibility. Bundles may include `scripts/`,
 `references/`, and `assets/`. Catalog packages must be portable: personal paths,
 client state, account data, and brand-specific defaults belong in local/private
 skills or `~/.rudi` state.
@@ -141,6 +158,21 @@ node -e "const i=require('./index.json'); console.log(Object.keys(i.packages).jo
 ```
 
 ## Required Checks
+
+### Runtime compatibility
+
+Catalog runtimes and consuming applications have independent release contracts.
+Read `catalog/runtimes/node.json` and the consumer's declared `engines` before
+selecting an execution runtime; a validated catalog download is not application
+compatibility proof.
+
+At the October 20, 2026 source review, Registry `2ad101b` selects Node 24.21.0,
+while CLI `22d5c1d` requires Node 22 or 24.22+. That combination is incompatible
+with the CLI's Node 24 requirement. Use a consumer-supported runtime and retain
+the compatibility gap until a separately verified runtime update is accepted.
+This documentation review does not update the manifest or installed runtimes.
+
+### Repository verification
 
 ```bash
 npm test
@@ -173,3 +205,9 @@ guidance.
 ## License
 
 MIT
+
+Skill category, naming, facet and dependency conventions are defined in
+[Skill catalog organization](docs/skill-catalog.md).
+
+Documentation ownership and the review requirements are in
+[AGENTS.md](AGENTS.md#documentation-maintenance).

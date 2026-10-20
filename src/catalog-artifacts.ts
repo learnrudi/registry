@@ -1,12 +1,8 @@
-export const CATALOG_PAYLOAD_PATTERNS = [
-  "catalog/stacks/**/!(node_modules)/**/*.{ts,js,json,md,py,txt}",
-  "catalog/stacks/*/manifest.json",
-  "catalog/stacks/*/.env.example",
-  "catalog/skills/**/*",
-  "catalog/prompts/**/*.md",
-];
+// Hash the full release catalog, including dotfiles and future payload types.
+export const CATALOG_PAYLOAD_PATTERNS = ["catalog/**/*"];
 
 export const CATALOG_ARTIFACT_IGNORE = [
+  "**/.DS_Store",
   "**/node_modules/**",
   "**/runs/**",
   "**/downloads/**",

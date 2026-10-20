@@ -1,3 +1,5 @@
+import { parsePublicUrl } from "./public-http.js";
+
 export function parseHttpUrl(rawUrl: unknown, fieldName = "url"): URL {
   if (typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
     throw new Error(`${fieldName} must be a non-empty string`);
@@ -14,7 +16,7 @@ export function parseHttpUrl(rawUrl: unknown, fieldName = "url"): URL {
     throw new Error(`${fieldName} must use http or https`);
   }
 
-  return parsed;
+  return parsePublicUrl(parsed.toString());
 }
 
 export function hostnameMatches(parsed: URL, domains: string[]): boolean {

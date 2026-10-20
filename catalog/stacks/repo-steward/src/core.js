@@ -1,9 +1,12 @@
+import { createEnrollmentOperations } from "./enrollment-operations.js";
+import { repositoryHead, requireSourceHead } from "./git-head.js";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { createCloseoutOperations } from "./closeout.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -180,7 +183,7 @@ async function runGit(repositoryPath, args, options = {}) {
       stderr: result.stderr,
     };
   } catch (error) {
-    throw new Error(gitFailureMessage(error, options.operation || "Git command"));
+    throw new Error(gitFailureMessage(error, options.operation || "Git command"), { cause: { code: error?.code } });
   }
 }
 
@@ -681,113 +684,6 @@ async function withEnrollmentLock(stateRoot, owner, operation, options = {}) {
   }
 }
 
-function defaultRootId(rootPath) {
-  const candidate = path.basename(rootPath)
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "workspace";
-  return requireRepositoryId(candidate, "root_id");
-}
-
-export async function enrollRepositoryRoot(args = {}, options = {}) {
-  assertAllowedKeys(args, "arguments", [
-    "root_id",
-    "root_path",
-    "owner",
-    "fetch_allowed",
-    "max_depth",
-  ]);
-  const owner = requireOwner(args.owner);
-  const rootPathInput = nonEmptyString(args.root_path, "root_path", 4096);
-  if (!path.isAbsolute(rootPathInput)) throw new Error("root_path must be absolute.");
-  const rootPath = await requireDirectoryRealpath(rootPathInput, "root_path");
-  const rootId = args.root_id === undefined
-    ? defaultRootId(rootPath)
-    : requireRepositoryId(args.root_id, "root_id");
-  const root = {
-    id: rootId,
-    path: rootPath,
-    fetchAllowed: optionalBoolean(args.fetch_allowed, "fetch_allowed"),
-    maxDepth: boundedInteger(args.max_depth, "max_depth", {
-      defaultValue: DEFAULT_DISCOVERY_DEPTH,
-      min: 0,
-      max: MAX_DISCOVERY_DEPTH,
-    }),
-    source: "enrollment",
-  };
-  const stateRoot = defaultStateRoot(options);
-
-  const enrollmentResult = await withEnrollmentLock(stateRoot, owner, async () => {
-    const sources = await loadConfigurationSources(options);
-    const existingByPath = sources.roots.find((candidate) => candidate.path === root.path);
-    if (existingByPath) {
-      const samePolicy =
-        existingByPath.id === root.id &&
-        existingByPath.fetchAllowed === root.fetchAllowed &&
-        existingByPath.maxDepth === root.maxDepth;
-      if (!samePolicy) {
-        throw new Error(`Root ${root.path} is already enrolled with different policy.`);
-      }
-      return {
-        enrollmentVersion: sources.enrollment.version,
-        idempotent: true,
-        root: existingByPath,
-      };
-    }
-    const existingById = sources.roots.find((candidate) => candidate.id === root.id);
-    if (existingById) {
-      throw new Error(`Root ID already belongs to another path: ${root.id}.`);
-    }
-    const overlapping = sources.roots.find((candidate) => pathsOverlap(candidate.path, root.path));
-    if (overlapping) {
-      const label = overlapping.source === "enrollment" ? "enrolled" : "configured";
-      throw new Error(`Root ${root.id} overlaps ${label} root ${overlapping.id}.`);
-    }
-
-    const current = sources.enrollment;
-    const now = new Date(
-      typeof options.now === "function" ? options.now() : Date.now()
-    ).toISOString();
-    const version = current.version + 1;
-    const next = {
-      schema_version: CONFIG_SCHEMA_VERSION,
-      version,
-      roots: [...current.roots, {
-        root_id: root.id,
-        path: root.path,
-        fetch_allowed: root.fetchAllowed,
-        max_depth: root.maxDepth,
-      }],
-      history: [...current.history, {
-        version,
-        event: "root_enrolled",
-        owner,
-        root_id: root.id,
-        path: root.path,
-        at: now,
-      }].slice(-MAX_ENROLLMENT_HISTORY),
-    };
-    const paths = enrollmentPaths(stateRoot);
-    if (current.version > 0) {
-      await ensureStateDirectory(paths.history);
-      await atomicWriteJson(
-        path.join(paths.history, `enrollment-v${current.version}-${Date.now()}-${randomUUID()}.json`),
-        current
-      );
-    }
-    await atomicWriteJson(paths.active, next);
-    return { enrollmentVersion: version, idempotent: false, root };
-  }, options);
-
-  const discovery = await discoverRepositories({ root_ids: [rootId] }, options);
-  return {
-    enrollment_version: enrollmentResult.enrollmentVersion,
-    idempotent: enrollmentResult.idempotent,
-    root: publicRoot(enrollmentResult.root),
-    discovery,
-  };
-}
-
 export async function discoverRepositories(args = {}, options = {}) {
   assertAllowedKeys(args, "arguments", ["root_ids"]);
   const sources = await loadConfigurationSources(options);
@@ -949,24 +845,24 @@ async function assertActiveLease(config, repository, owner, leaseId, options = {
   return lease;
 }
 
-async function readActionLock(file) {
+async function readRecordLock(file) {
   let lock;
   try {
     lock = JSON.parse(await fs.readFile(file, "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") return null;
-    throw new Error(`Unable to read action lock: ${redactText(error?.message)}`);
+    throw new Error(`Unable to read record lock: ${redactText(error?.message)}`);
   }
-  assertAllowedKeys(lock, "action lock", ["lease_id", "owner", "expires_at"]);
+  assertAllowedKeys(lock, "record lock", ["lease_id", "owner", "expires_at"]);
   const leaseId = requireLeaseId(lock.lease_id);
   const owner = requireOwner(lock.owner);
   if (typeof lock.expires_at !== "string" || !Number.isFinite(Date.parse(lock.expires_at))) {
-    throw new Error("action lock expires_at must be an ISO timestamp.");
+    throw new Error("record lock expires_at must be an ISO timestamp.");
   }
   return { lease_id: leaseId, owner, expires_at: lock.expires_at };
 }
 
-async function archiveActionLock(paths, nowMs) {
+async function archiveRecordLock(paths, nowMs) {
   await ensureStateDirectory(paths.lockHistory);
   const target = path.join(
     paths.lockHistory,
@@ -981,7 +877,7 @@ async function archiveActionLock(paths, nowMs) {
   }
 }
 
-async function withActionLock(paths, lease, operation, options = {}) {
+async function withRecordLock(paths, lease, operation, options = {}, label = "Action update") {
   await ensureStateDirectory(paths.actionsRoot);
   const nowMs = typeof options.now === "function" ? options.now() : Date.now();
   let acquired = false;
@@ -1004,20 +900,20 @@ async function withActionLock(paths, lease, operation, options = {}) {
         await fs.unlink(paths.lock).catch(() => {});
       }
       if (error?.code !== "EEXIST") throw error;
-      const existing = await readActionLock(paths.lock);
+      const existing = await readRecordLock(paths.lock);
       if (!existing) continue;
       if (Date.parse(existing.expires_at) > nowMs) {
         throw new Error(
-          `Action update is already in progress: ${path.basename(paths.active, ".json")}.`
+          `${label} is already in progress: ${path.basename(paths.active, ".json")}.`
         );
       }
-      await archiveActionLock(paths, nowMs);
+      await archiveRecordLock(paths, nowMs);
     }
   }
 
   if (!acquired) {
     throw new Error(
-      `Unable to acquire action lock after concurrent updates: ${path.basename(paths.active, ".json")}.`
+      `Unable to acquire ${label.toLowerCase()} lock after concurrent updates: ${path.basename(paths.active, ".json")}.`
     );
   }
 
@@ -1148,12 +1044,8 @@ async function getResolvedRepositoryStatus(repository, args = {}) {
   const startedAt = Date.now();
   const fetch = await maybeFetch(args, repository);
   const branch = await tryGit(repository.path, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-  const head = (
-    await runGit(repository.path, ["rev-parse", "HEAD"], {
-      operation: `Read HEAD for ${repository.id}`,
-    })
-  ).stdout.trim();
-  const upstream = await tryGit(repository.path, [
+  const head = await repositoryHead(repository, runGit);
+  const upstream = head === null ? null : await tryGit(repository.path, [
     "rev-parse",
     "--abbrev-ref",
     "--symbolic-full-name",
@@ -1189,6 +1081,7 @@ async function getResolvedRepositoryStatus(repository, args = {}) {
     relative_path: repository.relativePath,
     branch: branch || null,
     head,
+    head_state: head === null ? "unborn" : "committed",
     upstream: upstream || null,
     ahead,
     behind,
@@ -1252,6 +1145,7 @@ export async function scanFleet(args = {}, options = {}) {
       total: repositories.length,
       scanned: scanned.length,
       failed: repositories.length - scanned.length,
+      awaiting_first_commit: scanned.filter((repository) => repository.head_state === "unborn").length,
       dirty: scanned.filter((repository) => repository.dirty.total > 0).length,
       needs_push: scanned.filter((repository) => (repository.ahead ?? 0) > 0).length,
       needs_pull: scanned.filter((repository) => (repository.behind ?? 0) > 0).length,
@@ -1352,7 +1246,7 @@ export async function recordRepositoryAction(args = {}, options = {}) {
   const lease = await assertActiveLease(config, repository, owner, leaseId, options);
   const paths = actionPaths(config.stateRoot, repository.id, actionId);
 
-  return withActionLock(paths, lease, async () => {
+  return withRecordLock(paths, lease, async () => {
     const existing = await readAction(paths.active);
     const now = new Date(
       typeof options.now === "function" ? options.now() : Date.now()
@@ -1367,9 +1261,9 @@ export async function recordRepositoryAction(args = {}, options = {}) {
       }
       const kind = requireEnum(args.kind, "kind", ACTION_KINDS);
       const summary = boundedSafeText(args.summary, "summary", 2000);
-      const sourceHead = nonEmptyString(args.source_head, "source_head", 40).toLowerCase();
-      if (!/^[0-9a-f]{40}$/.test(sourceHead)) {
-        throw new Error("source_head must be a 40-character Git object ID.");
+      const sourceHead = requireSourceHead(args.source_head);
+      if (sourceHead === null && await repositoryHead(repository, runGit) !== null) {
+        throw new Error("source_head may be null only for a verified unborn repository.");
       }
       const action = {
         schema_version: 1,
@@ -1399,7 +1293,7 @@ export async function recordRepositoryAction(args = {}, options = {}) {
     if (expectedVersion === 0) {
       const kind = requireEnum(args.kind, "kind", ACTION_KINDS);
       const summary = boundedSafeText(args.summary, "summary", 2000);
-      const sourceHead = nonEmptyString(args.source_head, "source_head", 40).toLowerCase();
+      const sourceHead = requireSourceHead(args.source_head);
       const sameCreation =
         existing.version === 1 &&
         existing.status === "proposed" &&
@@ -1489,7 +1383,7 @@ export async function recordRepositoryVerification(args = {}, options = {}) {
   const lease = await assertActiveLease(config, repository, owner, leaseId, options);
   const paths = actionPaths(config.stateRoot, repository.id, actionId);
 
-  return withActionLock(paths, lease, async () => {
+  return withRecordLock(paths, lease, async () => {
     const existing = await readAction(paths.active);
     if (!existing) throw new Error(`Repository action does not exist: ${actionId}.`);
     if (existing.version !== expectedVersion) {
@@ -1572,8 +1466,15 @@ export async function listRepositoryActions(args = {}, options = {}) {
   };
 }
 
-export const internal = {
-  randomUUID,
-  redactText,
-  requireRepositoryId,
-};
+export const { listRepositoryCloseouts, recordRepositoryCloseout } = createCloseoutOperations({
+  assertActiveLease, assertAllowedKeys, atomicWriteJson, boundedInteger, boundedSafeText, ensureStateDirectory, getResolvedRepositoryStatus, nonEmptyString, redactText, requireEnum, requireLeaseId, requireOwner, requireRepositoryId, resolveConfiguredRepository, runGit, withRecordLock,
+});
+export const { enrollRepositoryRoot, updateRootPolicy } = createEnrollmentOperations({
+  assertAllowedKeys, requireOwner, nonEmptyString, requireDirectoryRealpath,
+  requireRepositoryId, optionalBoolean, boundedInteger, defaultStateRoot,
+  withEnrollmentLock, loadConfigurationSources, pathsOverlap, enrollmentPaths,
+  ensureStateDirectory, atomicWriteJson, discoverRepositories, publicRoot,
+  requireExpectedVersion, boundedSafeText, CONFIG_SCHEMA_VERSION,
+  DEFAULT_DISCOVERY_DEPTH, MAX_DISCOVERY_DEPTH, MAX_ENROLLMENT_HISTORY
+});
+export const internal = { randomUUID, redactText, requireRepositoryId };

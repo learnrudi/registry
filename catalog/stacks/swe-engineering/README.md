@@ -2,7 +2,11 @@
 
 Portable RUDI stack for the SWE Operating Manual and agent debt scanning.
 
-This package exists so another computer can install the engineering doctrine
+This catalog directory is the canonical authoring home of the SWE Operating
+Manual. Edit the manual here and release through the registry; installed
+copies and any other checkouts are distribution artifacts, not sources.
+
+This package exists so any computer can install the engineering doctrine
 without relying on a local source path. It vendors only the portable manual
 documents and the debt scanner needed by agents.
 
@@ -29,8 +33,11 @@ rudi integrate codex
 
 Restart the agent after indexing so the tools and related skill are available.
 
-The related skill `skill:swe-compliance-checklist` gives agents the workflow for
-turning the manual into phase-gated implementation and verification plans.
+The RUDI Agentic Engineering Standard defines these related skills as one RUDI
+Delivery Loop while retaining their stable package IDs: Change Map,
+Chief of Staff as Delivery Coordinator, SWE Compliance Checklist as Engineering
+Gate, Horizontal Engineering Review as Coherence Review, Repo Steward, and
+Worktree Closeout. Each skill keeps its own authority and ownership boundary.
 
 ## Contents
 
@@ -49,6 +56,9 @@ src/
     08-Infrastructure-and-Deployment-Engineering-Standard.md
     09-Build-Order-and-Engineering-System.md
     10-Engineering-Operating-Manual-Index.md
+    11-Agent-Copilot-Operating-Standard.md
+    12-Horizontal-Engineering-and-Codebase-Stewardship-Standard.md
+    13-RUDI-Agentic-Engineering-Standard.md
   tools/
     agent-debt-scan.cjs
 ```

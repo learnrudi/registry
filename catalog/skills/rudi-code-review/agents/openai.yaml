@@ -1,0 +1,4 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Quick code review or formal standards/spec/proof review"
+  default_prompt: "Use $rudi-code-review to review this diff at the depth its risk requires."

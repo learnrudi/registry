@@ -51,6 +51,9 @@ export interface PageSize {
 }
 
 export interface ValidatedExportRequest {
+  /** Internal operation state; never accepted from tool arguments. */
+  deadlineAt: number;
+  outputBytes: number;
   format: ExportFormat;
   inputPath: string;
   inputStem: string;

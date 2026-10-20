@@ -2,21 +2,24 @@
   "id": "stack:swe-engineering",
   "kind": "stack",
   "name": "SWE Engineering",
-  "version": "0.1.0",
-
+  "version": "0.5.0",
   "delivery": "remote",
   "install": {
     "source": "catalog",
     "path": "catalog/stacks/swe-engineering"
   },
-
   "runtime": "node",
-
+  "surface": "both",
+  "toolSurfaces": {
+    "swe_manual_list": "cloud-hosted",
+    "swe_manual_read": "cloud-hosted",
+    "swe_manual_search": "cloud-hosted",
+    "swe_debt_scan": "local-only"
+  },
   "requires": {
     "binaries": [],
     "secrets": []
   },
-
   "provides": {
     "tools": [
       "swe_manual_list",
@@ -25,26 +28,39 @@
       "swe_debt_scan"
     ]
   },
-
   "related": {
     "operatorSkill": "skill:swe-compliance-checklist",
     "skills": [
-      "skill:swe-compliance-checklist"
+      "skill:swe-compliance-checklist",
+      "skill:map-change-impact",
+      "skill:rudi-chief-of-staff",
+      "skill:horizontal-engineering-review",
+      "skill:rudi-repo-steward",
+      "skill:rudi-worktree-closeout"
     ]
   },
-
   "mcp": {
     "transport": "stdio",
     "command": "node",
-    "args": ["src/index.js"],
+    "args": [
+      "src/index.js"
+    ],
     "cwd": "."
   },
-
   "meta": {
     "description": "Portable SWE Operating Manual reference and JS/TS agent debt scanning tools for engineering workflows.",
     "author": "RUDI",
     "license": "MIT",
-    "category": "development",
-    "tags": ["swe", "engineering", "manual", "testing", "debugging", "debt-scan", "code-quality"]
+    "category": "code",
+    "tags": [
+      "swe",
+      "engineering",
+      "manual",
+      "testing",
+      "debugging",
+      "debt-scan",
+      "code-quality",
+      "capability:review"
+    ]
   }
 }

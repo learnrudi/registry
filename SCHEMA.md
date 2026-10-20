@@ -41,7 +41,7 @@ migration material lives under `docs/archive/`.
 | `binary` | CLI tool | `catalog/binaries/{name}.json` |
 | `agent` | AI assistant | `catalog/agents/{name}.json` |
 | `stack` | MCP server | `catalog/stacks/{name}/manifest.json` |
-| `skill` | Reusable skill template | `catalog/skills/{name}.md` or `catalog/skills/{name}/SKILL.md` |
+| `skill` | Reusable skill template | `catalog/skills/{name}/SKILL.md` (legacy flat files remain readable) |
 | `prompt` | Legacy prompt template | `catalog/prompts/{name}.md` |
 
 ---
@@ -156,9 +156,19 @@ stable or supported.
   public indexes. Retired definitions do not remain as hidden or versioned
   schema-v2 packages.
 
+### Stack classification
+
+Authored stacks use `catalog/stacks/{id}/manifest.json`. Their `meta.category`
+must be one of `web`, `code`, `data`, `documents`, `media`, `communication`, or
+`agents`, matching the primary operator skill. `meta.tags` requires at least
+one `capability:<slug>`; optional `domain:<slug>` and `provider:<slug>` facets
+use lowercase kebab-case. Ordinary keywords remain supported. The compiler and
+validator enforce authored metadata; legacy readers remain compatible. See
+[Stack catalog organization](docs/stack-catalog.md).
+
 ### Skill Packages
 
-Skills use either a legacy-compatible flat Markdown file at `catalog/skills/{name}.md` or a bundle rooted at `catalog/skills/{name}/SKILL.md`. Bundles may carry `scripts/`, `references/`, and `assets/`; the complete directory is the install payload.
+Author skills in `catalog/skills/{name}/SKILL.md`. Bundles may carry `scripts/`, `references/`, `assets/`, and `agents/openai.yaml`; the complete directory is the install payload. Legacy flat Markdown input remains readable, but the public validator and compiler require canonical folders for authored catalog entries.
 During v2 validation and compile, the registry derives:
 
 - `id`: `skill:{name}` from the flat Markdown filename or bundled directory name
@@ -167,7 +177,7 @@ During v2 validation and compile, the registry derives:
 - `install.source`: `catalog`
 - `install.path`: the flat Markdown file path or bundled directory path
 
-Only top-level flat `*.md` files and exact `*/SKILL.md` entries are package entrypoints. Nested Markdown references are payload files, not additional packages. Entry frontmatter must include `name` and `description`; `version` defaults to `1.0.0` when omitted. Optional `requires.stacks` entries are normalized to canonical `stack:*` package IDs and must resolve to existing v2 stack packages.
+Only top-level flat `*.md` files and exact `*/SKILL.md` entries are package entrypoints. Nested Markdown references are payload files, not additional packages. Entry frontmatter must include `name` and `description`; legacy input defaults `version` to `1.0.0` when omitted. Authored catalog skills also require one primitive `category` and at least one `capability:` tag; `domain:` and `provider:` facets are optional. See [Skill catalog organization](docs/skill-catalog.md). Optional `requires.stacks` entries are normalized to canonical `stack:*` package IDs and must resolve to existing v2 stack packages.
 
 Public registry skills must avoid personal, client-specific, machine-specific, or brand-specific defaults. Consumers can edit the installed local copy or layer a private skill on top of the public one.
 
@@ -375,6 +385,32 @@ Use `requires.stacks` for skill packages that need one or more stacks to perform
 }
 ```
 
+### `surface` and `toolSurfaces`
+
+Stack remote-execution eligibility is explicit and fail-closed:
+
+```json
+"surface": "both",
+"toolSurfaces": {
+  "video_trim": "cloud-hosted",
+  "video_speed": "local-only"
+}
+```
+
+Allowed values are `local-only`, `cloud-hosted`, and `both`.
+
+- Omitted `surface` resolves to `local-only`.
+- A `local-only` or unclassified stack cannot elevate a tool through an
+  override.
+- On a `both` stack, an omitted tool override resolves to `local-only`.
+- Every `toolSurfaces` key must appear in the same manifest's
+  `provides.tools` list.
+- The local stdio router continues to expose installed stack tools; these
+  fields control hosted eligibility, not local removal.
+- Registry eligibility is necessary but not sufficient for hosted execution.
+  A hosted service must additionally pin and review an immutable first-party
+  adapter and enforce its own exact allowlist and tenant policy.
+
 ### `related`
 ```json
 "related": {
@@ -574,20 +610,23 @@ layer.
   "id": "agent:claude",
   "kind": "agent",
   "name": "Claude Code",
-  "version": "latest",
+  "version": "system",
 
-  "delivery": "remote",
+  "delivery": "system",
   "install": {
-    "source": "npm",
-    "package": "@anthropic-ai/claude-code"
+    "source": "system"
   },
 
   "bins": ["claude"],
   "detect": { "command": "claude --version" },
 
+  "installHints": {
+    "manual": "Install or update with Anthropic's supported native installer"
+  },
+
   "auth": {
     "required": true,
-    "command": "claude login",
+    "command": "claude auth login",
     "instructions": "Authenticate with your Anthropic account"
   }
 }
@@ -719,6 +758,7 @@ Validation applies to the **effective resolved config** (after platform merge):
 6. **All packages**: `name` required (used for display)
 7. **If `lifecycle.support == "unsupported"`**: `lifecycle.deprecation` required
 8. **If `lifecycle.deprecation.replacementId` is present**: it must reference another published package
+9. **If `kind == "agent"`**: `version`, `delivery`, and `install.source` must all be `"system"`; `detect` and actionable `installHints` are required
 
 ---
 

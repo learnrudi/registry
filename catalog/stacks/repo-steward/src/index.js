@@ -15,12 +15,44 @@ import {
   enrollRepositoryRoot,
   getRepositoryStatus,
   listRepositoryActions,
+  listRepositoryCloseouts,
   preflightRepoSteward,
   recordRepositoryAction,
+  recordRepositoryCloseout,
   recordRepositoryVerification,
   releaseRepositoryLease,
   scanFleet,
+  updateRootPolicy,
 } from "./core.js";
+
+const CLOSEOUT_STATES = [
+  "observed",
+  "classified",
+  "preservation_required",
+  "retained",
+  "archive_eligible",
+  "cleanup_pending_approval",
+  "cleanup_approved",
+  "blocked",
+];
+
+const VALIDATION_EVIDENCE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["command", "outcome", "summary", "at"],
+  properties: {
+    command: { type: "string", minLength: 1, maxLength: 500 },
+    outcome: { type: "string", enum: ["passed", "failed", "skipped"] },
+    exit_code: {
+      anyOf: [
+        { type: "integer", minimum: 0, maximum: 255 },
+        { type: "null" },
+      ],
+    },
+    summary: { type: "string", minLength: 1, maxLength: 2000 },
+    at: { type: "string", minLength: 1, maxLength: 64 },
+  },
+};
 
 const TOOL_DEFINITIONS = [
   {
@@ -45,6 +77,24 @@ const TOOL_DEFINITIONS = [
         owner: { type: "string", minLength: 1, maxLength: 128 },
         fetch_allowed: { type: "boolean", default: false },
         max_depth: { type: "integer", minimum: 0, maximum: 32, default: 12 },
+      },
+    },
+  },
+  {
+    name: "repo_steward_update_root_policy",
+    description: "Explicitly change only fetch permission for one locally enrolled root under a versioned enrollment lock. Requires owner approval evidence; never fetches or changes a repository.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["root_id", "root_path", "owner", "fetch_allowed", "expected_version", "approval_reference", "confirm_update"],
+      properties: {
+        root_id: { type: "string", minLength: 1, maxLength: 128 },
+        root_path: { type: "string", minLength: 1, maxLength: 4096 },
+        owner: { type: "string", minLength: 1, maxLength: 128 },
+        fetch_allowed: { type: "boolean" },
+        expected_version: { type: "integer", minimum: 1 },
+        approval_reference: { type: "string", minLength: 1, maxLength: 1000 },
+        confirm_update: { type: "boolean", const: true },
       },
     },
   },
@@ -144,6 +194,20 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "repo_steward_list_closeouts",
+    description: "List versioned local worktree-closeout receipts for one configured repository. This reads Repo Steward state only and performs no Git mutation.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["repo_id"],
+      properties: {
+        repo_id: { type: "string", minLength: 1, maxLength: 128 },
+        state: { type: "string", enum: CLOSEOUT_STATES },
+        limit: { type: "integer", minimum: 1, maximum: 500, default: 50 },
+      },
+    },
+  },
+  {
     name: "repo_steward_record_action",
     description: "Create or transition one lease-bound local action using an expected version. This records intent only and never performs Git or GitHub mutations.",
     inputSchema: {
@@ -171,8 +235,77 @@ const TOOL_DEFINITIONS = [
           enum: ["proposed", "approved", "running", "completed", "blocked", "cancelled"],
         },
         summary: { type: "string", minLength: 1, maxLength: 2000 },
-        source_head: { type: "string", pattern: "^[0-9a-fA-F]{40}$" },
+        source_head: {
+          type: ["string", "null"],
+          pattern: "^[0-9a-fA-F]{40}$",
+          description: "Required for creation: a commit SHA, or explicit null only for a verified unborn repository.",
+        },
         expected_version: { type: "integer", minimum: 0 },
+      },
+    },
+  },
+  {
+    name: "repo_steward_record_closeout",
+    description: "Create or transition one lease-bound worktree-closeout receipt. It records repository state, lineage, evidence, disposition, preservation, and approval references but never cleans, archives, deletes, or otherwise mutates a repository.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "repo_id",
+        "owner",
+        "lease_id",
+        "receipt_id",
+        "state",
+        "expected_version",
+      ],
+      properties: {
+        repo_id: { type: "string", minLength: 1, maxLength: 128 },
+        owner: { type: "string", minLength: 1, maxLength: 128 },
+        lease_id: { type: "string", minLength: 36, maxLength: 36 },
+        receipt_id: { type: "string", minLength: 1, maxLength: 128 },
+        state: { type: "string", enum: CLOSEOUT_STATES },
+        expected_version: { type: "integer", minimum: 0 },
+        base_ref: { type: "string", minLength: 1, maxLength: 256 },
+        task_lineage: {
+          type: "object",
+          additionalProperties: false,
+          required: ["task_id"],
+          properties: {
+            task_id: { type: "string", minLength: 1, maxLength: 256 },
+            source_thread_id: { type: "string", minLength: 1, maxLength: 256 },
+            plan_id: { type: "string", minLength: 1, maxLength: 256 },
+            node_id: { type: "string", minLength: 1, maxLength: 256 },
+          },
+        },
+        agent_lineage: {
+          type: "object",
+          additionalProperties: false,
+          required: ["agent_id"],
+          properties: {
+            agent_id: { type: "string", minLength: 1, maxLength: 256 },
+            host: { type: "string", minLength: 1, maxLength: 256 },
+            attempt_id: { type: "string", minLength: 1, maxLength: 256 },
+          },
+        },
+        acceptance_reference: { type: "string", minLength: 1, maxLength: 1000 },
+        validation_evidence: {
+          type: "array",
+          minItems: 1,
+          maxItems: 100,
+          items: VALIDATION_EVIDENCE_SCHEMA,
+        },
+        preservation_requirements: {
+          type: "array",
+          maxItems: 100,
+          items: { type: "string", minLength: 1, maxLength: 1000 },
+        },
+        summary: { type: "string", minLength: 1, maxLength: 2000 },
+        classification: {
+          type: "string",
+          enum: ["active", "superseded", "retained", "archive_candidate", "unknown"],
+        },
+        disposition_summary: { type: "string", minLength: 1, maxLength: 2000 },
+        approval_reference: { type: "string", minLength: 1, maxLength: 1000 },
       },
     },
   },
@@ -230,7 +363,7 @@ function errorResponse(error) {
 
 export function createServer(coreOptions = {}) {
   const server = new Server(
-    { name: "repo-steward", version: "0.2.0" },
+    { name: "repo-steward", version: "0.3.0" },
     { capabilities: { tools: {} } }
   );
 
@@ -245,6 +378,8 @@ export function createServer(coreOptions = {}) {
           return jsonResponse(await preflightRepoSteward(args, coreOptions));
         case "repo_steward_enroll_root":
           return jsonResponse(await enrollRepositoryRoot(args, coreOptions));
+        case "repo_steward_update_root_policy":
+          return jsonResponse(await updateRootPolicy(args, coreOptions));
         case "repo_steward_discover_repositories":
           return jsonResponse(await discoverRepositories(args, coreOptions));
         case "repo_steward_scan_fleet":
@@ -257,8 +392,12 @@ export function createServer(coreOptions = {}) {
           return jsonResponse(await releaseRepositoryLease(args, coreOptions));
         case "repo_steward_list_actions":
           return jsonResponse(await listRepositoryActions(args, coreOptions));
+        case "repo_steward_list_closeouts":
+          return jsonResponse(await listRepositoryCloseouts(args, coreOptions));
         case "repo_steward_record_action":
           return jsonResponse(await recordRepositoryAction(args, coreOptions));
+        case "repo_steward_record_closeout":
+          return jsonResponse(await recordRepositoryCloseout(args, coreOptions));
         case "repo_steward_record_verification":
           return jsonResponse(await recordRepositoryVerification(args, coreOptions));
         default:

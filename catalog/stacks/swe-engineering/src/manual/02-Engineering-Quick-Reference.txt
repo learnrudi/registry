@@ -419,6 +419,9 @@ Use this checklist for any non-trivial change.
 - Is rollout safe for existing callers and existing data?
 - Are privacy, access control, and data retention obligations addressed where relevant?
 - Are the right tests present for the behavior and risks introduced?
+- Does this add another semantic implementation of an existing mechanism? If so, is its horizontal obligation explicitly dispositioned without silently widening scope?
+- For multi-file or medium/high-risk work, are coherent commit boundaries planned and verified?
+- Are task-owned paths isolated, and are commit and publication permissions explicit and separate?
 - Is the design simpler than the alternatives that were available?
 
 VI. Source Map
@@ -431,7 +434,7 @@ The canonical master document. Use for:
 
 - the full statement of all 22 engineering principles
 - the extended review dimensions and scoring rubric (A-L)
-- the full 23-section PR review checklist
+- the full 24-section PR review checklist
 - engineering review questions by category
 - incident response and postmortem framework
 - Appendix A: Database Engineering Discipline
@@ -462,6 +465,18 @@ Full engineering system reference.
 10-Engineering-Operating-Manual-Index.md
 
 Index and navigation for the operating manual.
+
+11-Agent-Copilot-Operating-Standard.md
+
+Agent co-pilot posture, review evidence, red-green operation, and commit authorization.
+
+12-Horizontal-Engineering-and-Codebase-Stewardship-Standard.md
+
+Cross-change pattern detection, consolidation obligations, disposition, and repository-level remediation.
+
+13-RUDI-Agentic-Engineering-Standard.md
+
+RUDI Delivery Loop, capability ownership, lifecycle handoffs, compatibility, and non-destructive worktree closeout.
 
 VII. Maintenance Rule
 

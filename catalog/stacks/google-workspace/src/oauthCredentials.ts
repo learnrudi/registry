@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { storedGoogleAccountFile } from "./accountStorage.js";
 import type { WorkspacePaths } from "./state.js";
 
 type OAuthClientConfig = {
@@ -24,7 +24,7 @@ export function loadGoogleCredentials(paths: WorkspacePaths, account?: string): 
   }
 
   if (account) {
-    const accountCredentialsPath = join(paths.accountsDir, account, "credentials.json");
+    const accountCredentialsPath = storedGoogleAccountFile(paths.accountsDir, account, "credentials.json");
     if (existsSync(accountCredentialsPath)) {
       return readCredentialsFile(accountCredentialsPath);
     }

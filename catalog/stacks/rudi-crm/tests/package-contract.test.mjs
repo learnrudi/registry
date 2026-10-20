@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import * as contract from "../dist/contract.js";
 
 const stackRoot = fileURLToPath(new URL("../", import.meta.url));
 
@@ -50,12 +51,11 @@ const EXPECTED_DATABASE_OBJECTS = [
 ];
 
 test("package contract preserves the controlled CRM and finance boundary", async () => {
-  const [manifest, packageJson, serverSource, contractSource, schemaSource, financeSql] =
+  const [manifest, packageJson, serverSource, schemaSource, financeSql] =
     await Promise.all([
       fs.readFile(path.join(stackRoot, "manifest.json"), "utf8").then(JSON.parse),
       fs.readFile(path.join(stackRoot, "package.json"), "utf8").then(JSON.parse),
       fs.readFile(path.join(stackRoot, "src/index.ts"), "utf8"),
-      fs.readFile(path.join(stackRoot, "src/contract.ts"), "utf8"),
       fs.readFile(path.join(stackRoot, "src/schemas.ts"), "utf8"),
       fs.readFile(path.join(stackRoot, "sql/migrations/0001_engagement_crm.sql"), "utf8"),
     ]);
@@ -72,9 +72,9 @@ test("package contract preserves the controlled CRM and finance boundary", async
   assert.equal(serverSource.includes("raw_sql"), false);
 
   for (const symbol of [
-    "record_discovery_observations",
-    "log_ingest_batch",
-    "upsert_interaction",
+    "recordDiscoveryObservations",
+    "logIngestBatch",
+    "upsertInteraction",
     "listPeople",
     "getActivityFeed",
     "getAttentionBrief",
@@ -84,7 +84,7 @@ test("package contract preserves the controlled CRM and finance boundary", async
     "classifyContactAddress",
     "promoteContact",
   ]) {
-    assert.equal(contractSource.includes(symbol), true, `missing contract symbol: ${symbol}`);
+    assert.equal(typeof contract[symbol], "function", `missing public contract: ${symbol}`);
   }
   for (const symbol of [
     "UpsertInteractionInput",

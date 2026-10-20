@@ -328,7 +328,7 @@ describe("schema validation - valid manifests", () => {
     expect(valid).toBe(true);
   });
 
-  it("should accept agent manifest with npm source", () => {
+  it("should reject agent manifests that RUDI would install through npm", () => {
     const manifest = {
       id: "agent:claude",
       kind: "agent",
@@ -343,7 +343,7 @@ describe("schema validation - valid manifests", () => {
     };
 
     const valid = validate(manifest);
-    expect(valid).toBe(true);
+    expect(valid).toBe(false);
   });
 
   it("should accept a detected system-installed agent", () => {
@@ -356,9 +356,26 @@ describe("schema validation - valid manifests", () => {
       install: { source: "system" },
       bins: ["agy"],
       detect: { command: "agy --version", expectExitCode: 0 },
+      installHints: { manual: "Install with the vendor-supported installer" },
     };
 
     expect(validate(manifest)).toBe(true);
+  });
+
+  it("should reject a system agent without actionable vendor install guidance", () => {
+    const manifest = {
+      id: "agent:test",
+      kind: "agent",
+      name: "Test Agent",
+      version: "system",
+      delivery: "system",
+      install: { source: "system" },
+      bins: ["test-agent"],
+      detect: { command: "test-agent --version" },
+      installHints: {},
+    };
+
+    expect(validate(manifest)).toBe(false);
   });
 
   it("should accept full binary manifest with all optional fields", () => {
@@ -453,6 +470,62 @@ describe("schema validation - valid manifests", () => {
 
     const valid = validate(manifest);
     expect(valid).toBe(true);
+  });
+
+  it("should accept a stack surface with exact tool overrides", () => {
+    const manifest = {
+      id: "stack:swe-engineering",
+      kind: "stack",
+      name: "SWE Engineering",
+      version: "0.5.0",
+      delivery: "remote",
+      install: {
+        source: "catalog",
+        path: "catalog/stacks/swe-engineering",
+      },
+      runtime: "node",
+      surface: "both",
+      toolSurfaces: {
+        swe_manual_list: "cloud-hosted",
+        swe_debt_scan: "local-only",
+      },
+      provides: {
+        tools: ["swe_manual_list", "swe_debt_scan"],
+      },
+      mcp: {
+        transport: "stdio",
+        command: "node",
+      },
+    };
+
+    expect(validate(manifest)).toBe(true);
+  });
+
+  it("should reject unknown surface values and non-stack surface fields", () => {
+    const stack = {
+      id: "stack:test",
+      kind: "stack",
+      name: "Test Stack",
+      version: "1.0.0",
+      delivery: "remote",
+      install: { source: "catalog", path: "catalog/stacks/test" },
+      runtime: "node",
+      surface: "internet",
+      provides: { tools: ["test_tool"] },
+      mcp: { transport: "stdio", command: "node" },
+    };
+    const skill = {
+      id: "skill:test",
+      kind: "skill",
+      name: "Test Skill",
+      version: "1.0.0",
+      delivery: "remote",
+      install: { source: "catalog", path: "catalog/skills/test.md" },
+      surface: "cloud-hosted",
+    };
+
+    expect(validate(stack)).toBe(false);
+    expect(validate(skill)).toBe(false);
   });
 
   it("should reject related.skills entries that are not skill package ids", () => {

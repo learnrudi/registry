@@ -5,10 +5,15 @@ observed fleet of nested Git worktrees. It discovers repositories again on
 every stewardship run, reports their state, optionally fetches remote metadata
 when root policy allows it, grants one bounded worker lease per repository,
 and records a durable action and verification ledger.
+It also records immutable, versioned worktree-closeout receipts with task and
+agent lineage, validation evidence, preservation requirements, disposition,
+and fail-closed cleanup eligibility.
 
 The stack never stages, commits, pushes, merges, resets, or cleans. GitHub
 issues and pull requests are also outside this stack; use `stack:github` under
 the related operator skill when those actions are authorized.
+Closeout approval states record authority only; the stack never deletes,
+archives, moves, prunes, retires, or attests cleanup of a worktree.
 
 ## One-path flow
 
@@ -78,6 +83,9 @@ without embedded credentials, and token-like text in summaries is redacted.
   local state directory.
 - `repo_steward_enroll_root` persistently enrolls one absolute directory path
   and immediately returns its discovered Git worktrees.
+- `repo_steward_update_root_policy` changes only one locally enrolled root's
+  fetch permission with explicit confirmation, approval evidence and the
+  current enrollment version. It never fetches or changes repository content.
 - `repo_steward_discover_repositories` rediscovers configured roots without
   reading repository file contents or changing Git state.
 - `repo_steward_scan_fleet` scans every configured repository and can perform
@@ -88,10 +96,52 @@ without embedded credentials, and token-like text in summaries is redacted.
   repository.
 - `repo_steward_release_lease` releases the matching lease token.
 - `repo_steward_list_actions` reads the local improvement-action ledger.
+- `repo_steward_list_closeouts` reads active closeout receipt projections.
 - `repo_steward_record_action` creates or transitions a versioned action while
   the caller holds the repository lease.
+- `repo_steward_record_closeout` creates or transitions an immutable,
+  versioned closeout receipt while the caller holds the repository lease.
 - `repo_steward_record_verification` appends test or inspection evidence while
   the caller holds the repository lease.
+
+## Explicit fetch-policy changes
+
+Enrollment still rejects a repeated root with different policy. When the owner
+authorizes a policy change, read the current enrollment version and root from
+preflight, then call `repo_steward_update_root_policy` with `root_id`, exact
+`root_path`, `owner`, explicit boolean `fetch_allowed`, `expected_version`,
+`approval_reference` and `confirm_update: true`. The approval reference records
+the caller's authority evidence; it does not authenticate or grant approval.
+
+The operation uses the existing enrollment lock, preserves the previous state
+document, atomically saves the new version and appends a redacted audit event.
+It preserves every root ID/path/depth and changes only the selected root's fetch
+permission. External configuration, stale versions, identity mismatches, missing
+approval evidence and unknown fields fail closed. An exact immediate retry is
+idempotent; an intervening transition rejects stale intent. A current-version
+request for the already-selected policy is a no-op.
+
+Permission is not execution: future status or scan calls must still explicitly
+request fetch. Observation schedules continue using `fetch: false`. Repository
+leases and commit/push/merge authority are unchanged. Never edit enrollment JSON
+or widen an enrolled root to work around a denied operation.
+
+## Repositories awaiting their first commit
+
+Status distinguishes committed history (`head_state: "committed"`) from an
+unborn branch (`head_state: "unborn"`, `head: null`). Unborn observations include
+the intended branch and staged, unstaged and untracked counts. Their upstream
+and ahead/behind counts are null, never evidence of alignment. Fleet summaries
+count them in `awaiting_first_commit` and in successful observations. Invalid
+HEADs and unreadable or corrupt references remain failures.
+
+For a new first-commit action, explicitly pass `source_head: null`. The stack
+checks that the repository is unborn while holding the action record lock. An
+omitted source is still invalid; committed repositories still require a SHA.
+A retry of the same initial action remains idempotent after the first commit,
+and later transitions retain the original null source. Existing lease, version
+and verification gates still apply. This records intent, not authority to commit
+or publish. Closeout receipts require a committed HEAD and reject unborn work.
 
 ## Action lifecycle
 
@@ -106,6 +156,17 @@ operator must inspect repository instructions and diffs, protect unknown user
 changes, separate coherent work, run repository verification, and obtain any
 approval required for Git or GitHub mutations. That agent may make targeted
 commits; the stack itself never guesses what should be committed.
+
+## Worktree closeout lifecycle
+
+Closeout receipts move through evidence-backed states: `observed`,
+`classified`, `preservation_required`, `retained`, `archive_eligible`,
+`cleanup_pending_approval`, `cleanup_approved`, and `blocked`. Dirty,
+conflicted, untracked, ahead-only, unaccepted, unvalidated, or explicitly
+preserved evidence blocks archive eligibility. `cleanup_approved` requires an
+exact approval reference but records no cleanup side effect. Each version is
+immutable and the active projection advances only with the current version and
+repository lease.
 
 ## Verification
 

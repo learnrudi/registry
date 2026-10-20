@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   resolve,
+  resolveToolSurface,
   assertEffectivePolicy,
   PolicyError,
   type Package,
@@ -353,7 +354,7 @@ describe("assertEffectivePolicy", () => {
       expect(() => assertEffectivePolicy(resolved)).not.toThrow();
     });
 
-    it("should reject unsupported agent install sources", () => {
+    it("should require externally managed agents to use the system source", () => {
       const pkg: Package = {
         id: "agent:claude",
         kind: "agent",
@@ -368,7 +369,26 @@ describe("assertEffectivePolicy", () => {
 
       expect(() => assertEffectivePolicy(resolved)).toThrow(PolicyError);
       expect(() => assertEffectivePolicy(resolved)).toThrow(
-        "agent must use install.source=npm or system"
+        "agent must use system delivery and install.source=system"
+      );
+    });
+
+    it("should reject npm-installed agents", () => {
+      const pkg: Package = {
+        id: "agent:codex",
+        kind: "agent",
+        name: "Codex",
+        version: "latest",
+        delivery: "remote",
+        install: { source: "npm", package: "@openai/codex" },
+        bins: ["codex"],
+      };
+      const ctx: ResolveContext = { os: "darwin", arch: "arm64" };
+      const resolved = resolve(pkg, ctx);
+
+      expect(() => assertEffectivePolicy(resolved)).toThrow(PolicyError);
+      expect(() => assertEffectivePolicy(resolved)).toThrow(
+        "agent must use system delivery and install.source=system"
       );
     });
 
@@ -472,9 +492,9 @@ describe("assertEffectivePolicy", () => {
   describe("npm/pip source constraints", () => {
     it("should require package field for npm source", () => {
       const pkg: Package = {
-        id: "agent:test",
-        kind: "agent",
-        name: "Test Agent",
+        id: "binary:test",
+        kind: "binary",
+        name: "Test Binary",
         version: "1.0.0",
         delivery: "remote",
         install: { source: "npm" },
@@ -488,7 +508,7 @@ describe("assertEffectivePolicy", () => {
       );
     });
 
-    it("should pass when package field is provided", () => {
+    it("should reject npm source for agents even when package is provided", () => {
       const pkg: Package = {
         id: "agent:test",
         kind: "agent",
@@ -500,11 +520,75 @@ describe("assertEffectivePolicy", () => {
       const ctx: ResolveContext = { os: "darwin", arch: "arm64" };
       const resolved = resolve(pkg, ctx);
 
-      expect(() => assertEffectivePolicy(resolved)).not.toThrow();
+      expect(() => assertEffectivePolicy(resolved)).toThrow(
+        "agent must use system delivery and install.source=system"
+      );
     });
   });
 
   describe("stack constraints", () => {
+    it("defaults unclassified stacks and omitted tools on both surfaces to local-only", () => {
+      expect(resolveToolSurface(minimalStack, "video_trim")).toBe("local-only");
+      expect(
+        resolveToolSurface({ ...minimalStack, surface: "both" }, "video_trim")
+      ).toBe("local-only");
+    });
+
+    it("resolves only declared explicit tool surfaces", () => {
+      const pkg: Package = {
+        ...minimalStack,
+        surface: "both",
+        toolSurfaces: {
+          video_trim: "cloud-hosted",
+          video_speed: "local-only",
+        },
+      };
+
+      expect(resolveToolSurface(pkg, "video_trim")).toBe("cloud-hosted");
+      expect(resolveToolSurface(pkg, "video_speed")).toBe("local-only");
+      expect(() => resolveToolSurface(pkg, "video_unknown")).toThrow(
+        "tool is not declared"
+      );
+    });
+
+    it("rejects local-only elevation and overrides for undeclared tools", () => {
+      const elevated = resolve(
+        {
+          ...minimalStack,
+          surface: "local-only",
+          toolSurfaces: { video_trim: "cloud-hosted" },
+        },
+        { os: "darwin", arch: "arm64" }
+      );
+      const unknown = resolve(
+        {
+          ...minimalStack,
+          surface: "both",
+          toolSurfaces: { video_unknown: "cloud-hosted" },
+        },
+        { os: "darwin", arch: "arm64" }
+      );
+
+      expect(() => assertEffectivePolicy(elevated)).toThrow(
+        "local-only stack cannot elevate tool video_trim"
+      );
+      expect(() => assertEffectivePolicy(unknown)).toThrow(
+        "toolSurfaces key video_unknown is not declared"
+      );
+      expect(() => resolveToolSurface(elevated, "video_trim")).toThrow(
+        "local-only stack cannot elevate tool video_trim"
+      );
+      expect(() => resolveToolSurface({
+        ...minimalStack,
+        toolSurfaces: { video_trim: "cloud-hosted" },
+      }, "video_trim")).toThrow(
+        "local-only stack cannot elevate tool video_trim"
+      );
+      expect(() => resolveToolSurface(unknown, "video_trim")).toThrow(
+        "toolSurfaces key video_unknown is not declared"
+      );
+    });
+
     it("should require runtime field for stacks", () => {
       const pkg: Package = {
         ...minimalStack,

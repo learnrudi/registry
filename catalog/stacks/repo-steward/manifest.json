@@ -2,7 +2,7 @@
   "id": "stack:repo-steward",
   "kind": "stack",
   "name": "Repo Steward",
-  "version": "0.2.0",
+  "version": "0.3.2",
   "delivery": "remote",
   "install": {
     "source": "catalog",
@@ -19,13 +19,16 @@
     "tools": [
       "repo_steward_preflight",
       "repo_steward_enroll_root",
+      "repo_steward_update_root_policy",
       "repo_steward_discover_repositories",
       "repo_steward_scan_fleet",
       "repo_steward_get_status",
       "repo_steward_acquire_lease",
       "repo_steward_release_lease",
       "repo_steward_list_actions",
+      "repo_steward_list_closeouts",
       "repo_steward_record_action",
+      "repo_steward_record_closeout",
       "repo_steward_record_verification"
     ]
   },
@@ -33,6 +36,7 @@
     "operatorSkill": "skill:rudi-repo-steward",
     "skills": [
       "skill:rudi-repo-steward",
+      "skill:rudi-worktree-closeout",
       "skill:github",
       "skill:rudi-swe-issue-loop",
       "skill:swe-compliance-checklist"
@@ -47,10 +51,10 @@
     "cwd": "."
   },
   "meta": {
-    "description": "Enroll one workspace path, safely discover its nested Git worktrees, coordinate one repository worker at a time, and maintain a durable local improvement-action ledger.",
+    "description": "Enroll one workspace path, safely discover its nested Git worktrees, coordinate one repository worker at a time, and maintain durable action and worktree-closeout ledgers.",
     "author": "RUDI",
     "license": "MIT",
-    "category": "development",
+    "category": "code",
     "tags": [
       "git",
       "github",
@@ -59,7 +63,9 @@
       "continuous-development",
       "leases",
       "action-ledger",
-      "agents"
+      "closeout-receipts",
+      "agents",
+      "capability:review"
     ],
     "icon": "git-branch"
   }

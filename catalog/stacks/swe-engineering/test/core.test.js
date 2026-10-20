@@ -22,8 +22,17 @@ import {
 test("manual list exposes the operating manual documents", async () => {
   const result = await listManualDocuments();
 
-  assert.equal(result.documents.length, 10);
+  assert.equal(result.documents.length, 13);
   assert.equal(result.documents[0].id, "master-engineering-doctrine");
+  assert.equal(result.documents[10].id, "agent-copilot-operating-standard");
+  assert.equal(
+    result.documents[11].id,
+    "horizontal-engineering-and-codebase-stewardship-standard"
+  );
+  assert.equal(
+    result.documents[12].id,
+    "rudi-agentic-engineering-standard"
+  );
   assert.ok(result.documents.every((document) => document.bytes > 0));
 });
 
@@ -40,6 +49,29 @@ test("manual read rejects path traversal and reads allowlisted documents", async
 
   assert.equal(result.document.filename, "10-Engineering-Operating-Manual-Index.md");
   assert.match(result.content, /Engineering Operating Manual Index/);
+
+  const horizontalStandard = await readManualDocument({
+    document: "horizontal-engineering-and-codebase-stewardship-standard",
+    max_chars: 2000,
+  });
+
+  assert.equal(
+    horizontalStandard.document.filename,
+    "12-Horizontal-Engineering-and-Codebase-Stewardship-Standard.md"
+  );
+  assert.match(horizontalStandard.content, /Horizontal Engineering And Codebase Stewardship/);
+
+  const agenticStandard = await readManualDocument({
+    document: "rudi-agentic-engineering-standard",
+    max_chars: 12000,
+  });
+
+  assert.equal(
+    agenticStandard.document.filename,
+    "13-RUDI-Agentic-Engineering-Standard.md"
+  );
+  assert.match(agenticStandard.content, /RUDI Delivery Loop/);
+  assert.match(agenticStandard.content, /rudi-worktree-closeout/);
 });
 
 test("manual search returns matching line references", async () => {
@@ -50,6 +82,25 @@ test("manual search returns matching line references", async () => {
 
   assert.ok(result.matches.length > 0);
   assert.ok(result.matches.every((match) => match.filename && match.line > 0));
+
+  const horizontalResult = await searchManual({
+    query: "consolidation obligation",
+    max_results: 5,
+  });
+
+  assert.ok(horizontalResult.matches.length > 0);
+  assert.ok(horizontalResult.matches.some((match) => (
+    match.document === "horizontal-engineering-and-codebase-stewardship-standard"
+  )));
+
+  const deliveryResult = await searchManual({
+    query: "RUDI Delivery Loop",
+    max_results: 5,
+  });
+
+  assert.ok(deliveryResult.matches.some((match) => (
+    match.document === "rudi-agentic-engineering-standard"
+  )));
 });
 
 test("debt scan command builder uses an allowlisted argument shape", () => {

@@ -36,8 +36,66 @@ const PLAN_FIELDS = new Set([
   "requestedMaxParallel",
   "resourceEnvelope",
   "reviewPolicy",
+  "decisionFrontier",
   "nodes",
   "handoffs",
+]);
+const DECISION_FRONTIER_FIELDS = new Set([
+  "initiativeObjective",
+  "revision",
+  "areas",
+  "decisions",
+  "promotions",
+]);
+const FRONTIER_AREA_FIELDS = new Set([
+  "id",
+  "introducedAtFrontierRevision",
+  "question",
+  "status",
+  "resolution",
+  "decisionIds",
+  "approvalRef",
+  "decidedAt",
+]);
+const FRONTIER_DECISION_FIELDS = new Set([
+  "id",
+  "introducedAtFrontierRevision",
+  "question",
+  "recommendation",
+  "resolution",
+  "status",
+  "approvalRef",
+  "decidedAt",
+]);
+const FRONTIER_DECISION_BINDING_FIELDS = new Set(["decisionId", "digest"]);
+const FRONTIER_AREA_BINDING_FIELDS = new Set(["areaId", "digest"]);
+const FRONTIER_PROMOTION_FIELDS = new Set([
+  "promotionId",
+  "inputDigest",
+  "sourcePlanRevision",
+  "sourceFrontierRevision",
+  "sourceFrontierDigest",
+  "areaBindings",
+  "decisionBindings",
+  "approvalRef",
+  "implementationAuthorizationRef",
+  "promotedAt",
+  "createdNodeIds",
+  "acceptedPlanRevision",
+]);
+const FRONTIER_PROMOTION_INPUT_FIELDS = new Set([
+  "schemaVersion",
+  "projectId",
+  "runId",
+  "promotionId",
+  "expectedPlanRevision",
+  "expectedFrontierRevision",
+  "areaBindings",
+  "decisionBindings",
+  "approvalRef",
+  "implementationAuthorizationRef",
+  "promotedAt",
+  "nodes",
 ]);
 const RESOURCE_ENVELOPE_FIELDS = new Set([
   "maxElapsedSeconds",
@@ -393,6 +451,7 @@ function usage() {
     "Usage:",
     "  project-plan.mjs init --root <project> --project-id <id> --run-id <id> --objective <text> [--max-parallel <count>] [--max-elapsed-seconds <count>] [--max-tokens <count>] [--soft-checkpoint-elapsed-seconds <count>] [--soft-checkpoint-tokens <count>]",
     "  project-plan.mjs validate --plan <path>",
+    "  project-plan.mjs promote --plan <path> --input <path>",
     "  project-plan.mjs run-init --plan <path> --run <path> --input <path>",
     "  project-plan.mjs validate-run --plan <path> --run <path>",
     "  project-plan.mjs prepare --plan <path> --run <path> --input <path>",
@@ -498,6 +557,24 @@ function parsePlanArgs(args) {
   }
   if (!plan) throw new Error("--plan is required");
   return { plan };
+}
+
+function parsePromotionArgs(args) {
+  const options = { plan: null, input: null };
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === "--plan" || flag === "--input") {
+      const value = readValue(args, index, flag);
+      if (flag === "--plan") options.plan = value;
+      if (flag === "--input") options.input = value;
+      index += 1;
+      continue;
+    }
+    throw new Error("Unknown option: " + flag);
+  }
+  if (!options.plan) throw new Error("--plan is required");
+  if (!options.input) throw new Error("--input is required");
+  return options;
 }
 
 function parseReadyArgs(args) {
@@ -964,6 +1041,51 @@ async function replaceOwnedFile(file, content) {
   await fs.rename(temporary, file);
 }
 
+async function withExclusiveMutationLock(file, callback) {
+  await assertOwnedAncestorsAreNotSymlinks(file);
+  const lockPath = file + ".mutation.lock";
+  const deadline = Date.now() + 5000;
+  let handle;
+  while (!handle) {
+    try {
+      handle = await fs.open(lockPath, "wx", 0o600);
+    } catch (error) {
+      if (!error || error.code !== "EEXIST") throw error;
+      if (Date.now() >= deadline) {
+        throw new Error("Timed out waiting for the mutation lock: " + lockPath);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+  try {
+    await handle.writeFile(
+      serializeJson({ pid: process.pid, acquiredAt: new Date().toISOString() }),
+      "utf8"
+    );
+    await handle.sync();
+    return await callback();
+  } finally {
+    await handle.close();
+    await fs.unlink(lockPath).catch((error) => {
+      if (!error || error.code !== "ENOENT") throw error;
+    });
+  }
+}
+
+async function mutateRunFile(planPath, runPath, mutator) {
+  return withExclusiveMutationLock(runPath, async () => {
+    const plan = validatePlan(await readPlanFile(planPath));
+    const run = await readRunFile(runPath, planPath);
+    const previousRunPlanRevision = run.planRevision;
+    const result = await mutator(plan, run);
+    if (!result.idempotent || run.planRevision !== previousRunPlanRevision) {
+      validateRun(plan, run);
+      await replaceOwnedFile(runPath, serializeJson(run));
+    }
+    return { plan, run, result };
+  });
+}
+
 function serializeJson(value) {
   return JSON.stringify(value, null, 2) + "\n";
 }
@@ -1189,7 +1311,13 @@ async function initializeRun(planPath, runPath, rawInput) {
 export function validatePlan(raw) {
   if (!isPlainObject(raw)) throw new Error("plan must be an object");
   assertKnownFields(raw, PLAN_FIELDS, "plan");
-  if (raw.schemaVersion !== 1) throw new Error("plan schemaVersion must be 1");
+  if (!new Set([1, 2]).has(raw.schemaVersion)) {
+    throw new Error("plan schemaVersion must be 1 or 2");
+  }
+  if (raw.schemaVersion === 1 && raw.decisionFrontier !== undefined) {
+    throw new Error("schema-v1 plans cannot contain decisionFrontier");
+  }
+  if (raw.schemaVersion === 2) validateDecisionFrontier(raw.decisionFrontier);
   validateIdentifier(raw.projectId, "plan project ID");
   validateIdentifier(raw.runId, "plan run ID");
   validateText(raw.objective, "plan objective", MAX_OBJECTIVE_LENGTH);
@@ -1243,6 +1371,18 @@ export function validatePlan(raw) {
     }
   }
   const byId = new Map(raw.nodes.map((node) => [node.id, node]));
+  if (raw.schemaVersion === 2) {
+    for (const receipt of raw.decisionFrontier.promotions) {
+      if (receipt.acceptedPlanRevision > raw.revision) {
+        throw new Error("promotion receipt revision cannot exceed the plan revision");
+      }
+      for (const nodeId of receipt.createdNodeIds) {
+        if (!byId.has(nodeId)) {
+          throw new Error("promotion receipt references unknown node: " + nodeId);
+        }
+      }
+    }
+  }
   validateReviewSequences(raw.nodes, raw.reviewPolicy);
   const handoffIds = new Set();
   for (const handoff of raw.handoffs) {
@@ -1295,9 +1435,35 @@ export function validatePlan(raw) {
   }
   for (const nodeId of [...byId.keys()].sort()) visit(nodeId, []);
   const acceptedRevisions = new Set();
+  if (raw.schemaVersion === 2) {
+    for (const receipt of raw.decisionFrontier.promotions) {
+      if (acceptedRevisions.has(receipt.acceptedPlanRevision)) {
+        throw new Error(
+          "Duplicate accepted plan revision: " + receipt.acceptedPlanRevision
+        );
+      }
+      acceptedRevisions.add(receipt.acceptedPlanRevision);
+    }
+  }
+  const reconciliationIds = new Set();
+  const reconciledAttemptIds = new Set();
   for (const node of raw.nodes) {
     validateReconciliations(raw, node);
     for (const record of node.reconciliations) {
+      const reconciliationId = record.resultId ?? record.cancellationId;
+      if (reconciliationIds.has(reconciliationId)) {
+        throw new Error("Duplicate reconciliation ID: " + reconciliationId);
+      }
+      reconciliationIds.add(reconciliationId);
+      if (record.attemptId !== null) {
+        if (reconciledAttemptIds.has(record.attemptId)) {
+          throw new Error(
+            "An attempt may have only one terminal reconciliation: " +
+              record.attemptId
+          );
+        }
+        reconciledAttemptIds.add(record.attemptId);
+      }
       if (acceptedRevisions.has(record.acceptedPlanRevision)) {
         throw new Error(
           "Duplicate accepted plan revision: " + record.acceptedPlanRevision
@@ -1349,6 +1515,501 @@ function validateReviewPolicy(value) {
     throw new Error("reviewPolicy additionalReviewRule is invalid");
   }
   return value;
+}
+
+function frontierDecisionDigest(decision) {
+  return (
+    "sha256:" +
+    crypto.createHash("sha256").update(JSON.stringify(decision)).digest("hex")
+  );
+}
+
+function frontierAreaDigest(area) {
+  return (
+    "sha256:" +
+    crypto.createHash("sha256").update(JSON.stringify(area)).digest("hex")
+  );
+}
+
+function frontierRecordIntroductionRevision(record, label, currentFrontierRevision) {
+  const revision = record.introducedAtFrontierRevision ?? 1;
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw new Error(label + " introducedAtFrontierRevision must be a positive safe integer");
+  }
+  if (revision > currentFrontierRevision) {
+    throw new Error(label + " cannot be introduced after the current frontier revision");
+  }
+  return revision;
+}
+
+function validateFrontierAreaBinding(binding, areas, label) {
+  if (!isPlainObject(binding)) throw new Error(label + " must be an object");
+  assertKnownFields(binding, FRONTIER_AREA_BINDING_FIELDS, label);
+  const areaId = validateIdentifier(binding.areaId, label + " areaId");
+  if (typeof binding.digest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(binding.digest)) {
+    throw new Error(label + " digest must be lowercase SHA-256");
+  }
+  const area = areas.get(areaId);
+  if (!area || area.status === "open") {
+    throw new Error(label + " must reference a terminal area outcome");
+  }
+  if (binding.digest !== frontierAreaDigest(area)) {
+    throw new Error(label + " area digest does not match the plan");
+  }
+  return binding;
+}
+
+function validateFrontierDecisionBinding(binding, decisions, label) {
+  if (!isPlainObject(binding)) throw new Error(label + " must be an object");
+  assertKnownFields(binding, FRONTIER_DECISION_BINDING_FIELDS, label);
+  const decisionId = validateIdentifier(binding.decisionId, label + " decisionId");
+  if (typeof binding.digest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(binding.digest)) {
+    throw new Error(label + " digest must be lowercase SHA-256");
+  }
+  const decision = decisions.get(decisionId);
+  if (!decision || decision.status === "proposed") {
+    throw new Error(label + " must reference a terminal decision");
+  }
+  if (binding.digest !== frontierDecisionDigest(decision)) {
+    throw new Error(label + " decision digest does not match the plan");
+  }
+  return binding;
+}
+
+function frontierSnapshotDigest(frontier, sourceRevision, areaBindings, decisionBindings) {
+  const areas = new Map(frontier.areas.map((area) => [area.id, area]));
+  const decisions = new Map(frontier.decisions.map((decision) => [decision.id, decision]));
+  const snapshot = {
+    initiativeObjective: frontier.initiativeObjective,
+    revision: sourceRevision,
+    areas: [...areaBindings]
+      .sort((left, right) => compareCodeUnits(left.areaId, right.areaId))
+      .map((binding) => areas.get(binding.areaId)),
+    decisions: [...decisionBindings]
+      .sort((left, right) => compareCodeUnits(left.decisionId, right.decisionId))
+      .map((binding) => decisions.get(binding.decisionId)),
+  };
+  return (
+    "sha256:" +
+    crypto.createHash("sha256").update(JSON.stringify(snapshot)).digest("hex")
+  );
+}
+
+function validateDecisionFrontier(value) {
+  if (!isPlainObject(value)) throw new Error("decisionFrontier must be an object");
+  assertKnownFields(value, DECISION_FRONTIER_FIELDS, "decision frontier");
+  validateText(
+    value.initiativeObjective,
+    "decision frontier initiativeObjective",
+    MAX_OBJECTIVE_LENGTH
+  );
+  if (!Number.isSafeInteger(value.revision) || value.revision < 1) {
+    throw new Error("decision frontier revision must be a positive safe integer");
+  }
+  if (!Array.isArray(value.areas) || value.areas.length === 0) {
+    throw new Error("decision frontier areas must be a non-empty array");
+  }
+  if (!Array.isArray(value.decisions) || value.decisions.length === 0) {
+    throw new Error("decision frontier decisions must be a non-empty array");
+  }
+  if (!Array.isArray(value.promotions)) {
+    throw new Error("decision frontier promotions must be an array");
+  }
+
+  const decisions = new Map();
+  for (const decision of value.decisions) {
+    if (!isPlainObject(decision)) throw new Error("decision record must be an object");
+    assertKnownFields(decision, FRONTIER_DECISION_FIELDS, "decision record");
+    const id = validateIdentifier(decision.id, "decision record ID");
+    if (decisions.has(id)) throw new Error("Duplicate decision record ID: " + id);
+    frontierRecordIntroductionRevision(
+      decision,
+      "decision record " + id,
+      value.revision
+    );
+    validateText(decision.question, "decision record question", 2000);
+    validateNullableText(decision.recommendation, "decision recommendation", 4000);
+    if (!new Set(["proposed", "accepted", "rejected", "superseded"]).has(decision.status)) {
+      throw new Error("Unknown decision record status: " + decision.status);
+    }
+    if (decision.status === "proposed") {
+      if (
+        decision.resolution !== null ||
+        decision.approvalRef !== null ||
+        decision.decidedAt !== null
+      ) {
+        throw new Error("proposed decision records cannot claim approval or resolution");
+      }
+    } else {
+      validateText(decision.resolution, "decision resolution", 4000);
+      validateText(decision.approvalRef, "decision approval reference", 1000);
+      validateCanonicalTimestamp(decision.decidedAt, "decision decidedAt");
+    }
+    decisions.set(id, decision);
+  }
+
+  const areas = new Set();
+  for (const area of value.areas) {
+    if (!isPlainObject(area)) throw new Error("unresolved area must be an object");
+    assertKnownFields(area, FRONTIER_AREA_FIELDS, "unresolved area");
+    const id = validateIdentifier(area.id, "unresolved area ID");
+    if (areas.has(id)) throw new Error("Duplicate unresolved area ID: " + id);
+    areas.add(id);
+    frontierRecordIntroductionRevision(
+      area,
+      "unresolved area " + id,
+      value.revision
+    );
+    validateText(area.question, "unresolved area question", 2000);
+    if (!new Set(["open", "resolved", "accepted_deferral", "out_of_scope"]).has(area.status)) {
+      throw new Error("Unknown unresolved area status: " + area.status);
+    }
+    if (!Array.isArray(area.decisionIds)) {
+      throw new Error("unresolved area decisionIds must be an array");
+    }
+    const referencedDecisions = new Set();
+    for (const decisionId of area.decisionIds) {
+      validateIdentifier(decisionId, "unresolved area decision ID");
+      if (referencedDecisions.has(decisionId)) {
+        throw new Error("Duplicate unresolved area decision ID: " + decisionId);
+      }
+      referencedDecisions.add(decisionId);
+      if (!decisions.has(decisionId)) {
+        throw new Error("Unresolved area references unknown decision: " + decisionId);
+      }
+    }
+    if (area.status === "open") {
+      if (
+        area.resolution !== null ||
+        area.decisionIds.length !== 0 ||
+        area.approvalRef !== null ||
+        area.decidedAt !== null
+      ) {
+        throw new Error("open unresolved areas cannot claim a resolution");
+      }
+      continue;
+    }
+    validateText(area.resolution, "unresolved area resolution", 4000);
+    validateCanonicalTimestamp(area.decidedAt, "unresolved area decidedAt");
+    if (area.status === "resolved") {
+      if (area.decisionIds.length === 0) {
+        throw new Error("resolved areas require at least one accepted decision");
+      }
+      if (
+        [...referencedDecisions].some(
+          (decisionId) => decisions.get(decisionId).status !== "accepted"
+        )
+      ) {
+        throw new Error("resolved areas may reference only accepted decisions");
+      }
+      if (area.approvalRef !== null) {
+        throw new Error("resolved area approval belongs on its accepted decision records");
+      }
+    } else {
+      validateText(area.approvalRef, "unresolved area approval reference", 1000);
+    }
+  }
+
+  const promotionIds = new Set();
+  let previousAcceptedPlanRevision = 0;
+  let previousSourcePlanRevision = 0;
+  let previousSourceFrontierRevision = 0;
+  for (const receipt of value.promotions) {
+    if (!isPlainObject(receipt)) throw new Error("promotion receipt must be an object");
+    assertKnownFields(receipt, FRONTIER_PROMOTION_FIELDS, "promotion receipt");
+    const promotionId = validateIdentifier(receipt.promotionId, "promotion ID");
+    if (promotionIds.has(promotionId)) throw new Error("Duplicate promotion ID: " + promotionId);
+    promotionIds.add(promotionId);
+    if (
+      typeof receipt.inputDigest !== "string" ||
+      !/^sha256:[a-f0-9]{64}$/u.test(receipt.inputDigest)
+    ) {
+      throw new Error("promotion inputDigest must be lowercase SHA-256");
+    }
+    for (const field of [
+      "sourcePlanRevision",
+      "sourceFrontierRevision",
+      "acceptedPlanRevision",
+    ]) {
+      if (!Number.isSafeInteger(receipt[field]) || receipt[field] < 1) {
+        throw new Error("promotion " + field + " must be a positive safe integer");
+      }
+    }
+    if (receipt.acceptedPlanRevision !== receipt.sourcePlanRevision + 1) {
+      throw new Error("promotion acceptedPlanRevision must immediately follow its source");
+    }
+    if (receipt.sourcePlanRevision < previousAcceptedPlanRevision) {
+      throw new Error("promotion source plan revision must not predate earlier promotion history");
+    }
+    if (receipt.sourcePlanRevision <= previousSourcePlanRevision) {
+      throw new Error("promotion source plan revisions must be strictly increasing");
+    }
+    previousSourcePlanRevision = receipt.sourcePlanRevision;
+    if (receipt.sourceFrontierRevision >= value.revision) {
+      throw new Error("promotion sourceFrontierRevision must precede the current frontier");
+    }
+    if (receipt.sourceFrontierRevision <= previousSourceFrontierRevision) {
+      throw new Error("promotion source frontier revisions must be strictly increasing");
+    }
+    previousSourceFrontierRevision = receipt.sourceFrontierRevision;
+    if (receipt.acceptedPlanRevision <= previousAcceptedPlanRevision) {
+      throw new Error("promotion receipts must be ordered by accepted plan revision");
+    }
+    previousAcceptedPlanRevision = receipt.acceptedPlanRevision;
+    if (
+      typeof receipt.sourceFrontierDigest !== "string" ||
+      !/^sha256:[a-f0-9]{64}$/u.test(receipt.sourceFrontierDigest)
+    ) {
+      throw new Error("promotion sourceFrontierDigest must be lowercase SHA-256");
+    }
+    if (!Array.isArray(receipt.areaBindings) || receipt.areaBindings.length === 0) {
+      throw new Error("promotion areaBindings must be a non-empty array");
+    }
+    const boundAreaIds = new Set();
+    const areaMap = new Map(value.areas.map((area) => [area.id, area]));
+    for (const binding of receipt.areaBindings) {
+      validateFrontierAreaBinding(binding, areaMap, "promotion area binding");
+      if (boundAreaIds.has(binding.areaId)) {
+        throw new Error("Duplicate promotion area binding: " + binding.areaId);
+      }
+      boundAreaIds.add(binding.areaId);
+    }
+    if (!Array.isArray(receipt.decisionBindings) || receipt.decisionBindings.length === 0) {
+      throw new Error("promotion decisionBindings must be a non-empty array");
+    }
+    const boundDecisionIds = new Set();
+    for (const binding of receipt.decisionBindings) {
+      validateFrontierDecisionBinding(binding, decisions, "promotion decision binding");
+      if (boundDecisionIds.has(binding.decisionId)) {
+        throw new Error("Duplicate promotion decision binding: " + binding.decisionId);
+      }
+      boundDecisionIds.add(binding.decisionId);
+    }
+    const sourceAreaIds = value.areas
+      .filter(
+        (area) =>
+          frontierRecordIntroductionRevision(
+            area,
+            "unresolved area " + area.id,
+            value.revision
+          ) <= receipt.sourceFrontierRevision
+      )
+      .map((area) => area.id)
+      .sort(compareCodeUnits);
+    if (
+      JSON.stringify([...boundAreaIds].sort(compareCodeUnits)) !==
+      JSON.stringify(sourceAreaIds)
+    ) {
+      throw new Error(
+        "promotion area bindings must exactly cover their source frontier revision"
+      );
+    }
+    const sourceDecisionIds = value.decisions
+      .filter(
+        (decision) =>
+          frontierRecordIntroductionRevision(
+            decision,
+            "decision record " + decision.id,
+            value.revision
+          ) <= receipt.sourceFrontierRevision
+      )
+      .map((decision) => decision.id)
+      .sort(compareCodeUnits);
+    if (
+      JSON.stringify([...boundDecisionIds].sort(compareCodeUnits)) !==
+      JSON.stringify(sourceDecisionIds)
+    ) {
+      throw new Error(
+        "promotion decision bindings must exactly cover their source frontier revision"
+      );
+    }
+    if (
+      receipt.sourceFrontierDigest !==
+      frontierSnapshotDigest(
+        value,
+        receipt.sourceFrontierRevision,
+        receipt.areaBindings,
+        receipt.decisionBindings
+      )
+    ) {
+      throw new Error("promotion source frontier digest does not match bound outcomes");
+    }
+    validateText(receipt.approvalRef, "promotion approval reference", 1000);
+    validateText(
+      receipt.implementationAuthorizationRef,
+      "promotion implementation authorization reference",
+      1000
+    );
+    if (receipt.approvalRef === receipt.implementationAuthorizationRef) {
+      throw new Error("promotion approval and implementation authorization must be distinct");
+    }
+    validateCanonicalTimestamp(receipt.promotedAt, "promotion promotedAt");
+    const boundOutcomeTimestamps = [
+      ...receipt.areaBindings.map((binding) => areaMap.get(binding.areaId).decidedAt),
+      ...receipt.decisionBindings.map((binding) => decisions.get(binding.decisionId).decidedAt),
+    ];
+    if (boundOutcomeTimestamps.some((decidedAt) => receipt.promotedAt < decidedAt)) {
+      throw new Error("promotion timestamp must not predate a bound approval");
+    }
+    if (!Array.isArray(receipt.createdNodeIds) || receipt.createdNodeIds.length === 0) {
+      throw new Error("promotion createdNodeIds must be a non-empty array");
+    }
+    const createdNodeIds = new Set();
+    for (const nodeId of receipt.createdNodeIds) {
+      validateIdentifier(nodeId, "promoted node ID");
+      if (createdNodeIds.has(nodeId)) throw new Error("Duplicate promoted node ID: " + nodeId);
+      createdNodeIds.add(nodeId);
+    }
+  }
+  return value;
+}
+
+function validateFrontierPromotionInput(plan, raw) {
+  if (!isPlainObject(raw)) throw new Error("promotion input must be an object");
+  assertKnownFields(raw, FRONTIER_PROMOTION_INPUT_FIELDS, "promotion input");
+  if (raw.schemaVersion !== 1) throw new Error("promotion input schemaVersion must be 1");
+  if (raw.projectId !== plan.projectId || raw.runId !== plan.runId) {
+    throw new Error("promotion project or run identity does not match the plan");
+  }
+  validateIdentifier(raw.promotionId, "promotion ID");
+  for (const field of ["expectedPlanRevision", "expectedFrontierRevision"]) {
+    if (!Number.isSafeInteger(raw[field]) || raw[field] < 1) {
+      throw new Error(field + " must be a positive safe integer");
+    }
+  }
+  if (!Array.isArray(raw.areaBindings) || raw.areaBindings.length === 0) {
+    throw new Error("promotion areaBindings must be a non-empty array");
+  }
+  if (!Array.isArray(raw.decisionBindings) || raw.decisionBindings.length === 0) {
+    throw new Error("promotion decisionBindings must be a non-empty array");
+  }
+  validateText(raw.approvalRef, "promotion approval reference", 1000);
+  validateText(
+    raw.implementationAuthorizationRef,
+    "promotion implementation authorization reference",
+    1000
+  );
+  if (raw.approvalRef === raw.implementationAuthorizationRef) {
+    throw new Error("promotion approval and implementation authorization must be distinct");
+  }
+  validateCanonicalTimestamp(raw.promotedAt, "promotion promotedAt");
+  if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) {
+    throw new Error("promotion nodes must be a non-empty array");
+  }
+  return raw;
+}
+
+export function promoteDecisionFrontier(plan, rawInput, rawBytes) {
+  validatePlan(plan);
+  if (!isPlainObject(rawInput)) throw new Error("promotion input must be an object");
+  const inputDigest =
+    "sha256:" + crypto.createHash("sha256").update(rawBytes).digest("hex");
+  const proposedId = rawInput.promotionId;
+  if (plan.schemaVersion === 2) {
+    const existing = plan.decisionFrontier.promotions.find(
+      (receipt) => receipt.promotionId === proposedId
+    );
+    if (existing) {
+      if (existing.inputDigest === inputDigest) {
+        return { receipt: existing, idempotent: true };
+      }
+      throw new Error("Conflicting duplicate promotion ID: " + proposedId);
+    }
+  }
+  const input = validateFrontierPromotionInput(plan, rawInput);
+  if (plan.schemaVersion !== 2) {
+    throw new Error("promotion requires a schema-v2 plan with decisionFrontier");
+  }
+  const frontier = plan.decisionFrontier;
+  if (
+    input.expectedPlanRevision !== plan.revision ||
+    input.expectedFrontierRevision !== frontier.revision
+  ) {
+    throw new Error("promotion expected revisions are stale");
+  }
+  if (frontier.areas.some((area) => area.status === "open")) {
+    throw new Error("promotion requires every unresolved area to be closed");
+  }
+  if (frontier.decisions.some((decision) => decision.status === "proposed")) {
+    throw new Error("promotion requires every decision record to be terminal");
+  }
+
+  const decisions = new Map(frontier.decisions.map((decision) => [decision.id, decision]));
+  const areas = new Map(frontier.areas.map((area) => [area.id, area]));
+  const areaBindingIds = new Set();
+  for (const binding of input.areaBindings) {
+    validateFrontierAreaBinding(binding, areas, "promotion area binding");
+    if (areaBindingIds.has(binding.areaId)) {
+      throw new Error("Duplicate promotion area binding: " + binding.areaId);
+    }
+    areaBindingIds.add(binding.areaId);
+  }
+  const bindingIds = new Set();
+  for (const binding of input.decisionBindings) {
+    validateFrontierDecisionBinding(binding, decisions, "promotion decision binding");
+    if (bindingIds.has(binding.decisionId)) {
+      throw new Error("Duplicate promotion decision binding: " + binding.decisionId);
+    }
+    bindingIds.add(binding.decisionId);
+  }
+  if (
+    JSON.stringify([...bindingIds].sort(compareCodeUnits)) !==
+    JSON.stringify(frontier.decisions.map((decision) => decision.id).sort(compareCodeUnits))
+  ) {
+    throw new Error("promotion decision bindings must exactly cover the frontier snapshot");
+  }
+  if (
+    JSON.stringify([...areaBindingIds].sort(compareCodeUnits)) !==
+    JSON.stringify(frontier.areas.map((area) => area.id).sort(compareCodeUnits))
+  ) {
+    throw new Error("promotion area bindings must exactly cover the frontier snapshot");
+  }
+
+  const existingNodeIds = new Set(plan.nodes.map((node) => node.id));
+  const createdNodeIds = [];
+  for (const node of input.nodes) {
+    if (!isPlainObject(node)) throw new Error("promoted node must be an object");
+    const nodeId = validateIdentifier(node.id, "promoted node ID");
+    if (existingNodeIds.has(nodeId) || createdNodeIds.includes(nodeId)) {
+      throw new Error("Promoted node ID already exists: " + nodeId);
+    }
+    if (node.status !== "proposed") {
+      throw new Error("promoted nodes must begin in proposed status");
+    }
+    if (!Array.isArray(node.reconciliations) || node.reconciliations.length !== 0) {
+      throw new Error("promoted nodes cannot contain reconciliation history");
+    }
+    createdNodeIds.push(nodeId);
+  }
+
+  const receipt = {
+    promotionId: input.promotionId,
+    inputDigest,
+    sourcePlanRevision: plan.revision,
+    sourceFrontierRevision: frontier.revision,
+    sourceFrontierDigest: frontierSnapshotDigest(
+      frontier,
+      frontier.revision,
+      input.areaBindings,
+      input.decisionBindings
+    ),
+    areaBindings: structuredClone(input.areaBindings),
+    decisionBindings: structuredClone(input.decisionBindings),
+    approvalRef: input.approvalRef,
+    implementationAuthorizationRef: input.implementationAuthorizationRef,
+    promotedAt: input.promotedAt,
+    createdNodeIds,
+    acceptedPlanRevision: plan.revision + 1,
+  };
+  const candidate = structuredClone(plan);
+  candidate.revision += 1;
+  candidate.nodes.push(...structuredClone(input.nodes));
+  candidate.decisionFrontier.revision += 1;
+  candidate.decisionFrontier.promotions.push(receipt);
+  validatePlan(candidate);
+  for (const key of Object.keys(plan)) delete plan[key];
+  Object.assign(plan, candidate);
+  return { receipt, idempotent: false };
 }
 
 function validateReviewDeclaration(value, nodeId) {
@@ -1570,10 +2231,16 @@ function validateRun(plan, run) {
   if (
     run.schemaVersion !== 1 ||
     run.projectId !== plan.projectId ||
-    run.runId !== plan.runId ||
-    run.planRevision !== plan.revision
+    run.runId !== plan.runId
   ) {
-    throw new Error("Run identity or plan revision does not match the plan");
+    throw new Error("Run identity does not match the plan");
+  }
+  if (
+    !Number.isSafeInteger(run.planRevision) ||
+    run.planRevision < 1 ||
+    run.planRevision > plan.revision
+  ) {
+    throw new Error("Run plan revision is invalid or ahead of the plan");
   }
   if (!Array.isArray(run.projects) || !Array.isArray(run.hosts) || !Array.isArray(run.attempts)) {
     throw new Error("run projects, hosts, and attempts must be arrays");
@@ -1672,6 +2339,7 @@ function validateRun(plan, run) {
   }
 
   const attemptIds = new Set();
+  const attemptsById = new Map();
   const idempotencyKeys = new Set();
   const activeNodeIds = new Set();
   const nodes = new Map(plan.nodes.map((node) => [node.id, node]));
@@ -1681,12 +2349,16 @@ function validateRun(plan, run) {
     validateIdentifier(attempt.attemptId, "attempt ID");
     if (attemptIds.has(attempt.attemptId)) throw new Error("Duplicate attempt ID: " + attempt.attemptId);
     attemptIds.add(attempt.attemptId);
+    attemptsById.set(attempt.attemptId, attempt);
     if (
       !Number.isSafeInteger(attempt.preparedPlanRevision) ||
       attempt.preparedPlanRevision < 1 ||
       attempt.preparedPlanRevision > plan.revision
     ) {
       throw new Error("attempt preparedPlanRevision is invalid");
+    }
+    if (attempt.preparedPlanRevision > run.planRevision) {
+      throw new Error("attempt preparedPlanRevision is ahead of the run plan revision");
     }
     validateCanonicalTimestamp(attempt.preparedAt, "attempt preparedAt");
     const node = nodes.get(attempt.nodeId);
@@ -1992,8 +2664,24 @@ function validateRun(plan, run) {
           attempt.resultReference.acceptedPlanRevision === record.acceptedPlanRevision
         );
       });
-      if (acceptedRecord && !reconciliationMatchesAttemptLifecycle(acceptedRecord, attempt)) {
+      if (!acceptedRecord) {
+        throw new Error("attempt result reference has no accepted reconciliation");
+      }
+      if (attempt.resultReference.acceptedPlanRevision > run.planRevision) {
+        throw new Error("attempt result reference is ahead of the run revision");
+      }
+      if (!reconciliationMatchesAttemptLifecycle(acceptedRecord, attempt)) {
         throw new Error("attempt lifecycle does not match its accepted reconciliation");
+      }
+    } else {
+      const acceptedRecord = node.reconciliations.find(
+        (record) => record.attemptId === attempt.attemptId
+      );
+      if (
+        acceptedRecord &&
+        acceptedRecord.acceptedPlanRevision <= run.planRevision
+      ) {
+        throw new Error("accepted reconciliation is missing its run result reference");
       }
     }
     if (isActiveAttempt(attempt)) {
@@ -2003,10 +2691,39 @@ function validateRun(plan, run) {
       activeNodeIds.add(attempt.nodeId);
     }
   }
+  for (const node of plan.nodes) {
+    for (const record of node.reconciliations) {
+      if (record.attemptId !== null) {
+        const attempt = attemptsById.get(record.attemptId);
+        if (!attempt) {
+          throw new Error(
+            "Accepted reconciliation references an unknown run attempt: " +
+              record.attemptId
+          );
+        }
+        if (attempt.nodeId !== node.id) {
+          throw new Error(
+            "Accepted reconciliation node does not match its run attempt: " +
+              record.attemptId
+          );
+        }
+        if (record.acceptedPlanRevision <= attempt.preparedPlanRevision) {
+          throw new Error(
+            "reconciliation acceptedPlanRevision must be later than attempt preparation"
+          );
+        }
+      }
+    }
+  }
   validateLineage(plan, run);
   validateAttemptLineage(plan, run);
   validateUsageReports(plan, run, attemptIds);
   return run;
+}
+
+function synchronizeRunPlanRevision(plan, run) {
+  validateRun(plan, run);
+  run.planRevision = plan.revision;
 }
 
 function validateUsageReports(plan, run, attemptIds) {
@@ -2360,7 +3077,7 @@ function prepareIdempotencyKey(plan, input) {
 }
 
 export function prepareAttempt(plan, run, rawInput) {
-  validateRun(plan, run);
+  synchronizeRunPlanRevision(plan, run);
   const input = validatePrepareInput(plan, rawInput);
   const node = plan.nodes.find((candidate) => candidate.id === input.nodeId);
   if (!node) throw new Error("Unknown prepare node ID: " + input.nodeId);
@@ -2517,7 +3234,7 @@ function usageReportFromInput(plan, raw) {
 }
 
 export function recordUsage(plan, run, rawInput) {
-  validateRun(plan, run);
+  synchronizeRunPlanRevision(plan, run);
   const report = usageReportFromInput(plan, rawInput);
   const existing = run.usageReports.find(
     (candidate) => candidate.usageId === report.usageId
@@ -2575,7 +3292,7 @@ function dispatchRecordFromInput(plan, raw) {
 }
 
 export function recordDispatch(plan, run, rawInput) {
-  validateRun(plan, run);
+  synchronizeRunPlanRevision(plan, run);
   const record = dispatchRecordFromInput(plan, rawInput);
   const attempt = run.attempts.find(
     (candidate) => candidate.attemptId === rawInput.attemptId
@@ -2646,7 +3363,7 @@ function terminationRecordFromInput(plan, raw) {
 }
 
 export function recordTermination(plan, run, rawInput) {
-  validateRun(plan, run);
+  synchronizeRunPlanRevision(plan, run);
   const record = terminationRecordFromInput(plan, rawInput);
   const attempt = run.attempts.find(
     (candidate) => candidate.attemptId === rawInput.attemptId
@@ -2698,7 +3415,7 @@ function steeringInput(plan, raw) {
 }
 
 export function recordSteering(plan, run, rawInput) {
-  validateRun(plan, run);
+  synchronizeRunPlanRevision(plan, run);
   const input = steeringInput(plan, rawInput);
   const attempt = run.attempts.find(
     (candidate) => candidate.attemptId === input.attemptId
@@ -2778,7 +3495,7 @@ function archiveRecordFromInput(plan, raw) {
 }
 
 export function recordArchive(plan, run, rawInput) {
-  validateRun(plan, run);
+  synchronizeRunPlanRevision(plan, run);
   const record = archiveRecordFromInput(plan, rawInput);
   const attempt = run.attempts.find(
     (candidate) => candidate.attemptId === rawInput.attemptId
@@ -3158,18 +3875,61 @@ function validateCancellation(plan, run, raw) {
     if (!noNativeWorkAccepted && attempt.terminationOutcome !== "cancelled") {
       throw new Error("Cancellation attempt has not reached confirmed native termination");
     }
-    if (
-      attempt.resultReference?.kind !== "cancellation" ||
-      attempt.resultReference?.id !== raw.cancellationId
-    ) {
-      throw new Error("Cancellation attempt reference does not match the accepted input");
-    }
   }
   return { node, attempt, evidence };
 }
 
 function requiredEvidenceSubjects(plan, node) {
   return requiredEvidenceSubjectsFromContract(evidenceContractFor(plan, node));
+}
+
+function validateReconciliationReplay(record, options) {
+  if (
+    record.toStatus !== options.to ||
+    record.managerReason !== options.managerReason ||
+    record.acceptedAt !== options.acceptedAt
+  ) {
+    throw new Error("Conflicting reconciliation replay");
+  }
+}
+
+function synchronizeReconciliationReference(plan, run, node, record) {
+  validateRun(plan, run);
+  const previousPlanRevision = run.planRevision;
+  let referenceChanged = false;
+  if (record.attemptId !== null) {
+    const attempt = run.attempts.find(
+      (candidate) => candidate.attemptId === record.attemptId
+    );
+    if (!attempt || attempt.nodeId !== node.id) {
+      throw new Error("Accepted reconciliation references an unknown run attempt");
+    }
+    if (!reconciliationMatchesAttemptLifecycle(record, attempt)) {
+      throw new Error("Accepted reconciliation does not match run lifecycle");
+    }
+    const expectedReference = {
+      kind: record.resultId !== null ? "result" : "cancellation",
+      id: record.resultId ?? record.cancellationId,
+      acceptedPlanRevision: record.acceptedPlanRevision,
+    };
+    if (attempt.resultReference === null) {
+      if (run.planRevision >= record.acceptedPlanRevision) {
+        throw new Error(
+          "Accepted reconciliation is missing from a non-lagging run"
+        );
+      }
+      attempt.resultReference = expectedReference;
+      referenceChanged = true;
+    } else if (
+      JSON.stringify(attempt.resultReference) !==
+      JSON.stringify(expectedReference)
+    ) {
+      throw new Error("Run result reference conflicts with accepted reconciliation");
+    }
+  }
+  run.planRevision = plan.revision;
+  validateRun(plan, run);
+  return referenceChanged || previousPlanRevision !== run.planRevision;
 }
 
 export function reconcileResult(plan, run, result, rawBytes, options) {
@@ -3179,7 +3939,17 @@ export function reconcileResult(plan, run, result, rawBytes, options) {
     for (const record of existingNode.reconciliations) {
       if (record.resultId !== proposedId && record.cancellationId !== proposedId) continue;
       if (record.inputDigest === inputDigest) {
-        return { node: existingNode, idempotent: true };
+        validateReconciliationReplay(record, options);
+        return {
+          node: existingNode,
+          idempotent: true,
+          runUpdated: synchronizeReconciliationReference(
+            plan,
+            run,
+            existingNode,
+            record
+          ),
+        };
       }
       throw new Error("Conflicting duplicate result ID: " + proposedId);
     }
@@ -3227,7 +3997,12 @@ export function reconcileResult(plan, run, result, rawBytes, options) {
     evidence,
   });
   plan.revision += 1;
-  return { node, idempotent: false };
+  const record = node.reconciliations.at(-1);
+  return {
+    node,
+    idempotent: false,
+    runUpdated: synchronizeReconciliationReference(plan, run, node, record),
+  };
 }
 
 export function reconcileCancellation(plan, run, cancellation, rawBytes, options) {
@@ -3242,7 +4017,17 @@ export function reconcileCancellation(plan, run, cancellation, rawBytes, options
         continue;
       }
       if (record.inputDigest === inputDigest) {
-        return { node: existingNode, idempotent: true };
+        validateReconciliationReplay(record, options);
+        return {
+          node: existingNode,
+          idempotent: true,
+          runUpdated: synchronizeReconciliationReference(
+            plan,
+            run,
+            existingNode,
+            record
+          ),
+        };
       }
       throw new Error("Conflicting duplicate cancellation ID: " + proposedId);
     }
@@ -3272,7 +4057,12 @@ export function reconcileCancellation(plan, run, cancellation, rawBytes, options
     evidence,
   });
   plan.revision += 1;
-  return { node, idempotent: false };
+  const record = node.reconciliations.at(-1);
+  return {
+    node,
+    idempotent: false,
+    runUpdated: synchronizeReconciliationReference(plan, run, node, record),
+  };
 }
 
 export function transitionNode(plan, nodeId, nextStatus, blockingReason = null, run = null) {
@@ -3486,6 +4276,30 @@ async function main() {
     );
     return;
   }
+  if (command === "promote") {
+    const options = parsePromotionArgs(args);
+    const planPath = assertCanonicalPlanPath(options.plan);
+    const input = await readJsonDocument(options.input);
+    const { plan, result } = await withExclusiveMutationLock(planPath, async () => {
+      const lockedPlan = validatePlan(await readPlanFile(planPath));
+      const promotion = promoteDecisionFrontier(lockedPlan, input.value, input.bytes);
+      if (!promotion.idempotent) {
+        await replaceOwnedFile(planPath, serializeJson(lockedPlan));
+      }
+      return { plan: lockedPlan, result: promotion };
+    });
+    process.stdout.write(
+      serializeJson({
+        promoted: true,
+        promotionId: result.receipt.promotionId,
+        createdNodeIds: result.receipt.createdNodeIds,
+        revision: plan.revision,
+        frontierRevision: plan.decisionFrontier.revision,
+        idempotent: result.idempotent,
+      })
+    );
+    return;
+  }
   if (command === "run-init") {
     const options = parseRunInputArgs(args);
     const input = await readJsonFile(options.input);
@@ -3523,14 +4337,13 @@ async function main() {
     if (!(await pathExists(runPath))) {
       throw new Error("Durable run must be initialized before prepare");
     }
-    const plan = validatePlan(await readPlanFile(planPath));
-    const run = await readRunFile(runPath, planPath);
     const input = await readJsonFile(options.input);
-    const result = prepareAttempt(plan, run, input);
+    const { plan, result } = await mutateRunFile(
+      planPath,
+      runPath,
+      (lockedPlan, run) => prepareAttempt(lockedPlan, run, input)
+    );
     const attempt = result.attempt;
-    if (!result.idempotent) {
-      await replaceOwnedFile(runPath, serializeJson(run));
-    }
     process.stdout.write(
       serializeJson({
         prepared: true,
@@ -3550,13 +4363,13 @@ async function main() {
   if (command === "record-usage") {
     const options = parseRunInputArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const runPath = assertRunBelongsToPlan(options.run, planPath, plan.runId);
-    const run = await readRunFile(runPath, planPath);
-    const result = recordUsage(plan, run, await readJsonFile(options.input));
-    if (!result.idempotent) {
-      await replaceOwnedFile(runPath, serializeJson(run));
-    }
+    const runPath = assertRunBelongsToPlan(options.run, planPath);
+    const input = await readJsonFile(options.input);
+    const { result } = await mutateRunFile(
+      planPath,
+      runPath,
+      (plan, run) => recordUsage(plan, run, input)
+    );
     process.stdout.write(
       serializeJson({
         usageId: result.report.usageId,
@@ -3571,13 +4384,13 @@ async function main() {
   if (command === "record-dispatch") {
     const options = parseRunInputArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const runPath = assertRunBelongsToPlan(options.run, planPath, plan.runId);
-    const run = await readRunFile(runPath, planPath);
-    const result = recordDispatch(plan, run, await readJsonFile(options.input));
-    if (!result.idempotent) {
-      await replaceOwnedFile(runPath, serializeJson(run));
-    }
+    const runPath = assertRunBelongsToPlan(options.run, planPath);
+    const input = await readJsonFile(options.input);
+    const { result } = await mutateRunFile(
+      planPath,
+      runPath,
+      (plan, run) => recordDispatch(plan, run, input)
+    );
     process.stdout.write(
       serializeJson({
         attemptId: result.attempt.attemptId,
@@ -3590,17 +4403,13 @@ async function main() {
   if (command === "record-termination") {
     const options = parseRunInputArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const runPath = assertRunBelongsToPlan(options.run, planPath, plan.runId);
-    const run = await readRunFile(runPath, planPath);
-    const result = recordTermination(
-      plan,
-      run,
-      await readJsonFile(options.input)
+    const runPath = assertRunBelongsToPlan(options.run, planPath);
+    const input = await readJsonFile(options.input);
+    const { result } = await mutateRunFile(
+      planPath,
+      runPath,
+      (plan, run) => recordTermination(plan, run, input)
     );
-    if (!result.idempotent) {
-      await replaceOwnedFile(runPath, serializeJson(run));
-    }
     process.stdout.write(
       serializeJson({
         attemptId: result.attempt.attemptId,
@@ -3613,14 +4422,13 @@ async function main() {
   if (command === "record-steering") {
     const options = parseRunInputArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const runPath = assertRunBelongsToPlan(options.run, planPath, plan.runId);
-    const run = await readRunFile(runPath, planPath);
+    const runPath = assertRunBelongsToPlan(options.run, planPath);
     const input = await readJsonFile(options.input);
-    const result = recordSteering(plan, run, input);
-    if (!result.idempotent) {
-      await replaceOwnedFile(runPath, serializeJson(run));
-    }
+    const { result } = await mutateRunFile(
+      planPath,
+      runPath,
+      (plan, run) => recordSteering(plan, run, input)
+    );
     process.stdout.write(
       serializeJson({
         attemptId: input.attemptId,
@@ -3634,13 +4442,13 @@ async function main() {
   if (command === "record-archive") {
     const options = parseRunInputArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const runPath = assertRunBelongsToPlan(options.run, planPath, plan.runId);
-    const run = await readRunFile(runPath, planPath);
-    const result = recordArchive(plan, run, await readJsonFile(options.input));
-    if (!result.idempotent) {
-      await replaceOwnedFile(runPath, serializeJson(run));
-    }
+    const runPath = assertRunBelongsToPlan(options.run, planPath);
+    const input = await readJsonFile(options.input);
+    const { result } = await mutateRunFile(
+      planPath,
+      runPath,
+      (plan, run) => recordArchive(plan, run, input)
+    );
     process.stdout.write(
       serializeJson({
         attemptId: result.attempt.attemptId,
@@ -3673,17 +4481,30 @@ async function main() {
   if (command === "transition") {
     const options = parseTransitionArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const run = options.run ? await readRunFile(options.run, planPath) : null;
-    const node = transitionNode(
-      plan,
-      options.node,
-      options.to,
-      options.blockingReason,
-      run
-    );
-    validatePlan(plan);
-    await replaceOwnedFile(planPath, serializeJson(plan));
+    const { plan, node } = await withExclusiveMutationLock(planPath, async () => {
+      const lockedPlan = validatePlan(await readPlanFile(planPath));
+      const applyTransition = async (run) => {
+        const transitionedNode = transitionNode(
+          lockedPlan,
+          options.node,
+          options.to,
+          options.blockingReason,
+          run
+        );
+        validatePlan(lockedPlan);
+        await replaceOwnedFile(planPath, serializeJson(lockedPlan));
+        return { plan: lockedPlan, node: transitionedNode };
+      };
+      if (!options.run) return applyTransition(null);
+      const runPath = assertRunBelongsToPlan(
+        options.run,
+        planPath,
+        lockedPlan.runId
+      );
+      return withExclusiveMutationLock(runPath, async () =>
+        applyTransition(await readRunFile(runPath, planPath))
+      );
+    });
     process.stdout.write(
       serializeJson({ nodeId: node.id, status: node.status, revision: plan.revision })
     );
@@ -3692,21 +4513,32 @@ async function main() {
   if (command === "reconcile") {
     const options = parseReconcileArgs(args);
     const planPath = assertCanonicalPlanPath(options.plan);
-    const plan = validatePlan(await readPlanFile(planPath));
-    const run = await readRunFile(options.run, planPath);
+    const runPath = assertRunBelongsToPlan(options.run, planPath);
     const input = await readJsonDocument(options.input);
     const hasResultId = Object.hasOwn(input.value, "resultId");
     const hasCancellationId = Object.hasOwn(input.value, "cancellationId");
     if (hasResultId === hasCancellationId) {
       throw new Error("reconcile input must be exactly one result or cancellation");
     }
-    const result = hasResultId
-      ? reconcileResult(plan, run, input.value, input.bytes, options)
-      : reconcileCancellation(plan, run, input.value, input.bytes, options);
-    if (!result.idempotent) {
-      validatePlan(plan);
-      await replaceOwnedFile(planPath, serializeJson(plan));
-    }
+    const { plan, result } = await withExclusiveMutationLock(planPath, async () => {
+      const lockedPlan = validatePlan(await readPlanFile(planPath));
+      assertRunBelongsToPlan(runPath, planPath, lockedPlan.runId);
+      return withExclusiveMutationLock(runPath, async () => {
+        const run = await readRunFile(runPath, planPath);
+        const reconciliation = hasResultId
+          ? reconcileResult(lockedPlan, run, input.value, input.bytes, options)
+          : reconcileCancellation(lockedPlan, run, input.value, input.bytes, options);
+        validatePlan(lockedPlan);
+        validateRun(lockedPlan, run);
+        if (!reconciliation.idempotent) {
+          await replaceOwnedFile(planPath, serializeJson(lockedPlan));
+        }
+        if (!reconciliation.idempotent || reconciliation.runUpdated) {
+          await replaceOwnedFile(runPath, serializeJson(run));
+        }
+        return { plan: lockedPlan, result: reconciliation };
+      });
+    });
     process.stdout.write(
       serializeJson({
         nodeId: result.node.id,

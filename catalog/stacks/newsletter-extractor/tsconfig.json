@@ -11,9 +11,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowJs": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*"
   ]
 }

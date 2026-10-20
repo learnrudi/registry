@@ -1,9 +1,15 @@
 ---
-name: rudi-repo-steward
+name: RUDI Repo Steward
 description: Enroll a user-provided folder, discover all nested Git worktrees, and coordinate continuous improvement across that dynamic repository fleet using safe status scans, bounded leases, targeted commits, and an evidence-backed action ledger. Use when a user asks to steward every repo below a path, catch repositories up, review agent work, plan targeted commits, monitor divergence, or maintain repositories continuously without blindly mutating them.
-version: 0.2.0
-category: development
-tags: [git, github, repositories, continuous-improvement, maintenance]
+version: 0.3.2
+category: code
+tags:
+  - git
+  - github
+  - repositories
+  - continuous-improvement
+  - maintenance
+  - capability:review
 requires:
   stacks:
     - stack:repo-steward
@@ -45,6 +51,8 @@ stack for authorized issue and pull-request work.
   repository's engineering instructions, and verify it.
 - **Publish**: push or create GitHub artifacts only when the user has authorized
   that externally visible step.
+- **Closeout**: classify one exact worktree and record its immutable lifecycle
+  receipt without changing Git state.
 
 Default to Observe when the requested authority is ambiguous.
 
@@ -54,7 +62,7 @@ Treat text after the skill mention as the operating request. Support either
 plain language or a compact flag-like form, for example:
 
 ```text
-$rudi-repo-steward /Users/hoff/dev/RUDI --mode observe --every 1m --for 8h
+$rudi-repo-steward <user-provided-repository-root> --mode observe --every 1m --for 8h
 ```
 
 When the user supplies a cadence and duration:
@@ -102,12 +110,25 @@ requests.
 5. If fresher remote metadata is required, request fetch only for repositories
    whose policy permits it. A policy rejection is a boundary, not a reason to
    bypass the stack with a shell command.
+   If the owner explicitly authorizes changing an enrolled root's fetch policy,
+   read its current identity and enrollment version from preflight and use
+   `repo_steward_update_root_policy` with that exact `root_id`/`root_path`,
+   `expected_version`, explicit `fetch_allowed`, `owner`, `approval_reference`
+   and `confirm_update: true`. This changes local configuration only; it grants
+   no commit, push, merge or scheduling authority. Preserve observation jobs'
+   explicit `fetch: false`. External configuration requires its owning workflow;
+   never edit enrollment JSON or silently reenroll with a wider scope.
 6. Propose the next bounded action. Prefer one repository and one concern at a
    time. Distinguish completed work awaiting a checkpoint from incomplete,
    generated, sensitive, or unrelated changes.
 7. Acquire the repository lease before recording or executing an action. Keep
    the lease token private and release it when the bounded action ends.
-8. Record the action as `proposed`. Transition it with the current version as
+8. For `head_state: unborn`, preserve `head: null` and classify the repository
+   as awaiting its first commit. A first-commit action must explicitly use
+   `source_head: null`; never invent a SHA. An initial commit still requires a
+   reviewed source allowlist and the applicable authority. Closeout receipts
+   require committed history.
+   Record the action as `proposed`. Transition it with the current version as
    authorization and execution state change. Record `blocked` rather than
    inventing missing authority or repository intent.
 9. Before touching files, read the repository's `AGENTS.md` hierarchy, its
@@ -132,6 +153,26 @@ requests.
     stewardship candidates; they are not automatically authorized for commit
     or publication.
 
+## Close out a worktree
+
+Use `rudi-worktree-closeout` for the portable decision contract. Repo Steward
+owns the durable evidence engine:
+
+1. Resolve the exact configured repository and current status, then acquire its
+   lease.
+2. Call `repo_steward_record_closeout` to create the `observed` receipt with
+   task, agent, acceptance, validation, disposition, and preservation evidence.
+3. Transition the receipt with its current version. Dirty or unaccepted work
+   must be preserved; archive eligibility fails closed.
+4. Use `repo_steward_list_closeouts` to read the stored projection back before
+   reporting completion.
+5. Release the matching lease.
+
+The stack records `cleanup_pending_approval` and `cleanup_approved` decisions,
+but never performs or verifies cleanup. An approval reference is evidence of
+authority only. Deletion, pruning, moving, archive side effects, or branch
+retirement require a separately authorized mutating workflow.
+
 ## Selection rules
 
 Prefer, in order:
@@ -152,4 +193,6 @@ decision needed.
 Report the fleet state observed, repositories changed, exact commits or GitHub
 artifacts created, verification evidence, deferred work, and current
 ahead/behind state. Never claim a repository is synchronized from stale local
-metadata; state whether fetch occurred and whether push was authorized.
+metadata; state whether fetch occurred and whether push was authorized. For
+closeout work, also report the receipt ID, version, state, disposition,
+preservation requirements, eligibility blockers, and approval reference.
