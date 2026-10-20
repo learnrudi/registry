@@ -1,5 +1,9 @@
 # Registry security remediation
 
+## October 20 bounded Linux acceptance
+
+Later evidence supersedes the historical pending Linux/render-review status below. Normal main integration preserves accepted catalog sources. Ubuntu 22.04 CI now passes all 11 changed stacks, including 29/29 Web Export tests with native browser sandboxing and no skips. Fresh Astra Extra High aggregate review found one additional P1 in page-controlled measurements; behavioral red/green corrections and focused confirmation close it with Standards/Spec/Proof pass at `94757f8...`. [The current follow-up ledger](2026-10-20-registry-linux-verification.md) records exact pins, CI and retained artifacts. macOS nested-browser and Ubuntu 24 restricted-AppArmor rendering remain unsupported/fail-closed. The PR remains a draft and this acceptance does not authorize merge, release, Admin adoption, deployment or live database/provider changes. The earlier receipt failure remains historical; the current non-mutating retention readback is recorded in the final task evidence.
+
 ## Phase 0: Baseline and manual lookup
 
 - Baseline: bb257decedf7f2313ccbc9ab6c9daad43ac12c1a, clean isolated worktree.
