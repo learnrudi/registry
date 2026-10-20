@@ -1,5 +1,6 @@
 import { RenderError } from './types.js';
 import type { ValidatedExportRequest } from './types.js';
+import { inspectDocument } from './document-inspection.js';
 
 export const MAX_RENDER_DIMENSION = 16384;
 export const MAX_RENDER_PAGES = 100;
@@ -37,7 +38,7 @@ export function consumeOutputBudget(request: ValidatedExportRequest, bytes: numb
 }
 
 export async function assertFlowBudget(page: import('playwright').Page, request: import('./types.js').ValidatedExportRequest): Promise<number> {
-  const metrics = await page.evaluate(() => {
+  const metrics = await inspectDocument(page, () => {
     const pageSizes: string[] = [];
     const visited = new Set<CSSStyleSheet>();
     const visitSheet = (sheet: CSSStyleSheet) => {

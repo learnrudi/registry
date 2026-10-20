@@ -20,6 +20,9 @@ are checked too. Imported and adopted print stylesheets are included. Scripted
 `beforeprint` layout runs once before validation, then page scripts are frozen
 through PDF rendering. Both PDF and PNG pause animations at their ready frame and
 freeze page scripts before measuring, so timers cannot change the captured size.
+Flow dimension/stylesheet checks and animation/print preparation use a pristine isolated
+browser world, so document scripts cannot replace the DOM APIs used by those
+checks. If isolated inspection is unavailable, the export fails before allocation.
 PDF pagination uses a conservative page limit plus one
 sentinel page; exceeding the limit fails rather than returning a truncated PDF.
 Actual PDF page dimensions are checked before output and raster review. Rasterizer

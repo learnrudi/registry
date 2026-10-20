@@ -5,6 +5,21 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { validateExportRequest } from '../dist/validate.js';
 
+// Budget-unit fixtures supply browser protocol results; real-browser tests in
+// print-security.test.mjs verify the isolated-world trust boundary itself.
+function inspectionContext(metrics = {}) {
+  return {
+    newCDPSession: async () => ({
+      send: async method => {
+        if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'fixture' } } };
+        if (method === 'Page.createIsolatedWorld') return { executionContextId: 1 };
+        return { result: { value: metrics } };
+      },
+      detach: async () => {},
+    }),
+  };
+}
+
 test('custom artboard size is bounded before browser allocation', () => {
   const root = mkdtempSync(join(tmpdir(), 'render-budget-'));
   try {
@@ -24,7 +39,7 @@ test('DOM-derived artboards are budgeted before screenshots or PDF allocation', 
       $$eval: async () => [{ index: 0, width: 20000, height: 20 }],
       evaluate: async () => ({ bodyStyle: null, htmlStyle: null, targetStyle: null }),
       waitForTimeout: async () => {}, emulateMedia: async () => {},
-      context: () => ({ newCDPSession: async () => ({ send: async () => {} }) }),
+      context: () => inspectionContext(),
       screenshot: async () => { allocations++; return Buffer.alloc(1); },
       pdf: async () => { allocations++; return Buffer.alloc(1); },
     };
@@ -40,7 +55,7 @@ test('flow dimensions are checked before requesting a full-page raster', async (
   let allocations = 0;
   const page = {
     evaluate: async () => ({ width: 20000, height: 20, pageSizes: [], breaks: 0 }),
-    context: () => ({ newCDPSession: async () => ({ send: async () => {} }) }),
+    context: () => inspectionContext({ width: 20000, height: 20, pageSizes: [] }),
     screenshot: async () => { allocations++; return Buffer.alloc(1); },
   };
   await assert.rejects(() => renderFlowPng(page, { format: 'png', inputStem: 'test', outputTarget: '/unused.png', outputProvided: true, scale: 1 }), /budget/);
@@ -59,7 +74,7 @@ test('CSS print dimensions cannot bypass the PDF render budget', async () => {
     const page = {
       evaluate: async () => ({ width: 100, height: 100, pageSizes: ['20000px 20px'] }),
       emulateMedia: async () => {},
-      context: () => ({ newCDPSession: async () => ({ send: async () => {} }) }),
+      context: () => inspectionContext({ width: 100, height: 100, pageSizes: ['20000px 20px'] }),
       pdf: async () => { allocations++; return Buffer.from(await pdf.save()); },
     };
     await assert.rejects(() => renderFlowPdf(page, request, { resolvedMode: 'css-print' }), /budget/);
@@ -71,7 +86,7 @@ test('PNG output bytes are checked before writing an oversized result', async ()
   const { renderArtboardPng } = await import('../dist/render-art.js');
   const page = {
     $$eval: async () => [{ index: 0, width: 10, height: 10 }],
-    context: () => ({ newCDPSession: async () => ({ send: async () => {} }) }),
+    context: () => inspectionContext(),
     evaluate: async () => ({ bodyStyle: null, htmlStyle: null, targetStyle: null }),
     waitForTimeout: async () => {},
     screenshot: async () => ({ length: 128 * 1024 * 1024 + 1 }),

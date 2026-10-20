@@ -1,5 +1,9 @@
 # Document and rendering security evidence
 
+## October 20 acceptance follow-up
+
+The prior final-review block below is historical. Fresh Astra Extra High review of PR #76 at `2dfe212...` confirmed one P1: active HTML could replace main-world dimension/stylesheet APIs before preflight. Tiny real-browser fixtures reproduced both pre-allocation bypasses; the unchanged assertions now reject with zero screenshot/PDF calls after pristine isolated-world inspection. A related animation-API override reproduced a changing layout, then passed after trusted print/animation preparation. Full rendering suite: 29/29, no skips. Final Linux CI and focused reviewer confirmation are recorded through [the Linux verification follow-up](2026-10-20-registry-linux-verification.md); those gates remain distinct from source implementation and Registry merge/release authority.
+
 Scope: scan #3, #11, #19. High-risk local-input / network boundary and bounded rendering. No real provider request or credential use. Preserve local scripted layout and local assets; remote assets intentionally blocked. No OS-wide local-writer race guarantee.
 
 - Web Export: `npm run build && node --test test/browser-security.test.mjs`. Installed pinned browser after initial environment-only failure, then observed actual behavior red: one request reached loopback listener. Green: zero requests with document layout script still executed. Caller remote endpoint test red missing exception, green with process-configured exact endpoint policy.

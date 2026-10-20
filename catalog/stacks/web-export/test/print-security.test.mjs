@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { acquireBrowserSession, navigateAndWait } from '../dist/browser.js';
 import { validateExportRequest } from '../dist/validate.js';
-import { renderFlowPdf } from '../dist/render-flow.js';
+import { renderFlowPdf, renderFlowPng } from '../dist/render-flow.js';
 import { PDFDocument } from 'pdf-lib';
 
 async function withDocument(html, callback, assets = {}) {
@@ -26,6 +26,29 @@ async function withDocument(html, callback, assets = {}) {
 }
 
 const cssPrint = { resolvedMode: 'css-print' };
+
+test('page-controlled measurement properties cannot authorize render allocation', async t => {
+  await t.test('shadowed scroll dimensions cannot authorize a full-page PNG', async () => {
+    await withDocument('<body style="width:20000px;height:20px">fixture<script>for(const element of [document.body,document.documentElement])for(const name of ["scrollWidth","scrollHeight"])Object.defineProperty(element,name,{value:100});</script></body>', async (page, request) => {
+      request.format = 'png';
+      request.outputTarget = request.outputTarget.replace(/pdf$/, 'png');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 100);
+      let allocations = 0;
+      page.screenshot = async () => { allocations++; throw new Error('unexpected PNG allocation'); };
+      await assert.rejects(() => renderFlowPng(page, request), /budget/);
+      assert.equal(allocations, 0);
+    });
+  });
+  await t.test('shadowed stylesheet access cannot authorize oversized CSS print', async () => {
+    await withDocument('<style>@page{size:20000px 20px}</style><body>fixture<script>Object.defineProperty(document,"styleSheets",{value:[]});Object.defineProperty(document,"adoptedStyleSheets",{value:[]});</script></body>', async (page, request) => {
+      assert.equal(await page.evaluate(() => document.styleSheets.length), 0);
+      let allocations = 0;
+      page.pdf = async () => { allocations++; throw new Error('unexpected PDF allocation'); };
+      await assert.rejects(() => renderFlowPdf(page, request, cssPrint), /budget/);
+      assert.equal(allocations, 0);
+    });
+  });
+});
 
 test('imported and adopted print styles are checked before PDF allocation', async () => {
   for (const html of [
@@ -89,5 +112,41 @@ test('PNG rendering preserves a stable ready layout across timers and animations
     };
     await renderFlowPng(page, request);
     assert.deepEqual(after, before);
+  });
+});
+
+test('page-controlled animation APIs cannot prevent layout freezing', async () => {
+  await withDocument('<style>@keyframes resize{from{height:10px}to{height:100px}}#animated{width:40px;animation:resize 1s infinite alternate}</style><body><div id="animated">layout</div><script>Object.defineProperty(document,"getAnimations",{value:()=>[]});Animation.prototype.pause=()=>{};</script></body>', async (page, request) => {
+    request.format = 'png';
+    request.outputTarget = request.outputTarget.replace(/pdf$/, 'png');
+    const originalScreenshot = page.screenshot.bind(page);
+    let before;
+    let after;
+    page.screenshot = async options => {
+      before = await page.locator('#animated').boundingBox();
+      await new Promise(resolve => setTimeout(resolve, 150));
+      after = await page.locator('#animated').boundingBox();
+      return originalScreenshot(options);
+    };
+    await renderFlowPng(page, request);
+    assert.deepEqual(after, before);
+  });
+});
+
+test('unavailable isolated inspection fails before render allocation', async () => {
+  await withDocument('<body>small fixture</body>', async (page, request) => {
+    const context = page.context();
+    const createSession = context.newCDPSession.bind(context);
+    context.newCDPSession = async target => {
+      const session = await createSession(target);
+      const send = session.send.bind(session);
+      session.send = (method, params) => method === 'Page.createIsolatedWorld'
+        ? Promise.reject(new Error('isolated inspection unavailable')) : send(method, params);
+      return session;
+    };
+    let allocations = 0;
+    page.pdf = async () => { allocations++; throw new Error('unexpected PDF allocation'); };
+    await assert.rejects(() => renderFlowPdf(page, request, cssPrint), /isolated inspection unavailable/);
+    assert.equal(allocations, 0);
   });
 });

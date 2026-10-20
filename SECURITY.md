@@ -101,4 +101,10 @@ Chromium attempts to apply an inner sandbox that macOS disallows inside the
 outer sandbox. Browser provisioning can succeed, but it does not establish
 rendering compatibility. Run those verification contracts in a separately
 validated Linux sandbox or VM; do not disable Chromium's sandbox or bypass the
-registry runner. Linux browser compatibility still requires an integration run.
+registry runner. PR #76's Ubuntu 22.04 CI verifies native Chromium inside
+unprivileged bubblewrap. Ubuntu 24's restricted AppArmor/bubblewrap combination
+remains unsupported and fails closed; the latest-platform manifest matrix does
+not qualify browser rendering on those platforms. Flow dimension/stylesheet
+checks and animation/print preparation use a pristine isolated browser world
+so active HTML cannot replace those APIs. Missing isolated inspection fails
+the export.
