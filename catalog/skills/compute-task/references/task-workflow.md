@@ -83,6 +83,10 @@ request needing task-tool network or shell access before preparing a review;
 changing its provider or scope requires the user's explicit choice. Omit
 `reasoning_effort` only when the catalog offers no effort setting and the review
 explicitly says provider default. JSON must have unique keys and finite values.
+Choose the runtime policy before hashing the profile. The example uses a finite
+timeout; explicit unlimited duration requires `timeout_ms: 0` and a matching
+zero bridge timeout on a release qualified for that behavior. Do not silently
+change an existing task's timeout or infer installed support from current source.
 
 Compute SHA-256 over the exact file bytes. Write `task.json`:
 
@@ -138,8 +142,21 @@ definition and file hashes to the review, and verify the release again. If any
 value changed, prepare a new review. Do not accept an arbitrary user-supplied
 revision or replace an existing task without its current compare-and-swap value.
 
-Set `bridge_timeout_seconds = ceil(timeout_ms / 1000) + 20` for cleanup, within
-21–3620 seconds. Native profile timeout must be 1–3600000 milliseconds.
+For a finite native profile timeout of 1–3600000 milliseconds, set
+`bridge_timeout_seconds = ceil(timeout_ms / 1000) + 20`, within 21–3620 seconds.
+For explicitly reviewed unlimited duration, both profile `timeout_ms` and
+`bridge_timeout_seconds` must be integer `0`; do not add the 20-second reserve
+to zero. This requires a matching CLI/Compute release with schema-5 support and
+exact release qualification. Check the delivered bundle, not a global CLI.
+An older or unqualified bundle blocks this option rather than being upgraded
+as a side effect.
+
+Unlimited duration removes the elapsed deadline, not output bounds, leases,
+custody, shutdown handling or workspace concurrency. A busy sequential controller
+skips missed task occurrences. Confirm these semantics in the owning
+[Compute task contract](https://github.com/learnrudi/rudi-compute/blob/main/docs/task-contract.md)
+and [Agent Host contract](https://github.com/learnrudi/cli/blob/main/docs/agent-task-execution.md)
+at the selected release revisions.
 
 For a reviewed recurring job:
 
