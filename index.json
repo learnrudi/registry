@@ -1,15 +1,15 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-20T16:02:34.000Z",
+  "generatedAt": "2026-10-20T17:37:55.000Z",
   "stats": {
-    "total": 175,
+    "total": 177,
     "byKind": {
       "agent": 4,
       "binary": 28,
       "runtime": 6,
-      "skill": 86,
-      "stack": 51
+      "skill": 87,
+      "stack": 52
     }
   },
   "packages": {
@@ -2466,6 +2466,34 @@
           "process-documentation",
           "human-in-the-loop",
           "capability:plan"
+        ]
+      }
+    },
+    "skill:microsoft-365": {
+      "id": "skill:microsoft-365",
+      "kind": "skill",
+      "name": "Microsoft 365",
+      "version": "0.1.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/microsoft-365"
+      },
+      "requires": {
+        "stacks": [
+          "stack:microsoft-365"
+        ]
+      },
+      "meta": {
+        "description": "Read named Outlook accounts, mail and attachments using delegated Microsoft Graph access. No mailbox writes or sends.",
+        "category": "communication",
+        "tags": [
+          "rudi",
+          "operator",
+          "microsoft-365",
+          "outlook",
+          "capability:read",
+          "provider:microsoft"
         ]
       }
     },
@@ -5352,6 +5380,67 @@
         "skills": [
           "skill:managed-ai"
         ]
+      }
+    },
+    "stack:microsoft-365": {
+      "id": "stack:microsoft-365",
+      "kind": "stack",
+      "name": "Microsoft 365",
+      "version": "0.1.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/stacks/microsoft-365"
+      },
+      "runtime": "node",
+      "requires": {
+        "binaries": [],
+        "secrets": []
+      },
+      "auth": {
+        "required": true,
+        "command": "npm run auth -- account-alias",
+        "instructions": "From the installed stack directory, configure a dedicated public-client Entra application and explicit named accounts in ~/.rudi/state/stacks/microsoft-365/config.json (or RUDI_HOME/state/stacks/microsoft-365/config.json). Grant only delegated User.Read and Mail.Read; device sign-in requests offline_access and standard MSAL sign-in scopes. Run npm run auth -- account-alias and finish the displayed Microsoft device sign-in from any browser, including a phone. The CLI verifies the configured tenant and mailbox before saving the per-account private token cache. See README.md for exact setup, storage limitations and read-only smoke commands."
+      },
+      "provides": {
+        "tools": [
+          "account_list",
+          "account_status",
+          "outlook_profile",
+          "outlook_mail_list",
+          "outlook_mail_search",
+          "outlook_mail_read",
+          "outlook_attachment_list",
+          "outlook_attachment_download"
+        ]
+      },
+      "mcp": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "src/index.js"
+        ],
+        "cwd": "."
+      },
+      "related": {
+        "operatorSkill": "skill:microsoft-365",
+        "skills": [
+          "skill:microsoft-365"
+        ]
+      },
+      "meta": {
+        "description": "Explicit-account, delegated read-only Outlook mail and attachment access through Microsoft Graph v1.0.",
+        "author": "RUDI",
+        "license": "MIT",
+        "category": "communication",
+        "tags": [
+          "microsoft-365",
+          "outlook",
+          "email",
+          "capability:read",
+          "provider:microsoft"
+        ],
+        "icon": "📧"
       }
     },
     "stack:ms-office": {
