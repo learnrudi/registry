@@ -1,4 +1,4 @@
-# Microsoft 365 — Outlook read-only v1
+# Microsoft 365 — Outlook read-only and attachment extraction
 
 This generic stack reads the signed-in user's Outlook mailbox through Microsoft
 Graph v1.0. Every mailbox call requires an explicit configured account alias.
@@ -8,7 +8,7 @@ Attachment download creates a local file; it does not modify Microsoft 365.
 
 ## Setup
 
-Requires Node.js 20 or newer. From this stack directory run `npm ci`.
+Requires Node.js 22.13 or newer. From this stack directory run `npm ci`.
 The pinned runtime dependencies and transitive resolutions are in
 `package.json` and `package-lock.json`.
 
@@ -105,6 +105,7 @@ started by MCP tools.
 | `outlook_mail_search` | `account`, `query` | `limit`, `cursor`; Graph search, not exhaustive |
 | `outlook_mail_read` | `account`, `message_id` | `max_body_chars` 1–100,000 (default 20,000); explicit truncation |
 | `outlook_attachment_list` | `account`, `message_id` | `limit`, `cursor`; metadata only |
+| `outlook_attachment_extract` | `account`, `message_id`, `attachment_id` | XLSX cells with normalized dates or PDF page text, source IDs/hash and warnings; no files written |
 | `outlook_attachment_download` | `account`, `message_id`, `attachment_id`, `output_dir`, `filename` | New file path, byte count, SHA-256 |
 
 All schemas reject undocumented arguments. Example calls from this directory:
@@ -117,6 +118,7 @@ npm run call -- outlook_mail_list '{"account":"work","limit":2}'
 npm run call -- outlook_mail_search '{"account":"work","query":"from:person@example.com","limit":2}'
 npm run call -- outlook_mail_read '{"account":"work","message_id":"MESSAGE_ID","max_body_chars":2000}'
 npm run call -- outlook_attachment_list '{"account":"work","message_id":"MESSAGE_ID"}'
+npm run call -- outlook_attachment_extract '{"account":"work","message_id":"MESSAGE_ID","attachment_id":"ATTACHMENT_ID"}'
 npm run call -- outlook_attachment_download '{"account":"work","message_id":"MESSAGE_ID","attachment_id":"ATTACHMENT_ID","output_dir":"/absolute/existing/private-directory","filename":"review-copy.pdf"}'
 ```
 
@@ -166,6 +168,54 @@ are created exclusively with mode 0600 and no-follow flags; existing files,
 symlinks and hard links are not overwritten. Partial writes are cleaned up.
 As with ordinary process-local file controls, a hostile process running as the
 same OS user is outside the isolation boundary.
+
+## Reusable extraction (0.2.0)
+
+`outlook_attachment_extract` fetches the selected file attachment through the
+same authorized GET boundary and parses it in memory. It accepts `.xlsx` and
+`.pdf` filenames, validates the document through its parser, and returns
+`account`, `source` (message/attachment IDs, name, decoded bytes, SHA-256), and
+`extraction`. No local path, URL, output directory, password or arbitrary parser
+options are accepted. The tool does not write files or change the mailbox.
+The existing download tool remains available for separately authorized copies.
+
+XLSX returns `format`, `date_system`, `sheets[{name,cells}]`, and `warnings`.
+Each cell retains its address and type. Date-formatted numeric cells include
+`raw_value` and normalized ISO `value`: `YYYY-MM-DD` for dates and
+`YYYY-MM-DDTHH:mm:ss[.SSS]` for date-times. Excel values have no timezone; the
+stack does not invent UTC or shift dates using the machine timezone. The
+workbook's 1900/1904 date system is honored. Ordinary numbers and text remain
+numbers and text. Time-only/duration formats, invalid dates and Excel's
+fictitious 1900-02-29 remain numeric with explicit warnings. Formula expressions
+are evidence only; cached values are returned without recalculation, external
+link fetching or macro execution. Missing formula caches are flagged. Rows,
+headers and financial meaning are not inferred; cells preserve source positions.
+
+PDF returns `pages[{page,text}]`, `empty_page_numbers`, `ocr_required` and
+warnings. A text-empty page may be scanned or blank; OCR is not performed.
+Text order follows PDF extraction order; this is not a guarantee of faithful
+table structure or reading order for complex layouts. Password-protected and
+invalid documents fail explicitly. No PDF JavaScript, viewer, hyperlinks or
+external resources are executed or opened.
+
+Limits fail explicitly instead of returning silently truncated data: input
+5 MiB; XLSX ZIP 1,000 entries, 16 MiB per expanded entry and 32 MiB total;
+20 worksheets, 20,000 nonempty cells and 10,000 characters per text/formula;
+PDF 100 pages and 1,000,000 extracted characters; parser JSON 4 MiB. Parsing
+runs in a separate Node process with a 256 MiB V8 heap cap and a 20-second
+wall-clock deadline, at most two concurrent extractions per server. These are
+resource controls, not an OS sandbox or a hard total-process memory cap.
+The child receives no OAuth cache or inherited environment. No document content
+is logged. Errors use safe codes such as `EXTRACTION_TYPE`, `EXTRACTION_FORMAT`,
+`EXTRACTION_LIMIT`, `EXTRACTION_ENCRYPTED`, `EXTRACTION_TIMEOUT` and
+`EXTRACTION_FAILED`. A busy server returns `BUSY`.
+
+Parsing dependencies are pinned with lockfile integrity: SheetJS 0.20.3 from
+its official CDN (the npm registry copy is obsolete), fflate 0.8.3, and Mozilla
+pdfjs-dist 6.4.299. Installation requires access to the CDN and npm registry.
+See [SheetJS installation](https://docs.sheetjs.com/docs/getting-started/installation/nodejs/),
+[date semantics](https://docs.sheetjs.com/docs/csf/features/dates/), and
+[PDF.js](https://mozilla.github.io/pdf.js/getting_started/).
 
 ## Verification and live acceptance
 

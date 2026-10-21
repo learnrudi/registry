@@ -87,3 +87,34 @@ large attachments, raw MIME and Microsoft 365 writes are unsupported.
 Conditional Access, revocation, service throttling and network timeout failures
 are modeled offline but not destructively induced in a live tenant. A hostile
 process running as the same OS user is outside filesystem isolation guarantees.
+
+## Version 0.2.0 — reusable extraction, 2026-10-21
+
+Scope: one `outlook_attachment_extract` tool; same Graph account/GET boundary,
+no new permission, mailbox writes or Power Automate changes. XLSX date-formatted
+cells honor workbook epoch and retain raw serials; PDF supplies page text and
+OCR-needed warnings. Source provenance is returned without saving attachments.
+Dependencies and Node requirement are pinned/documented in package metadata.
+
+Proof commands: `node --test test/extraction.test.mjs` initially failed on the
+missing tool (`TOOL`), then passed with the implementation. Parser regressions
+failed then passed for missing formula caches, wrapped ZIP-limit errors and
+1900 serial zero. The initial parser-only test failed on a missing module (not
+valid behavioral red); integration supplied the behavior-level red proof.
+Additional denial/timeout/output-cap tests verify existing protections.
+`npm run verify` covers the full suite and isolated nine-tool MCP surface.
+Refactor: shared attachment byte retrieval; existing download boundary tests
+remain green. Source live acceptance read the authorized synthetic XLSX/PDF
+attachments, normalized dates and verified known PDF content without printing
+mail content. Publication/installed acceptance is recorded separately.
+
+Independent review found no material blockers. Runtime debt scan covered all
+14 source files with no findings. No OCR, XLS binary parsing, inferred PDF
+column/table semantics, formula recalculation, date inference from arbitrary
+text, hard OS sandbox or automatic schedules are claimed. Invalid/time-only
+Excel values remain numeric with warnings. Heap limit is not an RSS ceiling.
+
+CI follow-up: the first hosted stack run exposed the workflow's Node20 runtime,
+which is below the new parser requirement. The stack verification phase now
+uses Node24; registry compilation/cross-platform schema checks retain their
+existing runtime. Both rollout hosts already use Node24.
