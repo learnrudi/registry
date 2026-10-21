@@ -5,20 +5,20 @@
 - Scope: add a controlled RUDI CRM contact-discovery pipeline that can retain Gmail address evidence, preview deduplicated contact candidates, and promote one approved candidate into a new person or an existing person's email aliases.
 - Files to inspect before editing: `catalog/stacks/rudi-crm/{README.md,manifest.json,package.json}`, `src/{contract.ts,index.ts,schemas.ts}`, ordered SQL migrations, package tests, and the local RUDI CRM skill.
 - Relevant SWE manual sections: Master Doctrine Appendix A (database invariants and migrations), Appendix C (red-green-refactor), API Standard contract/idempotency guidance, Backend Standard transaction guidance, and Security Standard trust-boundary guidance.
-- Current-state proof: the local CRM has 53 people; discovery observations already have exact source/address idempotency and domain heuristics, but the database drops `display_name` and `raw`, its role constraint is narrower than the MCP schema, and no controlled candidate-preview or person-promotion operation exists.
-- Existing-work boundary: preserve the in-progress local-PostgreSQL cutover and unrelated OpenCounter changes already present in the dirty registry worktree. Never edit the applied `0001_engagement_crm.sql` migration.
+- Historical baseline: discovery observations already had exact source/address idempotency and domain heuristics, but omitted `display_name` and `raw`; the role constraint was narrower than the MCP schema and lacked controlled candidate-preview and person-promotion operations.
+- Existing-work boundary: preserve unrelated dirty work and never edit the applied `0001_engagement_crm.sql` migration.
 - Exit criteria: current behavior, data invariants, overlapping changes, and test entrypoints are recorded before implementation.
 
 ## Phase 1: Scope Lock And Interface Contract
 
-- In scope: additive ordered migrations; candidate preview and domain-heuristic MCP reads/actions; an approval-only contact promotion mutation; schemas, contract, MCP surface, tests, manifest, README, generated index, local workflow guidance, installation/reindex, and a preview-only 12-month Gmail sweep for `hoff@learnrudi.com`.
+- In scope: additive ordered migrations; candidate preview and domain-heuristic MCP reads/actions; an approval-only promotion mutation; schemas, contract, MCP surface, tests, manifest, README, generated index and operator guidance. Mailbox sweeps and installation require separate operational authorization.
 - Non-goals: automatically promoting candidates, fuzzy auto-merges, mutating Gmail, committing personal CRM data, changing the applied `0001` migration, creating a general email-marketing system, or refactoring unrelated registry work.
 - Candidate-preview input: bounded pagination, minimum observation count, optional offset-aware `since`, and an `include_existing` flag. Output must expose exact-email status and review signals but must not imply fuzzy matches are safe to merge.
 - Promotion input: required normalized email and full name; optional existing person ID for explicit alias attachment and bounded person metadata. Exact email matches are idempotent. A new person plus primary email is atomic. A colliding email must never move between people implicitly.
 - Approval invariant: discovery and preview do not create or attach a person. Only `rudi_crm_promote_contact`, called after explicit user approval, can do that.
 - Trust boundaries: Gmail headers, names, addresses, message timestamps, LLM-selected candidates, MCP arguments, and database reads are untrusted until validated. Secrets and database URLs remain outside source and logs.
 - Failure behavior: malformed addresses/roles/timestamps fail closed; duplicate observations replay safely; promotion collision returns or raises an actionable deterministic result; transaction failure creates neither a partial person nor a partial alias.
-- Expected files touched: this checklist; `catalog/stacks/rudi-crm/sql/migrations/0002_contact_discovery_promotion.sql`; `src/{schemas.ts,contract.ts,index.ts}`; focused tests; `README.md`; `manifest.json`; package version files if required; generated `index.json`; and `/Users/hoff/.codex/skills/rudi-crm/SKILL.md`.
+- Expected files touched: this checklist; additive CRM SQL migrations; `src/{schemas.ts,contract.ts,index.ts}`; focused tests; `README.md`; `manifest.json`; package version files if required; generated `index.json`; and the canonical CRM operator skill.
 - Exit criteria: the behavior and data contracts are represented by focused failing tests before implementation.
 
 ## Phase 2: Red-Green-Refactor Slices
@@ -51,22 +51,33 @@
 - Targeted package tests: CRM contract, MCP, package contract, migration bootstrap, live database, and live contact behavior tests.
 - Full package and registry checks: CRM `npm test` and `npm run build`; registry `npm test`, `npm run validate`, `npm run indexes:sync`, `npm run indexes:check`, `npm run catalog:clean:check`, `npm run build`, and `npm pack --dry-run --json`.
 - Debt scan: run the repository's architecture-aware JS/TS scan scoped to the edited CRM TypeScript files; errors block completion, warnings are fixed if in scope or recorded.
-- Live smoke: migrate the local CRM, confirm setup health and zero validator violations, install/reindex the canonical stack, verify the controlled MCP surface, and run transaction-wrapped synthetic promotion proof with rollback/no residue.
+- Smoke proof: bootstrap an isolated synthetic database, confirm setup health and validators, verify the controlled MCP surface, and run transaction-wrapped promotion proof with rollback/no residue.
 - Security/data checks: `git diff --check`; no secrets, database URLs, personal message bodies, or CRM row data in source artifacts.
 - Exit criteria: every applicable gate passes or a precise pre-existing/out-of-scope failure is documented.
 
 ## Phase 5: Preview-Only Execution And Handoff
 
-- Sweep window: 12 months ending 2026-08-04 for `hoff@learnrudi.com`, excluding spam/trash and retaining only header-level evidence necessary for contact discovery.
+- Sweep boundary: use only a separately approved account and date window, excluding spam/trash and retaining necessary header-level evidence. Keep account identifiers and activity in private operational records.
 - Execution: record idempotent discovery evidence and an ingest batch, apply domain heuristics, then return a deduplicated candidate preview with exact existing-contact status.
 - Hard stop: do not call contact promotion for any candidate until the user explicitly approves that person and whether to create a new person or attach an alias.
 - Handoff: report candidate counts, filtered/noise counts where available, the approval list, exact commands/gates run, installed stack state, changed files, residual risks, and rollback/recovery notes.
-- Definition of Done: the canonical stack provides a verified, installed, approval-gated discovery/promotion contract; local workflow guidance is current; and the 12-month sweep reaches candidate preview without promoting contacts.
+- Definition of Done: the source contract and synthetic behavior are tested and documented; live ingestion, installation and promotion require their own acceptance evidence.
 
-## Execution Record
+## Historical Source Verification
 
-- Status: in progress.
-- Red/green evidence: pending.
-- Verification results: pending.
-- Preview results: pending.
-- Files changed: pending.
+The original discovery workflow stopped at preview. Promotion remained a
+separate, explicitly approved operation. Historical verification covered:
+
+- Bounded candidate/promotion schemas and controlled MCP declarations.
+- Additive migrations `0002` and `0003`, including checksum-preserving replay.
+- Source, timestamp, and address-role validation.
+- Mixed-domain filtering that excludes no-reply addresses without suppressing
+  human contacts at the same domain.
+- Promotion atomicity, replay safety, exact-email collisions, and validator checks.
+- Package build, registry validation, generated indexes, and package contents.
+
+Account identifiers, message/candidate counts, private ingest-batch IDs, and
+machine-specific runtime state are operational records and are omitted here.
+This historical record does not authorize replaying a mailbox sweep or establish
+current installed state. The current synthetic verification is recorded in
+[the PR #33 reconciliation checklist](2026-10-20-pr33-main-reconciliation.md).

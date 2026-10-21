@@ -1,7 +1,7 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-20T17:37:55.000Z",
+  "generatedAt": "2026-10-21T14:22:45.000Z",
   "stats": {
     "total": 177,
     "byKind": {
@@ -6175,7 +6175,7 @@
       "id": "stack:rudi-crm",
       "kind": "stack",
       "name": "RUDI CRM",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -6199,6 +6199,7 @@
           "rudi_crm_record_discovery_observations",
           "rudi_crm_apply_discovery_heuristics",
           "rudi_crm_list_contact_candidates",
+          "rudi_crm_classify_contact_address",
           "rudi_crm_promote_contact",
           "rudi_crm_log_ingest_batch",
           "rudi_crm_upsert_interaction",
@@ -6217,10 +6218,9 @@
       },
       "mcp": {
         "transport": "stdio",
-        "command": "npx",
+        "command": "node",
         "args": [
-          "tsx",
-          "src/index.ts"
+          "dist/index.js"
         ],
         "cwd": "."
       },

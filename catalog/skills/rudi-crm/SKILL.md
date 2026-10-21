@@ -56,6 +56,7 @@ unavailable.
 - `rudi_crm_record_discovery_observations`
 - `rudi_crm_apply_discovery_heuristics`
 - `rudi_crm_list_contact_candidates`
+- `rudi_crm_classify_contact_address`
 - `rudi_crm_promote_contact`
 - `rudi_crm_log_ingest_batch`
 - `rudi_crm_upsert_interaction`
@@ -70,6 +71,14 @@ unavailable.
 - `rudi_crm_get_unknown_discovery_domains`
 - `rudi_crm_get_engagement_context`
 - `rudi_crm_get_latest_correspondence`
+
+`rudi_crm_list_people` returns the primary address in `email` and every stored
+address in `emails`, including each address's `work`, `personal`, `alias`,
+`former`, or `unknown` label, primary flag, source, and verification timestamp.
+
+`rudi_crm_classify_contact_address` records an address category independently of
+contact promotion. It does not create a person or merge records. Apply the
+write-approval workflow above; promotion remains a separate approved action.
 
 Use only tools that are actually available in the active RUDI router. If the
 installed stack exposes a different tool set than this catalog version, report

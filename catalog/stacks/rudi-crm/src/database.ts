@@ -18,6 +18,7 @@ const EXPECTED_TABLES = [
   "engagement_finance_events",
   "discovery_domains",
   "discovery_observations",
+  "contact_address_classifications",
   "ingest_batches",
   "audit_events",
   "engagement_people",
@@ -37,6 +38,7 @@ const EXPECTED_FUNCTIONS = [
   "apply_discovery_domain_heuristics",
   "get_unknown_discovery_domains",
   "promote_contact",
+  "classify_contact_address",
 ] as const;
 
 export const VALIDATOR_VIEWS = [
@@ -134,6 +136,7 @@ export function getConfigStatus() {
       "set_audit_context",
       "upsert_interaction",
       "promote_contact",
+      "classify_contact_address",
       "refresh_thread_rollups",
     ],
     validator_views: VALIDATOR_VIEWS,
