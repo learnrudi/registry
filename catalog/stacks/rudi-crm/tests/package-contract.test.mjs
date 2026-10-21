@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import * as contract from "../dist/contract.js";
 
 const stackRoot = fileURLToPath(new URL("../", import.meta.url));
 
@@ -50,38 +51,40 @@ const EXPECTED_DATABASE_OBJECTS = [
 ];
 
 test("package contract preserves the controlled CRM and finance boundary", async () => {
-  const [manifest, packageJson, serverSource, contractSource, schemaSource, financeSql] =
+  const [manifest, packageJson, serverSource, schemaSource, financeSql] =
     await Promise.all([
       fs.readFile(path.join(stackRoot, "manifest.json"), "utf8").then(JSON.parse),
       fs.readFile(path.join(stackRoot, "package.json"), "utf8").then(JSON.parse),
       fs.readFile(path.join(stackRoot, "src/index.ts"), "utf8"),
-      fs.readFile(path.join(stackRoot, "src/contract.ts"), "utf8"),
       fs.readFile(path.join(stackRoot, "src/schemas.ts"), "utf8"),
       fs.readFile(path.join(stackRoot, "sql/migrations/0001_engagement_crm.sql"), "utf8"),
     ]);
 
   assert.equal(manifest.id, "stack:rudi-crm");
   assert.match(manifest.meta.boundary, /controlled write\/read contract/i);
-  assert.equal(manifest.version, "0.3.0");
-  assert.equal(packageJson.version, "0.3.0");
-  assert.equal(manifest.provides.tools.length, 19);
+  assert.equal(manifest.version, "0.4.0");
+  assert.equal(manifest.mcp.command, "node");
+  assert.deepEqual(manifest.mcp.args, ["dist/index.js"]);
+  assert.equal(packageJson.version, "0.4.0");
+  assert.equal(manifest.provides.tools.length, 20);
   assert.equal(packageJson.scripts["test:live"].includes("RUDI_CRM_LIVE_TESTS=1"), true);
   assert.equal(serverSource.includes("pg_execute"), false);
   assert.equal(serverSource.includes("raw_sql"), false);
 
   for (const symbol of [
-    "record_discovery_observations",
-    "log_ingest_batch",
-    "upsert_interaction",
+    "recordDiscoveryObservations",
+    "logIngestBatch",
+    "upsertInteraction",
     "listPeople",
     "getActivityFeed",
     "getAttentionBrief",
     "recordFinanceEvent",
     "applyDiscoveryHeuristics",
     "listContactCandidates",
+    "classifyContactAddress",
     "promoteContact",
   ]) {
-    assert.equal(contractSource.includes(symbol), true, `missing contract symbol: ${symbol}`);
+    assert.equal(typeof contract[symbol], "function", `missing public contract: ${symbol}`);
   }
   for (const symbol of [
     "UpsertInteractionInput",
@@ -89,6 +92,7 @@ test("package contract preserves the controlled CRM and finance boundary", async
     "AttentionBriefInput",
     "RecordFinanceEventInput",
     "ListContactCandidatesInput",
+    "ClassifyContactAddressInput",
     "PromoteContactInput",
   ]) {
     assert.equal(schemaSource.includes(symbol), true, `missing schema symbol: ${symbol}`);
@@ -160,4 +164,31 @@ test("package filters no-reply addresses without hiding mixed human domains", as
   assert.match(migrationSource, /v_contact_candidates/i);
   assert.match(migrationSource, /no-reply/i);
   assert.match(migrationSource, /automated\/no-reply/i);
+});
+
+test("package ships address-level candidate classification without domain-wide suppression", async () => {
+  const migrationSource = await fs.readFile(
+    path.join(stackRoot, "sql/migrations/0004_contact_address_classification.sql"),
+    "utf8"
+  );
+
+  for (const symbol of [
+    "contact_address_classifications",
+    "classify_contact_address",
+    "suggested_address_category",
+    "address_category",
+    "classification_source",
+  ]) {
+    assert.equal(
+      migrationSource.includes(symbol),
+      true,
+      `address classification migration is missing required contract: ${symbol}`
+    );
+  }
+
+  assert.match(migrationSource, /shared_inbox/i);
+  assert.match(migrationSource, /notification/i);
+  assert.match(migrationSource, /on conflict \(email\)/i);
+  assert.match(migrationSource, /set_audit_context/i);
+  assert.doesNotMatch(migrationSource, /where domain = .*shared_inbox/i);
 });
