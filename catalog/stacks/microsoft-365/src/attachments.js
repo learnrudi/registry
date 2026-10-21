@@ -36,9 +36,18 @@ export class Attachments {
 
   async download(input) {
     accountAlias(input.account);
+    identifier(input.message_id);
+    identifier(input.attachment_id);
+    await validateDestination(input.output_dir, input.filename);
+    const { bytes } = await this.read(input);
+    const saved = await writeAttachment(input.output_dir, input.filename, bytes);
+    return { account: input.account, ...saved };
+  }
+
+  async read(input) {
+    accountAlias(input.account);
     const message = identifier(input.message_id);
     const attachment = identifier(input.attachment_id);
-    await validateDestination(input.output_dir, input.filename);
     return this.accounts.withAuthorized(input.account, async graph => {
       const data = await graph.get(`/me/messages/${message}/attachments/${attachment}`, {}, null, 8 * 1024 * 1024);
       if (data['@odata.type'] !== '#microsoft.graph.fileAttachment') {
@@ -51,8 +60,7 @@ export class Attachments {
       }
       const bytes = Buffer.from(data.contentBytes, 'base64');
       if (bytes.toString('base64') !== data.contentBytes) throw new SafeError('GRAPH_PAYLOAD', 'Attachment encoding is invalid.');
-      const saved = await writeAttachment(input.output_dir, input.filename, bytes);
-      return { account: input.account, ...saved };
+      return { bytes, name: typeof data.name === 'string' ? data.name.slice(0,512) : '' };
     });
   }
 }

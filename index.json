@@ -1,7 +1,7 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-21T14:22:45.000Z",
+  "generatedAt": "2026-10-21T14:27:43.000Z",
   "stats": {
     "total": 177,
     "byKind": {
@@ -2473,7 +2473,7 @@
       "id": "skill:microsoft-365",
       "kind": "skill",
       "name": "Microsoft 365",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2485,7 +2485,7 @@
         ]
       },
       "meta": {
-        "description": "Read named Outlook accounts, mail and attachments using delegated Microsoft Graph access. No mailbox writes or sends.",
+        "description": "Read named Outlook accounts, mail and extract XLSX/PDF attachments using delegated Microsoft Graph access. No mailbox writes or sends.",
         "category": "communication",
         "tags": [
           "rudi",
@@ -5386,7 +5386,7 @@
       "id": "stack:microsoft-365",
       "kind": "stack",
       "name": "Microsoft 365",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -5411,7 +5411,8 @@
           "outlook_mail_search",
           "outlook_mail_read",
           "outlook_attachment_list",
-          "outlook_attachment_download"
+          "outlook_attachment_download",
+          "outlook_attachment_extract"
         ]
       },
       "mcp": {

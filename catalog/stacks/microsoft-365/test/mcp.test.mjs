@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/index.js';
 
-test('MCP initializes and offers only the eight bounded Outlook/account tools', async t => {
+test('MCP initializes and offers only the nine bounded Outlook/account tools', async t => {
   const server = createServer();
   const client = new Client({ name: 'test', version: '1' });
   const [left, right] = InMemoryTransport.createLinkedPair();
@@ -12,7 +12,7 @@ test('MCP initializes and offers only the eight bounded Outlook/account tools', 
   await server.connect(right);
   await client.connect(left);
   const listed = await client.listTools();
-  assert.deepEqual(listed.tools.map(tool => tool.name).sort(), ['account_list', 'account_status', 'outlook_profile', 'outlook_mail_list', 'outlook_mail_search', 'outlook_mail_read', 'outlook_attachment_list', 'outlook_attachment_download'].sort());
+  assert.deepEqual(listed.tools.map(tool => tool.name).sort(), ['account_list', 'account_status', 'outlook_profile', 'outlook_mail_list', 'outlook_mail_search', 'outlook_mail_read', 'outlook_attachment_list', 'outlook_attachment_download', 'outlook_attachment_extract'].sort());
   for (const tool of listed.tools) {
     assert.equal(tool.inputSchema.additionalProperties, false);
     assert.equal(tool.annotations.readOnlyHint, tool.name !== 'outlook_attachment_download');

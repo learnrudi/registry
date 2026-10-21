@@ -7,7 +7,7 @@ import { createToolkit } from './tools.js';
 
 export function createServer(accounts) {
   const toolkit = createToolkit(accounts);
-  const server = new Server({ name: 'microsoft-365', version: '0.1.0' }, { capabilities: { tools: {} } });
+  const server = new Server({ name: 'microsoft-365', version: '0.2.0' }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toolkit.tools }));
   server.setRequestHandler(CallToolRequestSchema, async request => {
     try {
