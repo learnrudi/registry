@@ -112,3 +112,57 @@
   remain. Actionlint/provider execution not locally established.
 - Verdict: local projection ready for consumer review; hosted/native qualification,
   refresh, publication and controller/auto-live remain separate held gates.
+
+## Accepted-main CI integration — 2026-10-21
+
+This later phase supersedes the earlier no-refresh/publication state for this
+local integration only; all earlier source manifests, red/green logs and reviews
+remain historical and unchanged. Node `registry-ci-main-integration`, attempt
+`registry-ci-main-integration-1`, prepared plan 194; high risk integration boundary.
+
+- [x] Fresh accepted main `c1d03c31e8485988ca9b8b57a29dae78816ad5b9`
+  includes `080a28159d096fc515d188672d7fb550a14417de`, pinned Node 24 setup
+  before changed-stack verification. Its accepted Microsoft 365/CRM source,
+  tests, catalog/index and SQL must be imported byte-for-byte, not reimplemented.
+- [x] Explicitly authorized local-only foundation commit
+  `976c7df07e5c2429ee91366da78d5585ed295a57` preserves exactly the original
+  reviewed three CI/docs files at base `584c85fac7cc70fff125c5473fdd6d572c2e8b13`.
+  Workflow history SHA-256 remains
+  `f9d2150fc7a6ebd96dcb36c95c55aa3929f97bfcaa22c49df494dc1ca05ecc83`.
+  Full staged diff matched the original reviewed diff. No push occurred.
+- [x] Fetched exact accepted main, then `git merge --no-commit --no-ff origin/main`
+  merged automatically without conflicts. `MERGE_HEAD` remains accepted main;
+  no merge commit was created. Incoming workflow adds only the accepted pinned
+  Node 24 setup; exact metadata/no-source OIDC, Ubuntu 22, unconditional native
+  Web Export prepare/verify and strict aggregate remain intact.
+- [x] Meaningful configuration red/green: new exact-main-step contract fails
+  against foundation for `accepted_main_stack_node_setup_missing`, then passes
+  on actual integrated YAML. Original focused proof assertions are retained;
+  only the independently required exact-main step is normalized for composition.
+  Actual projected metadata/custody 41 cases, shell 25 blocks and all 36 aggregate
+  pairs pass; only success/success qualifies. No sandbox/timing/assertion/skip
+  relaxation or application source correction.
+- [x] Fresh native Node 24.21 root suite: 412 pass, 1 existing opt-in skip, 0 fail.
+  Prescribed validate/index-sync/index-check/catalog-clean/build/package gates,
+  release provenance and public readiness pass. Deterministic
+  SOURCE_DATE_EPOCH=1792592863 preserves accepted index timestamp. Root checks
+  did not invoke provider or live database/migration operations.
+- [x] All 51 imported nonworkflow paths, their Git modes and staged blobs exactly equal
+  accepted main; existing reviewed helper/test sources and prior proof remain
+  unchanged. Build/index commands leave incoming index bytes identical.
+  No authored JS/TS edits: incoming accepted source is copied through Git only.
+- [x] `npm run debt:scan` passes with zero errors, warnings or informational
+  findings. No imported source was changed to satisfy this scan.
+- [x] README documents retained accepted-main Node 24 ordering; this append-only
+  record explains the changed source basis and keeps prior evidence immutable.
+- [ ] Fresh focused independent review of this exact merged candidate pending;
+  coordinator retains merge-commit/publication authority after acceptance.
+- [ ] Actual final hosted Ubuntu 22 native Web Export with both sandboxes,
+  complete Linux/macOS/Windows matrix, strict aggregate, signed identity/custody,
+  live required-context and Admin/native qualification remain mandatory gates.
+
+Review input is the uncommitted merge tree with foundation/accepted-main parents;
+coordinator evidence `registry-ci-main-integration-result.json` and source manifest
+record exact hashes, patch, preservation and proof outcomes. No push, PR update,
+ready-state, merge commit, settings, Admin, activation, provider/deployment/live DB
+or SQL execution occurred. Preserve MERGE_HEAD/worktree until fresh Astra review.

@@ -207,6 +207,12 @@ stack changed. The earlier root-only CI pass did not execute that hook and
 does not qualify its nested native browser sandbox. This new step must pass
 on the final hosted revision with both sandboxes intact.
 
+The accepted-main pinned Node 24 setup immediately before changed-stack
+verification is retained, including its Microsoft 365 extraction compatibility
+requirement. It runs before both changed-stack selection and the unconditional
+Web Export hook. Importing accepted catalog source does not authorize provider
+access, package deployment or database migrations.
+
 The stable branch-protection check name is **`Registry CI required`**. It runs
 with `always()` and requires `success` from both the full verification job and
 the complete platform-validation matrix. Failure, cancellation, skipped jobs
