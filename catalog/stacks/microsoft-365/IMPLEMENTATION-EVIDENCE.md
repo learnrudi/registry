@@ -113,3 +113,8 @@ Independent review found no material blockers. Runtime debt scan covered all
 column/table semantics, formula recalculation, date inference from arbitrary
 text, hard OS sandbox or automatic schedules are claimed. Invalid/time-only
 Excel values remain numeric with warnings. Heap limit is not an RSS ceiling.
+
+CI follow-up: the first hosted stack run exposed the workflow's Node20 runtime,
+which is below the new parser requirement. The stack verification phase now
+uses Node24; registry compilation/cross-platform schema checks retain their
+existing runtime. Both rollout hosts already use Node24.
