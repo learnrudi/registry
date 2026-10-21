@@ -187,6 +187,43 @@ npm run release:verify
 npm pack --dry-run --json
 ```
 
+### Continuous integration
+
+[Registry CI](.github/workflows/registry.yml) runs for every pull request to
+`main` and every push to `main`, including documentation-only changes, and can
+also be dispatched manually. Its existing test, build, provenance, readiness,
+index, catalog, changed-stack, debt and package checks remain in place.
+Ubuntu 22.04 runs the full verification job to preserve nested native sandbox
+qualification. The manifest-validation matrix covers Ubuntu, macOS and Windows;
+all matrix jobs are allowed to finish even when another platform fails. All three
+CI execution paths (full verification, artifact-only Release and the validation
+matrix) use Node 24 LTS. This CI runtime choice does not change the catalog's
+runtime definitions or consumer engine requirements.
+
+The stable branch-protection check name is **`Registry CI required`**. It runs
+with `always()` and requires `success` from both the full verification job and
+the complete platform-validation matrix. Failure, cancellation, skipped jobs
+or absent result values fail the gate. Configure the required-check setting
+separately when enabling branch protection.
+
+The push-only `Release` job builds and uploads release artifacts and is excluded
+from the required gate because it does not run on PRs. Registry publication
+remains a separate manual action; this CI change grants no deployment or live
+host adoption authority. Local proof and hosted-run limits are in the
+[CI compliance record](docs/swe-compliance/2026-10-21-platform-ci.md).
+
+### Verification process cleanup
+
+Stack verification signals only its detached subprocess group. On macOS,
+`EPERM` can describe an exited-only group awaiting reaping. The verifier
+reclassifies that signal result only when a bounded, shell-free `/bin/ps`
+inspection proves the group absent or every listed member is a zombie with
+the exact requested group ID and the current user's UID. The query has a
+one-second timeout and a 64 KiB output limit. Live members, mismatched identity,
+unknown output or inspection failure preserve the cleanup error. Other
+platforms retain their original signal handling; no single-PID fallback or
+sandbox bypass is used.
+
 ## URLs
 
 - Index: `https://raw.githubusercontent.com/learnrudi/registry/main/index.json`

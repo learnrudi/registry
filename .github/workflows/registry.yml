@@ -3,30 +3,8 @@ name: Registry CI
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/**'
-      - '.debt-scan.json'
-      - '.stack-debt-baseline.json'
-      - 'catalog/**'
-      - 'schemas/**'
-      - 'scripts/**'
-      - 'src/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vitest.config.ts'
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/**'
-      - '.debt-scan.json'
-      - '.stack-debt-baseline.json'
-      - 'catalog/**'
-      - 'schemas/**'
-      - 'scripts/**'
-      - 'src/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vitest.config.ts'
   workflow_dispatch:
 
 permissions:
@@ -50,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Setup Python for package verification
@@ -90,7 +68,9 @@ jobs:
 
       - name: Verify changed stack packages
         if: github.event_name == 'pull_request' || github.event_name == 'push'
-        run: npm run stacks:verify -- --changed-from "${{ github.event.pull_request.base.sha || github.event.before }}" --prepare
+        env:
+          STACK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run stacks:verify -- --changed-from "$STACK_BASE_REF" --prepare
 
       - name: Scan JavaScript and TypeScript debt
         run: npm run debt:scan
@@ -123,7 +103,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Configure deterministic source date
@@ -184,6 +164,7 @@ jobs:
     name: Validate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
@@ -196,7 +177,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -204,3 +185,23 @@ jobs:
 
       - name: Validate manifests
         run: npm run validate
+
+  required:
+    name: Registry CI required
+    if: ${{ always() }}
+    needs: [validate, validate-platforms]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require validation and every platform to succeed
+        env:
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          PLATFORMS_RESULT: ${{ needs.validate-platforms.result }}
+        shell: bash
+        run: |
+          printf 'Validation: %s\nPlatforms: %s\n' "$VALIDATE_RESULT" "$PLATFORMS_RESULT"
+          if [[ "$VALIDATE_RESULT" != success || "$PLATFORMS_RESULT" != success ]]; then
+            echo 'Validation and all platform checks must succeed.' >&2
+            exit 1
+          fi
