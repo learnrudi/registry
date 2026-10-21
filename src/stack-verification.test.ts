@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { execFile } from "node:child_process";
+import * as childProcess from "node:child_process";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { setTimeout as realDelay } from "node:timers/promises";
@@ -15,6 +16,11 @@ import {
   runStackVerifications,
   selectChangedStackIds,
 } from "./stack-verification.js";
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) };
+});
 
 let tmpDir: string;
 
@@ -473,7 +479,7 @@ describe("runStackVerifications", () => {
 
 
 describe("verification containment", () => {
-  it("returns a failed result when the OS refuses process-group cleanup", async () => {
+  it("returns a failed result when cleanup is denied and group state is unobservable", async () => {
     const stackDir = path.join(tmpDir, "catalog/stacks/cleanup-error");
     await writeJson(path.join(stackDir, "manifest.json"), { id: "stack:cleanup-error", kind: "stack", runtime: "python" });
     await writeText(path.join(stackDir, "verify.py"), "raise SystemExit(0)\n");
@@ -482,8 +488,38 @@ describe("verification containment", () => {
       if (pid < 0 && signal === "SIGKILL") throw Object.assign(new Error("synthetic kill EPERM"), { code: "EPERM" });
       return originalKill(pid, signal);
     });
+    const inspect = vi.mocked(childProcess.spawnSync).mockImplementation(() => {
+      throw new Error("synthetic process observation denied");
+    });
     try {
       const [result] = await runStackVerifications(tmpDir, ["stack:cleanup-error"], { timeoutMs: 100 });
+      expect(result).toMatchObject({ status: "failed", error: expect.stringMatching(/cleanup.*EPERM/) });
+    } finally {
+      inspect.mockReset();
+      kill.mockRestore();
+    }
+  });
+
+  it("retains an earlier live-group cleanup denial after later termination succeeds", async () => {
+    const stackDir = path.join(tmpDir, "catalog/stacks/initial-cleanup-error");
+    await writeJson(path.join(stackDir, "manifest.json"), {
+      id: "stack:initial-cleanup-error", kind: "stack", runtime: "python",
+    });
+    await writeText(path.join(stackDir, "verify.py"), "import time; time.sleep(30)\n");
+    const originalKill = process.kill.bind(process);
+    let denied = false;
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (pid < 0 && signal === "SIGTERM") {
+        denied = true;
+        throw Object.assign(new Error("synthetic live-group EPERM"), { code: "EPERM" });
+      }
+      return originalKill(pid, signal);
+    });
+    try {
+      const [result] = await runStackVerifications(tmpDir, ["stack:initial-cleanup-error"], {
+        timeoutMs: 50,
+      });
+      expect(denied).toBe(true);
       expect(result).toMatchObject({ status: "failed", error: expect.stringMatching(/cleanup.*EPERM/) });
     } finally {
       kill.mockRestore();

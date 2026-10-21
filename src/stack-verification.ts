@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { signalVerificationProcessGroup } from "./verification-process-group.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -162,16 +163,8 @@ async function executeVerification(
       stdio: "inherit",
     });
 
-    const signalGroup = (signal: NodeJS.Signals): Error | undefined => {
-      if (!child.pid) return;
-      try {
-        process.kill(-child.pid, signal);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
-          return new Error(`verification process-group cleanup failed (${child.pid}): ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-    };
+    const signalGroup = (signal: NodeJS.Signals): Error | undefined =>
+      signalVerificationProcessGroup(child.pid, signal);
     let timedOut = false;
     let cleanupError: Error | undefined;
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined;

@@ -187,6 +187,72 @@ npm run release:verify
 npm pack --dry-run --json
 ```
 
+### Continuous integration
+
+[Registry CI](.github/workflows/registry.yml) runs for every pull request to
+`main` and every push to `main`, including documentation-only changes, and can
+also be dispatched manually. Its existing test, build, provenance, readiness,
+index, catalog, changed-stack, debt and package checks remain in place.
+Ubuntu 22.04 runs the full verification job to preserve nested native sandbox
+qualification. The manifest-validation matrix covers Ubuntu, macOS and Windows;
+all matrix jobs are allowed to finish even when another platform fails. All three
+CI execution paths (full verification, artifact-only Release and the validation
+matrix) use Node 24 LTS. This CI runtime choice does not change the catalog's
+runtime definitions or consumer engine requirements.
+
+The full Ubuntu 22.04 job additionally runs
+`npm run stacks:verify -- --stack stack:web-export --prepare` unconditionally.
+This selects the Web Export package verification hook even when no catalog
+stack changed. The earlier root-only CI pass did not execute that hook and
+does not qualify its nested native browser sandbox. This new step must pass
+on the final hosted revision with both sandboxes intact.
+
+The accepted-main pinned Node 24 setup immediately before changed-stack
+verification is retained, including its Microsoft 365 extraction compatibility
+requirement. It runs before both changed-stack selection and the unconditional
+Web Export hook. Importing accepted catalog source does not authorize provider
+access, package deployment or database migrations.
+
+The stable branch-protection check name is **`Registry CI required`**. It runs
+with `always()` and requires `success` from both the full verification job and
+the complete platform-validation matrix. Failure, cancellation, skipped jobs
+or absent result values fail the gate. Configure the required-check setting
+separately when enabling branch protection.
+
+The source-free `delivery-binding` job runs before full verification and the
+platform matrix. It validates provider repository/PR/head/base/merge/run/attempt
+identity and records schema-v2 metadata with an opaque GitHub job-specific JWT
+for audience `urn:rudi:platform-delivery:ci-proof`. Only metadata has job-local
+`id-token: write`; all original jobs retain their previous permissions without
+token minting. Redirects are prohibited, output is immutable, and its own log
+records artifact ID/digest custody markers. Non-PR events succeed without an
+identity request or artifact, preserving main/manual verification.
+
+The canonical corrected [`rudi-system`](https://github.com/learnrudi/rudi-system)
+producer has focused source approval; consumer-wide review, controller crypto,
+final hosted custody and native Web Export qualification remain pending. This
+source does not activate automatic live behavior or exchange cloud tokens.
+Exact producer provenance and limits are in the
+[binding compliance record](docs/swe-compliance/2026-10-21-platform-delivery-binding.md).
+
+The push-only `Release` job builds and uploads release artifacts and is excluded
+from the required gate because it does not run on PRs. Registry publication
+remains a separate manual action; this CI change grants no deployment or live
+host adoption authority. Local proof and hosted-run limits are in the
+[CI compliance record](docs/swe-compliance/2026-10-21-platform-ci.md).
+
+### Verification process cleanup
+
+Stack verification signals only its detached subprocess group. On macOS,
+`EPERM` can describe an exited-only group awaiting reaping. The verifier
+reclassifies that signal result only when a bounded, shell-free `/bin/ps`
+inspection proves the group absent or every listed member is a zombie with
+the exact requested group ID and the current user's UID. The query has a
+one-second timeout and a 64 KiB output limit. Live members, mismatched identity,
+unknown output or inspection failure preserve the cleanup error. Other
+platforms retain their original signal handling; no single-PID fallback or
+sandbox bypass is used.
+
 ## URLs
 
 - Index: `https://raw.githubusercontent.com/learnrudi/registry/main/index.json`
