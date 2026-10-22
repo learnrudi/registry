@@ -1,6 +1,6 @@
-import { lstatSync, realpathSync, type Stats } from "fs";
+import { lstatSync, realpathSync, readdirSync, readFileSync, type Stats } from "fs";
 import { dirname, join } from "path";
-import { normalizeRequestedGoogleAccount } from "./authIdentity.js";
+import { normalizeRequestedGoogleAccount, assertAuthorizedGoogleAccount } from "./authIdentity.js";
 import { ensurePrivateDir } from "./state.js";
 
 function lstatIfPresent(entryPath: string): Stats | null {
@@ -44,4 +44,42 @@ export function ensureIsolatedGoogleAccountDirectory(
 
   ensurePrivateDir(accountDir);
   return accountDir;
+}
+
+// Runtime selection must never create directories or follow account/file aliases.
+export function storedGoogleAccountFile(accountsDir: string, requestedAccount: unknown, filename: "token.json" | "credentials.json"): string {
+  const account = normalizeRequestedGoogleAccount(requestedAccount);
+  const accountDir = join(accountsDir, account);
+  const entry = lstatIfPresent(accountDir);
+  if (!entry?.isDirectory() || entry.isSymbolicLink() || dirname(realpathSync(accountDir)) !== realpathSync(accountsDir)) {
+    throw new Error(`Google account '${account}' is not an isolated stored account.`);
+  }
+  const filePath = join(accountDir, filename);
+  const file = lstatIfPresent(filePath);
+  if (file && (!file.isFile() || file.isSymbolicLink() || file.nlink !== 1 || dirname(realpathSync(filePath)) !== realpathSync(accountDir))) {
+    throw new Error(`Google account ${filename} must be an isolated regular file.`);
+  }
+  return filePath;
+}
+
+export function readStoredGoogleToken<T extends { account?: string }>(accountsDir: string, requestedAccount: unknown): T {
+  const account = normalizeRequestedGoogleAccount(requestedAccount);
+  const token = JSON.parse(readFileSync(storedGoogleAccountFile(accountsDir, account, "token.json"), "utf8")) as T;
+  if (!token || typeof token !== "object" || Array.isArray(token)) throw new Error("Invalid Google account token.");
+  // Legacy tokens have no identity field; preserve these isolated stored accounts.
+  if (token.account != null) assertAuthorizedGoogleAccount(account, token.account);
+  return token;
+}
+
+export function listStoredGoogleAccounts(accountsDir: string): string[] {
+  if (!lstatIfPresent(accountsDir)) return [];
+  return readdirSync(accountsDir).filter((name) => {
+    try {
+      if (normalizeRequestedGoogleAccount(name) !== name) return false;
+      readStoredGoogleToken(accountsDir, name);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }

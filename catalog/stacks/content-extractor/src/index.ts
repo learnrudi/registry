@@ -9,6 +9,7 @@
  *   - As CLI: node index.ts <url> [output]
  */
 
+import { publicHttp } from "./public-http.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -19,10 +20,11 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { dirname, join } from "path";
 import { homedir } from "os";
 import * as cheerio from "cheerio";
-import { decode } from "html-entities";
 import { Readability } from "@mozilla/readability";
 import { JSDOM, VirtualConsole } from "jsdom";
 import TurndownService from "turndown";
+
+import { extractTikTok, formatTikTokResult, type TikTokResult } from "./tiktok.js";
 
 import {
   extractReddit,
@@ -52,6 +54,9 @@ import {
 } from "./url-policy.js";
 
 export {
+  extractTikTok,
+  formatTikTokResult,
+  type TikTokResult,
   extractBatch,
   extractGitHub,
   extractLinks,
@@ -89,6 +94,12 @@ function resolveOutputPath(output: string | undefined, prefix: string, name: str
 function ensureOutputDir(outputPath = DEFAULT_OUTPUT_DIR) {
   const dir = outputPath.includes(".") ? dirname(outputPath) : outputPath;
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+
+function saveTikTokOutput(outputPath: string, data: TikTokResult): void {
+  ensureOutputDir(outputPath);
+  writeFileSync(`${outputPath}.json`, JSON.stringify(data, null, 2) + "\n", "utf8");
+  writeFileSync(outputPath, formatTikTokResult(data), "utf8");
 }
 
 async function discardResponseBody(response: Response): Promise<void> {
@@ -159,6 +170,8 @@ async function getYouTubeTranscriptViaSupaData(videoId: string, url: string) {
 
     const response = await fetch(apiUrl.toString(), {
       method: "GET",
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     });
 
@@ -188,7 +201,7 @@ async function getYouTubeTranscriptViaAPI(videoId: string) {
 
 async function getYouTubeTranscriptViaHTML(videoId: string) {
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const response = await publicHttp.fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
     });
     const html = await response.text();
@@ -201,7 +214,7 @@ async function getYouTubeTranscriptViaHTML(videoId: string) {
     const englishTrack = captionTracks.find((t: any) => t.languageCode === "en" || t.languageCode?.startsWith("en-"));
     if (!englishTrack) throw new Error("No English captions available");
 
-    const captionResponse = await fetch(englishTrack.baseUrl);
+    const captionResponse = await publicHttp.fetch(englishTrack.baseUrl);
     const captionXML = await captionResponse.text();
 
     const texts: string[] = [];
@@ -219,7 +232,7 @@ async function getYouTubeTranscriptViaHTML(videoId: string) {
 
 async function getYouTubeMetadata(videoId: string) {
   try {
-    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const response = await publicHttp.fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
     });
     const html = await response.text();
@@ -293,84 +306,6 @@ export function formatYouTubeResult(result: YouTubeResult): string {
   return text;
 }
 
-
-// =============================================================================
-// TIKTOK EXTRACTOR
-// =============================================================================
-
-const TIKTOK_HEADERS = {
-  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  referer: "https://www.tiktok.com/",
-};
-
-export interface TikTokResult {
-  url: string;
-  hasTranscript: boolean;
-  transcript: string;
-  wordCount: number;
-  metadata: {
-    user: string;
-    videoId: string;
-    description: string;
-    language?: string;
-  };
-}
-
-function stripVtt(vtt: string): string {
-  return vtt
-    .split(/\r?\n/)
-    .filter((l) => l && l !== "WEBVTT" && !/^\d\d:\d\d/.test(l) && !/-->/.test(l))
-    .join("\n");
-}
-
-export async function extractTikTok(url: string, preferLang = "eng"): Promise<TikTokResult> {
-  const tiktokUrl = requirePlatformUrl(url, "TikTok", ["tiktok.com"]);
-  const response = await fetch(tiktokUrl, { headers: TIKTOK_HEADERS, redirect: "follow" });
-  const fullUrl = response.url;
-  const html = await response.text();
-
-  const $ = cheerio.load(html);
-  const script = $("#__UNIVERSAL_DATA_FOR_REHYDRATION__");
-
-  if (!script.length) throw new Error("Could not find TikTok data");
-
-  const data = JSON.parse(decode(script.html() || "{}"));
-  const videoDetail = data.__DEFAULT_SCOPE__?.["webapp.video-detail"];
-
-  if (!videoDetail?.itemInfo?.itemStruct) throw new Error("Could not parse TikTok video data");
-
-  const item = videoDetail.itemInfo.itemStruct;
-  const user = item.author?.uniqueId || "unknown";
-  const videoId = item.id;
-  const description = item.desc || "";
-  const subtitles = item.video?.subtitleInfos || [];
-
-  if (!subtitles.length) {
-    return { url: fullUrl, hasTranscript: false, transcript: "", wordCount: 0, metadata: { user, videoId, description } };
-  }
-
-  const track = subtitles.find((s: any) => s.LanguageCodeName?.startsWith(preferLang)) || subtitles[0];
-  const vttResponse = await fetch(track.Url, { headers: TIKTOK_HEADERS });
-  const vtt = await vttResponse.text();
-  const transcript = stripVtt(vtt);
-  const wordCount = transcript.split(/\s+/).filter((w) => w.length > 0).length;
-
-  return { url: fullUrl, hasTranscript: true, transcript, wordCount, metadata: { user, videoId, description, language: track.LanguageCodeName } };
-}
-
-export function formatTikTokResult(result: TikTokResult): string {
-  let text = `**TikTok Video Extracted**\n\n`;
-  text += `**Creator:** @${result.metadata.user}\n`;
-  text += `**URL:** ${result.url}\n`;
-  if (result.metadata.description) text += `**Description:** ${result.metadata.description}\n`;
-  if (result.hasTranscript) {
-    text += `\n---\n\n## Transcript (${result.wordCount} words)\n\n${result.transcript}`;
-  } else {
-    text += `\n---\n\n*No captions available*`;
-  }
-  return text;
-}
-
 // =============================================================================
 // ARTICLE EXTRACTOR
 // =============================================================================
@@ -397,7 +332,7 @@ function htmlToMarkdown(html: string): string {
 export async function extractArticle(url: string): Promise<ArticleResult> {
   const articleUrl = parseHttpUrl(url).toString();
 
-  const response = await fetch(articleUrl, {
+  const response = await publicHttp.fetch(articleUrl, {
     headers: { "User-Agent": ARTICLE_USER_AGENT, Accept: "text/html" },
     redirect: "follow",
   });
@@ -482,13 +417,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "extract_tiktok",
-      description: "Extract transcript/captions from a TikTok video. Returns video info and transcript if captions are available.",
+      description: "Extract TikTok captions with timestamps, raw VTT and coverage. Missing initial captions do not prove absence; use caption_url for a resource verified in the browser.",
       inputSchema: {
         type: "object",
         properties: {
           url: { type: "string", description: "TikTok video URL (full URL or short link)" },
           lang: { type: "string", description: "Preferred language code (default: eng)" },
-          output: { type: "string", description: "Optional file path to save markdown output" },
+          caption_url: { type: "string", description: "Optional HTTPS TikTok/CDN WebVTT resource observed for this exact video in the browser. Requires a canonical /@creator/video/id url. Association is operator-verified; URL extension is ignored." },
+          output: { type: "string", description: "Optional Markdown path; also saves <output>.json with status, raw VTT, segments and coverage" },
         },
         required: ["url"],
       },
@@ -533,7 +469,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "extract_batch",
-      description: "Batch extract content from URL arrays, metadata items, or a CSV file. Deduplicates normalized URLs, routes each URL to the right extractor, classifies blocked/rate-limited failures, and writes per-link artifact folders plus a manifest, CSV report, and JSONL results file. Optional Playwright browser screenshot fallback captures page images for selected failed statuses and, when Tesseract is available, classifies captured screenshots as browser_captured, browser_blocked, browser_empty, browser_not_found, or browser_unclassified.",
+      description: "Batch extract content from URL arrays, metadata items, or a CSV file. Deduplicates normalized URLs, routes each URL to the right extractor, classifies blocked/rate-limited failures, and writes per-link artifact folders plus a manifest, CSV report, and JSONL results file. Playwright browser screenshot fallback is unavailable until browser network egress is guarded; failed extraction statuses are preserved.",
       inputSchema: {
         type: "object",
         properties: {
@@ -559,12 +495,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           url_column: { type: "string", description: "CSV column containing URLs (default: url)" },
           output_dir: { type: "string", description: "Directory where content, manifest, report, and JSONL files are written" },
           max_concurrency: { type: "number", minimum: 1, maximum: 10, description: "Maximum concurrent unique URL extractions (default: 4)" },
-          browser_fallback: { type: "boolean", description: "Enable Playwright browser screenshot fallback for blocked/rate-limited/fetch-failed URLs (default: false)" },
-          browser_timeout_ms: { type: "number", minimum: 1000, maximum: 60000, description: "Playwright browser screenshot fallback timeout in milliseconds (default: 15000)" },
+          browser_fallback: { type: "boolean", description: "Compatibility flag: Playwright browser screenshot fallback is disabled until network egress is guarded" },
+          browser_timeout_ms: { type: "number", minimum: 1000, maximum: 60000, description: "Reserved compatibility timeout; browser fallback is currently unavailable" },
           browser_fallback_statuses: {
             type: "array",
             items: { type: "string", enum: ["blocked", "rate_limited", "fetch_failed", "error", "no_transcript"] },
-            description: "Statuses that should trigger Playwright browser screenshot fallback (default: blocked, rate_limited, fetch_failed)",
+            description: "Statuses that record browser fallback unavailable (default: blocked, rate_limited, fetch_failed)",
           },
         },
       },
@@ -593,10 +529,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case "extract_tiktok": {
-        const data = await extractTikTok(args?.url as string, args?.lang as string);
-        result = formatTikTokResult(data);
-        if (args?.output) outputPath = resolveOutputPath(args.output as string, "tiktok", data.metadata.user);
-        break;
+        const data = await extractTikTok(args?.url as string, args?.lang as string, { captionUrl: args?.caption_url as string | undefined });
+        if (args?.output) {
+          const path = resolveOutputPath(args.output as string, "tiktok", data.metadata.user);
+          saveTikTokOutput(path, data);
+          return { content: [{ type: "text", text: `TikTok ${data.status}. Saved review to ${path} and evidence to ${path}.json` }], structuredContent: { ...data } };
+        }
+        return { content: [{ type: "text", text: formatTikTokResult(data) }], structuredContent: { ...data } };
       }
       case "extract_article": {
         const data = await extractArticle(args?.url as string);
@@ -714,8 +653,13 @@ else if (isMainModule && cliArgs.length > 0 && cliArgs[0] !== "--mcp") {
         }
         case "tiktok": {
           const data = await extractTikTok(url);
+          if (output) {
+            const path = resolveOutputPath(output, "tiktok", data.metadata.user);
+            saveTikTokOutput(path, data);
+            console.log(`TikTok ${data.status}. Saved review to ${path} and evidence to ${path}.json`);
+            return;
+          }
           result = formatTikTokResult(data);
-          if (output) outputPath = resolveOutputPath(output, "tiktok", data.metadata.user);
           break;
         }
         case "article": {

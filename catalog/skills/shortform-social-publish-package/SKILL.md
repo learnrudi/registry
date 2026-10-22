@@ -1,7 +1,7 @@
 ---
 name: Shortform Social Publish Package
 description: Generate platform-ready social publishing packages for short-form story folders, including Instagram Reels captions, Facebook captions, YouTube Shorts metadata, TikTok manual captions, media URL placeholders, and publish checklists before using social-media-publisher.
-version: 1.0.1
+version: 1.0.2
 category: communication
 tags:
   - video
@@ -209,3 +209,5 @@ Before finishing:
 - Verify no file promises a resource that does not exist.
 - Verify hashtags are platform-appropriate.
 - Do not print secrets, tokens, or page access tokens.
+
+Read the `Variant Map` in `copy/short-form-post-copy.md` as the render-to-post authority. Produce one package per accepted variant; never choose an arbitrary final or silently collapse two accepted posts. Missing or ambiguous render identity blocks only that variant until resolved.

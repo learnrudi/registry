@@ -1,3 +1,4 @@
+import { downloadPublicMedia } from '../security/media-download.js';
 import axios from 'axios';
 
 import { PlatformAdapterError } from './platform-errors.js';
@@ -204,13 +205,8 @@ function getLinkedInRestHeaders(token) {
   };
 }
 
-async function downloadMedia(item, maxBytes) {
-  const response = await axios.get(assertHttpsUrl(item.source_url, 'LinkedIn media URL'), {
-    responseType: 'arraybuffer',
-    timeout: 60_000,
-    maxContentLength: maxBytes,
-  });
-  const buffer = Buffer.from(response.data);
+export async function downloadMedia(item, maxBytes) {
+  const buffer = await downloadPublicMedia(assertHttpsUrl(item.source_url, 'LinkedIn media URL'), maxBytes);
 
   if (buffer.length > maxBytes) {
     throw new PlatformAdapterError(

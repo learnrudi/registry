@@ -734,3 +734,15 @@ export async function completePublishAttempt(client, input) {
 
   return result.rows[0] ?? null;
 }
+
+// The status comparison and transition are one database operation. Distinct
+// jobs competing for a target cannot both create an external publish attempt.
+export async function claimPostTarget(client, input) {
+  const result = await client.query(`
+    update post_targets
+    set status = 'publishing', metadata = metadata || $4::jsonb, updated_at = now()
+    where organization_id = $1 and id = $2 and post_id = $3 and status = 'queued'
+    returning id
+  `, [input.organizationId, input.postTargetId, input.postId, { publish_job_id: input.publishJobId }]);
+  return result.rows[0] ?? null;
+}

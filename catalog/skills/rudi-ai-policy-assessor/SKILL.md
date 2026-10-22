@@ -1,7 +1,7 @@
 ---
 name: RUDI AI Policy Assessor
-description: Assess, score, and upgrade organizational AI acceptable-use policies using RUDI's completeness rubric. Use when reviewing a client AI policy, creating a gap report, comparing a draft against RUDI standards, advising on Claude/ChatGPT/Copilot connectors and data permissions, or turning current AI practices into a policy/training rollout.
-version: 1.0.1
+description: "Assess, score, and upgrade organizational AI acceptable-use policies using RUDI's completeness rubric. Use when reviewing a client AI policy, creating a gap report, comparing a draft against RUDI standards, advising on Claude/ChatGPT/Copilot connectors and data permissions, or turning current AI practices into a policy/training rollout."
+version: 1.0.2
 category: documents
 tags:
   - rudi
@@ -17,14 +17,18 @@ tags:
 
 # RUDI AI Policy Assessor
 
-Use this skill to turn an AI policy draft, client conversation, or current-practice notes into a practical RUDI gap report and upgrade path.
+Use this skill to turn an AI policy draft, client conversation, or current-practice notes into a practical RUDI gap report and upgrade path. This is the single policy-review workflow,
+including requests formerly called `ai-policy-review`.
 
 Default to a client-facing advisory tone unless the user explicitly asks for internal notes. The report should read like something RUDI can send to the organization being reviewed: respectful, direct, specific, and free of behind-the-scenes commentary.
+
+Use one rubric: 12 elements scored 0–3, maximum 36. Preserve the former
+15-element checklist’s coverage through the mapping in the rubric reference.
 
 ## Core Workflow
 
 1. Identify the organization, industry, work types, regulated data, current AI tools, and intended rollout stage. If facts are missing, mark assumptions instead of inventing details.
-2. Use the RUDI AI policy completeness rubric below.
+2. Read `references/rudi-ai-policy-completeness-rubric.md`.
 3. Classify the source artifact:
    - No policy yet: produce a baseline policy outline and discovery questions.
    - Generic draft: score it and recommend concrete client-specific upgrades.
@@ -78,48 +82,6 @@ For a new policy, produce:
 - Do not let a tool list substitute for data-class rules and review rules.
 - Do not recommend technical controls without identifying who owns them.
 
-## RUDI AI Policy Completeness Rubric
+## Resources
 
-Score each element from 0-3:
-
-| Score | Meaning | Use when |
-|---|---|---|
-| 0 | Missing | The policy does not address the element. |
-| 1 | Vague | The element is named but not actionable. |
-| 2 | Usable | Staff could follow it, but edge cases or ownership are incomplete. |
-| 3 | Operational | The rule, owner, examples, exceptions, and failure behavior are clear. |
-
-The 12 elements:
-
-1. **Purpose, philosophy, and mission fit**: why the organization uses AI and how responsible use connects to mission, values, quality, and risk appetite.
-2. **AI tool definition and scope**: standalone chatbots, embedded AI, coding assistants, meeting tools, agents, connectors, custom GPTs/projects, contractors, and personal-device work.
-3. **Governance owner and approval workflow**: policy owner, approved tool register owner, exception path, review cadence, and change triggers.
-4. **Approved tools, vendor terms, and account rules**: approved tool table, business account requirements, vendor terms, privacy, retention, no-training, residency, audit, and request process.
-5. **Data classification and input rules**: public, internal, confidential, restricted/sensitive tiers and allowed-tool rules for each data class.
-6. **Redaction, minimization, and safe prompting**: remove identifiers, secrets, unique client details, and unnecessary file scope before using AI.
-7. **Connectors, integrations, and embedded AI controls**: approval, least privilege, source permissions, read-only defaults, write/delete approval gates, OAuth scopes, logging, and shared-drive hygiene.
-8. **Use categories: encouraged, caution, prohibited**: practical examples of approved workflows, high-caution workflows, and forbidden uses.
-9. **Human review, scrutiny tiers, and high-risk decisions**: AI output is draft; facts, figures, citations, code, and calculations are verified; high-risk work gets expert or manager sign-off.
-10. **Transparency, disclosure, and accountability**: staff remain accountable, internal acknowledgment and external disclosure rules are realistic, and disclosure ownership is explicit.
-11. **IP, copyright, ownership, and source integrity**: protect company and third-party rights, licensed content, source citations, code generation, and open-source license review.
-12. **Monitoring, incident response, training, and review**: reporting channel, containment steps, escalation, logs, usage review, training, office hours or FAQs, and annual/material-change review.
-
-Gap severity:
-
-| Severity | Use when | Typical action |
-|---|---|---|
-| Critical | Missing rule could expose sensitive data, create legal/regulatory risk, or enable harmful decisions. | Fix before rollout or connector enablement. |
-| High | Staff can use the policy, but a common workflow is unsafe or ambiguous. | Fix in the first revision. |
-| Medium | Policy works for basics but lacks examples, ownership, or training support. | Add during rollout. |
-| Low | Wording, formatting, or completeness issue with limited risk. | Clean up before final approval. |
-
-Connector decision matrix:
-
-| Decision area | Green light | Yellow light | Red light |
-|---|---|---|---|
-| Source permissions | Permissions are clean, least-privilege, and role-based. | Shared folders/channels need cleanup. | Broad everyone-access folders contain sensitive data. |
-| Data class | Mostly public/internal data. | Confidential data can be minimized or de-identified. | Restricted data cannot be filtered or minimized. |
-| Tool/vendor terms | Business/enterprise agreement reviewed. | Terms are likely acceptable but not documented. | Consumer/free account or unknown vendor terms. |
-| Actions | Read-only or approval-gated. | Some writes needed with clear workflow owner. | Delete/send/post/pay/update actions enabled broadly. |
-| Logging | Admin/audit visibility exists. | Partial logs exist. | No meaningful way to review access or incidents. |
-| Training | Staff know when to use connector vs paste. | Training planned but not delivered. | No training or use guidance. |
+- Read `references/rudi-ai-policy-completeness-rubric.md` before scoring or drafting a gap report.

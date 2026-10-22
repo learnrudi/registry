@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { pathToFileURL } from "node:url";
+import { publicHttp } from "./public-http.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -357,31 +359,17 @@ function extractNewsletterLinks(args: ToolArgs) {
   };
 }
 
-async function fetchFeed(url: string, timeoutMs: number): Promise<string> {
-  const parsed = parseHttpUrl(url);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(parsed.toString(), {
-      headers: {
-        "User-Agent": "RUDI newsletter-extractor/0.1.0",
-        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.1",
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error(`Feed fetch failed with HTTP ${response.status}`);
-
-    const contentLength = Number(response.headers.get("content-length") || "0");
-    if (contentLength > MAX_FEED_BYTES) throw new Error(`Feed exceeds ${MAX_FEED_BYTES} bytes`);
-
-    const xml = await response.text();
-    if (xml.length > MAX_FEED_BYTES) throw new Error(`Feed exceeds ${MAX_FEED_BYTES} bytes`);
-    return xml;
-  } finally {
-    clearTimeout(timeout);
-  }
+export async function fetchFeed(url: string, timeoutMs: number): Promise<string> {
+  const response = await publicHttp.fetch(parseHttpUrl(url).toString(), {
+    maxBytes: MAX_FEED_BYTES,
+    timeoutMs,
+    headers: {
+      "User-Agent": "RUDI newsletter-extractor/0.1.0",
+      "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.1",
+    },
+  });
+  if (!response.ok) throw new Error(`Feed fetch failed with HTTP ${response.status}`);
+  return response.text();
 }
 
 function asArray<T>(value: T | T[] | undefined | null): T[] {
@@ -545,5 +533,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

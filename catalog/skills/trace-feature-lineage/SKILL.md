@@ -1,7 +1,7 @@
 ---
 name: Trace Feature Lineage
-description: Perform end-to-end feature and data-lineage traces across software repositories. Use when investigating where a user-visible page, command, API result, record, workflow, or behavior comes from; why data appears, is missing, stale, filtered, duplicated, or mismatched; or when planning refactors, onboarding, incident response, deprecation cleanup, architecture reviews, or test coverage for an existing feature.
-version: 1.0.1
+description: "Perform end-to-end feature and data-lineage traces across software repositories. Use when investigating where a user-visible page, command, API result, record, workflow, or behavior comes from; why data appears, is missing, stale, filtered, duplicated, or mismatched; or when planning refactors, onboarding, incident response, deprecation cleanup, architecture reviews, or test coverage for an existing feature."
+version: 1.0.2
 category: code
 tags:
   - feature-trace
@@ -36,11 +36,14 @@ The goal is to reveal the actual contract: what the feature is designed to do, w
 
 Choose the shallowest depth that answers the question:
 
-- **Quick trace**: current runtime path only.
+- **Quick trace**: locate the feature’s entrypoint, core logic, data flow, dependencies, and tests. Return concise file/line links and how they connect; omit the full audit template unless needed.
 - **Full trace**: runtime path plus producers, transformations, jobs, migrations, downstream consumers, tests, and observability.
 - **Audit trace**: full trace plus historical commits, ownership, deprecation risk, failure modes, and formal test-gap report.
 
 If the user does not specify depth, use full trace for bugs or data-quality questions and quick trace for orientation questions.
+
+Requests formerly called `find-feature` use quick trace. Infer the feature from
+the request and current context; ask only when the target remains ambiguous.
 
 ## Evidence Labels
 

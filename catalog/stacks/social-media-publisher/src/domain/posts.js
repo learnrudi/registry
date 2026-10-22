@@ -344,8 +344,9 @@ export async function getPostAggregate(client, input) {
 
 export async function enqueuePublish(client, input) {
   const postId = assertUuid(input.postId, 'post_id');
-  const idempotencyKey = normalizeOptionalString(input.idempotencyKey, 'idempotency_key', 200)
+  const callerKey = normalizeOptionalString(input.idempotencyKey, 'idempotency_key', 200)
     ?? `post:${postId}:publish`;
+  const idempotencyKey = `${input.dryRun === true ? 'preview' : 'publish'}:${postId}:${callerKey}`;
   const runAfter = normalizeOptionalDate(input.runAfter, 'run_after') ?? new Date();
   const dryRun = input.dryRun === true;
 
@@ -374,10 +375,9 @@ export async function enqueuePublish(client, input) {
     });
   }
 
-  await queuePostTargets(client, {
-    organizationId: input.organizationId,
-    postId,
-  });
+  if (!dryRun) {
+    await queuePostTargets(client, { organizationId: input.organizationId, postId });
+  }
 
   const targetsAfterQueue = await listPostTargets(client, {
     organizationId: input.organizationId,
@@ -385,8 +385,7 @@ export async function enqueuePublish(client, input) {
   });
   const publishableTargets = targetsAfterQueue.filter((target) => [
     TARGET_STATUSES.QUEUED,
-    TARGET_STATUSES.PUBLISHING,
-    TARGET_STATUSES.PUBLISHED,
+    ...(dryRun ? [TARGET_STATUSES.VALID, TARGET_STATUSES.RETRY_WAIT] : []),
   ].includes(target.status));
 
   if (publishableTargets.length === 0) {
@@ -400,12 +399,14 @@ export async function enqueuePublish(client, input) {
     });
   }
 
-  const derivedStatus = derivePostStatusFromTargetStatuses(targetsAfterQueue);
-  await updatePostStatus(client, {
-    organizationId: input.organizationId,
-    postId,
-    status: derivedStatus === POST_STATUSES.PUBLISHED ? POST_STATUSES.PUBLISHED : POST_STATUSES.QUEUED,
-  });
+  if (!dryRun) {
+    const derivedStatus = derivePostStatusFromTargetStatuses(targetsAfterQueue);
+    await updatePostStatus(client, {
+      organizationId: input.organizationId,
+      postId,
+      status: derivedStatus === POST_STATUSES.PUBLISHED ? POST_STATUSES.PUBLISHED : POST_STATUSES.QUEUED,
+    });
+  }
 
   const job = await insertPublishJob(client, {
     organizationId: input.organizationId,

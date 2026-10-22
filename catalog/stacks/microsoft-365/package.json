@@ -1,0 +1,24 @@
+{
+  "name": "@rudi/microsoft-365-stack",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "auth": "node src/auth-cli.js",
+    "call": "node src/cli.js call",
+    "smoke": "node src/cli.js smoke",
+    "test": "node --test test/*.test.mjs",
+    "verify": "npm test && node src/verify.js"
+  },
+  "dependencies": {
+    "@azure/msal-node": "7.1.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "fflate": "0.8.3",
+    "pdfjs-dist": "6.4.299",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}

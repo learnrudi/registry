@@ -8,7 +8,7 @@ RUDI MCP stack for extracting useful text from URLs.
 | --- | --- |
 | `extract_youtube` | Extract YouTube metadata and transcript when captions are available. |
 | `extract_reddit` | Extract a Reddit post, top comments, and bounded threaded replies. |
-| `extract_tiktok` | Extract TikTok captions/transcript when available. |
+| `extract_tiktok` | Extract TikTok page captions or an explicitly supplied browser-discovered caption resource, with timing and raw evidence. |
 | `extract_article` | Extract clean article text with Readability and markdown output. |
 | `extract_github` | Extract GitHub repositories, files, gists, and releases; binary release assets are classified without download. |
 | `extract_links` | Extract and categorize page links as markdown, JSON, or CSV. |
@@ -37,6 +37,13 @@ npm run build
 npx tsx src/index.ts links https://example.com
 npx tsx src/index.ts https://github.com/openai/openai-node
 ```
+
+The public HTTP parity test compares this stack's transport with the copies in
+installed `audio-tools`, `newsletter-extractor`, and `social-media-publisher`
+sibling stacks. Uninstalled siblings are optional; a missing transport file in
+an installed stack or a differing copy fails the test. A standalone installation
+skips the comparison after checking its own transport file. In Registry's
+canonical `catalog/stacks` source tree, all four copies are required.
 
 To compare capture providers for a difficult URL:
 
@@ -70,9 +77,10 @@ npx tsx src/index.ts --mcp
   Browser login and Reddit API credentials are not required for the primary
   path. By default, Reddit output includes top-level comments plus direct
   replies (`max_depth: 2`); use `max_depth: 1` for only top-level comments.
-- TikTok extraction depends on TikTok page data and captions being available.
-  Videos without public captions return metadata with `hasTranscript: false`;
-  challenged or removed TikTok pages can fail before metadata is available.
+- TikTok extraction returns `status: success` only after parsing nonempty WebVTT
+  cues. `captions_not_found` means the initial page contained no caption tracks;
+  it does not prove that captions do not exist. HTTP, page parsing, identity,
+  network and caption validation failures are errors, not empty successes.
 - GitHub repository extraction uses the GitHub API for metadata and raw content
   for README/file bodies. Set `GITHUB_TOKEN` in the environment when higher
   GitHub API rate limits are needed; it is optional and not declared as a
@@ -84,14 +92,75 @@ npx tsx src/index.ts --mcp
   `content.md` when content exists, and `error.json` when extraction fails.
   Blocked/rate-limited fetches are classified as `blocked`, `rate_limited`, or
   `fetch_failed` instead of being collapsed into generic `error`.
-- Batch extraction can opt into Playwright browser screenshot fallback with
-  `browser_fallback: true`. For selected failure statuses, the stack writes
-  `links/<item-id>/page.png` and records `originalStatus`, `browserFallback`,
-  and `screenshot_path` in artifacts and reports. If Tesseract is available, the
-  stack writes `links/<item-id>/browser_text.txt` and classifies the capture:
-  `browser_captured` for content-bearing screenshots, `browser_blocked` for
-  bot/security/login walls, `browser_empty` for screenshots with no readable
-  text, `browser_not_found` for visible not-found pages, or
-  `browser_unclassified` when classification is unavailable or inconclusive.
-  This captures what a browser saw; it does not bypass bot protections.
+- Playwright browser screenshot fallback is disabled until browser egress is
+  guarded. Existing `browser_fallback` arguments remain accepted for compatibility;
+  failed rows retain their original extraction status and record
+  `browserFallback.status: "unavailable"` with the security reason. No browser is
+  launched and no screenshot is produced.
 - URL arguments are validated as HTTP(S) URLs before network requests.
+
+## TikTok browser recovery and evidence
+
+When the initial page is incomplete or blocked, inspect the exact video in the
+host's browser. Resolve its canonical `/@creator/video/id` URL, then inspect
+page caption metadata or caption network requests. A caption resource can have
+no `.vtt` suffix and can misleadingly advertise `mime_type=video_mp4`; the stack
+validates its WebVTT body. Do not infer a resource URL or associate it with a
+video solely because its host looks right.
+
+Call MCP `extract_tiktok` with `url` set to that canonical video URL and optional
+`caption_url` set to the exact observed caption resource. This bypasses the
+initial-page fetch and labels `retrievalMethod: supplied_caption`. The operator
+must verify the video/resource association; the stack cannot independently
+prove it. The API equivalent is
+`extractTikTok(videoUrl, "eng", { captionUrl: observedCaptionUrl })`.
+The positional CLI uses initial-page extraction; recovery is exposed through
+MCP and the API. Batch extraction also uses the initial page.
+
+TikTok requests require HTTPS, no credentials/custom port, and TikTok page
+hosts or approved TikTok CDN hosts (`tiktok.com`, `tiktokcdn.com`,
+`tiktokcdn-us.com`, `tiktokcdn-eu.com`, including subdomains). Every redirect is
+validated, with at most three redirects within one 15-second deadline per page
+or caption acquisition.
+Page bodies are limited to 5 MiB and caption bodies to 2 MiB. A new CDN family
+requires a reviewed allowlist change. Signed caption resource URLs are not
+included in results or saved evidence.
+
+Results preserve legacy `hasTranscript`, `transcript`, `wordCount` and metadata,
+and add `status`, `retrievalMethod`, `rawVtt`, timestamped `segments` (seconds),
+and `coverage` (cue count, first start, last end, and gaps over three seconds).
+Gaps indicate uncaptioned intervals, not proven missing speech; track endpoints
+do not prove full video coverage. Caption wording is not audio-verified and
+speaker names are not inferred. Preserve raw text and flag uncertain wording
+before summarizing or checking factual claims.
+
+MCP always returns structured evidence. With `output`, MCP and CLI write a
+timestamped Markdown review at that path and full evidence, including raw VTT,
+at `<output>.json`. Batch stores evidence in `metadata.captionEvidence` in each
+`result.json`, retaining its general `no_transcript` status for absent tracks.
+## Public network boundary
+
+Generic article/link requests, public YouTube/TikTok page/caption fetches and raw
+GitHub text downloads accept only public HTTP(S) destinations without URL
+credentials. All DNS answers must be public; the selected address is pinned at
+connect while retaining hostname certificate validation. Every redirect is vetted
+again (maximum five). Responses have a 5 MiB streamed-byte cap and a 15-second total
+DNS/request/body timeout. Compressed responses are rejected after requesting
+identity encoding. Missing or dishonest Content-Length cannot bypass the cap.
+
+TikTok acquisition uses this same transport in manual-redirect mode so its
+stricter HTTPS TikTok/CDN host policy is checked before every next hop. Each
+page or caption acquisition allows at most three redirects within one 15-second
+deadline; pages are capped at 5 MiB and caption resources at 2 MiB. The transport
+still vets all DNS answers and pins each connection. Other consumers retain
+the default automatic redirect behavior and its five-redirect limit.
+
+GitHub bearer credentials are attached only to the exact `https://api.github.com`
+origin, with redirects refused; raw GitHub/gist origins receive no API bearer.
+This changes private raw-content access: use a dedicated authenticated GitHub tool
+when raw files require credentials.
+
+The public transport guarantee does not cover the separate `youtube-transcript`
+library, fixed-origin authenticated provider API implementations, or manually run
+browser-provider diagnostic scripts. The production batch browser fallback is
+disabled because a generic browser can request private redirects/subresources.

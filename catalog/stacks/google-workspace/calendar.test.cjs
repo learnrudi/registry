@@ -265,8 +265,19 @@ async function testCalendarToolSchemas() {
 
   try {
     await client.connect(transport);
+    const releaseVersion = require("./package.json").version;
+    assert.equal(client.getServerVersion().version, releaseVersion, "MCP release version must match package");
+    assert.equal(require("./manifest.json").version, releaseVersion);
+    assert.equal(require("./package-lock.json").version, releaseVersion);
+    assert.equal(require("./package-lock.json").packages[""].version, releaseVersion);
     const { tools } = await client.listTools();
     const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+    for (const name of ["calendar_get", "calendar_update"]) {
+      assert(byName[name], `${name} must be exposed`);
+      assert(byName[name].inputSchema.required.includes("event_id"));
+      assert(byName[name].inputSchema.properties.account);
+      assert(byName[name].inputSchema.properties.calendar_id);
+    }
     assert(byName.calendar_discovery_page, "calendar_discovery_page must be exposed");
     assert.deepEqual(byName.calendar_discovery_page.inputSchema.required, [
       "account",

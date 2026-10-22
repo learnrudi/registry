@@ -1,7 +1,7 @@
 ---
 name: "OpenAI Suite Operator"
-description: "OpenAI tools: DALL-E images, Whisper transcription, TTS speech, Sora video"
-version: 1.0.1
+description: "Provider-specific operator for explicit OpenAI requests or an already-selected provider route within media generation."
+version: 1.0.2
 category: "media"
 tags:
   - rudi
@@ -27,6 +27,10 @@ OpenAI tools: DALL-E images, Whisper transcription, TTS speech, Sora video
 Use the stack when the request needs these capabilities. Do not substitute
 invented results when the stack, a required secret, or a supporting service is
 unavailable.
+
+## Routing
+
+Use this operator for an explicit OpenAI provider or `stack:openai` request, or as the selected provider inside a task workflow. For an unspecified provider, prefer `image-generate` (`skill:image-generator`), `video-generate` (`skill:video-generator`), `speech-generate` (`skill:speech-generator`), or `audio-tools` as appropriate. Obey the active host’s required native image tool when applicable. One task has one submission owner; do not generate again merely because both skills apply.
 
 ## Workflow
 

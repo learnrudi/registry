@@ -1,7 +1,9 @@
-import { chromium } from "playwright";
+import { prepareDocumentContext } from "./document-context.js";
+import { chromium, type Browser } from "playwright";
 
 import type { BrowserSession, ValidatedExportRequest } from "./types.js";
 import { RenderError } from "./types.js";
+import { remainingRenderMs } from './render-budget.js';
 
 const REMOTE_TIMEOUT_MS = 15_000;
 const LOCAL_TIMEOUT_MS = 30_000;
@@ -9,24 +11,30 @@ const LOCAL_TIMEOUT_MS = 30_000;
 export async function acquireBrowserSession(
   request: ValidatedExportRequest,
 ): Promise<BrowserSession> {
+  let browser: Browser | undefined;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   try {
-    const browser = request.browserWsEndpoint
+    browser = request.browserWsEndpoint
       ? await chromium.connectOverCDP({
           wsEndpoint: request.browserWsEndpoint,
-          timeout: REMOTE_TIMEOUT_MS,
+          timeout: Math.min(REMOTE_TIMEOUT_MS, remainingRenderMs(request)),
         })
       : await chromium.launch({
           headless: true,
-          timeout: LOCAL_TIMEOUT_MS,
-          args: ["--no-sandbox"],
+          timeout: Math.min(LOCAL_TIMEOUT_MS, remainingRenderMs(request)),
+          chromiumSandbox: true,
+          args: ["--disable-background-networking", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"],
         });
 
-    const context =
-      browser.contexts()[0] ??
-      (await browser.newContext({
+    const context = await browser.newContext({
+        serviceWorkers: "block",
+        acceptDownloads: false,
         viewport: { width: request.viewportWidth, height: request.viewportHeight },
         deviceScaleFactor: request.scale,
-      }));
+      });
+    context.setDefaultTimeout(15_000);
+    context.setDefaultNavigationTimeout(15_000);
+    deadline = setTimeout(() => { void context.close().catch(() => {}); }, remainingRenderMs(request));
 
     const page = await context.newPage();
     const telemetry = {
@@ -37,16 +45,16 @@ export async function acquireBrowserSession(
 
     page.on("console", (message) => {
       if (message.type() === "error") {
-        telemetry.consoleErrors.push(message.text());
+        if (telemetry.consoleErrors.length < 100) telemetry.consoleErrors.push(message.text().slice(0, 1000));
       }
     });
 
     page.on("pageerror", (error) => {
-      telemetry.pageErrors.push(error.message);
+      if (telemetry.pageErrors.length < 100) telemetry.pageErrors.push(error.message.slice(0, 1000));
     });
 
     page.on("requestfailed", (request_) => {
-      telemetry.failedRequests.push(`${request_.method()} ${request_.url()}`);
+      if (telemetry.failedRequests.length < 100) telemetry.failedRequests.push(`${request_.method()} ${request_.url()}`.slice(0, 1000));
     });
 
     return {
@@ -55,6 +63,7 @@ export async function acquireBrowserSession(
       page,
       telemetry,
       release: async () => {
+        clearTimeout(deadline);
         try {
           if (!page.isClosed()) {
             await page.close();
@@ -70,21 +79,22 @@ export async function acquireBrowserSession(
         }
 
         try {
-          await browser.close();
+          await browser?.close();
         } catch {
           // Best-effort cleanup.
         }
       },
     };
   } catch (error) {
+    clearTimeout(deadline);
+    await browser?.close().catch(() => {});
     throw new RenderError(
       "BROWSER_ACQUISITION_FAILED",
       request.browserWsEndpoint
         ? "Failed to connect to the remote Chromium endpoint."
         : "Failed to launch the local Chromium browser.",
       {
-        browserWsEndpoint: request.browserWsEndpoint,
-        cause: error instanceof Error ? error.message : String(error),
+        cause: request.browserWsEndpoint ? "Configured remote browser connection failed" : error instanceof Error ? error.message : String(error),
       },
     );
   }
@@ -94,10 +104,10 @@ export async function navigateAndWait(
   session: BrowserSession,
   request: ValidatedExportRequest,
 ): Promise<void> {
-  const fileUrl = new URL(`file://${request.inputPath}`);
+  const documentUrl = await prepareDocumentContext(session.context, request.inputPath);
 
   try {
-    await session.page.goto(fileUrl.toString(), { waitUntil: "networkidle" });
+    await session.page.goto(documentUrl, { waitUntil: "networkidle" });
     await session.page.waitForLoadState("networkidle");
     await session.page.evaluate(async () => {
       if ("fonts" in document && document.fonts?.ready) {

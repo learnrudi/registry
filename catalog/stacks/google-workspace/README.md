@@ -110,7 +110,51 @@ cross the discovery boundary.
 
 `gmail_send` resolves the authenticated Gmail profile and renders that primary mailbox as the RFC 2822 `From` header. It does not silently inherit a different default Send-As alias.
 
-Ask for explicit user confirmation before sending email, sending a draft, deleting messages, deleting Drive files, making Drive files public, creating/deleting calendar events, applying Slides batch updates, or creating/updating/completing/deleting tasks.
+Gmail composition loads the saved signature for the actual sending address using
+`users.settings.sendAs.get` (existing `gmail.modify` access suffices). New drafts,
+updates, direct sends, replies, and forwards include it once before quoted content.
+Missing, unreadable, image-only, or duplicate signatures block the operation.
+Draft sends check the reviewed body without modifying it; update and review an
+old unsigned draft before sending. A changed saved signature also requires a
+new draft review. Sent messages are read back and report `signatureVerified`;
+if verification fails, the response still reports the successful send and warns
+against resending. Text-bearing signature comparison ignores HTML formatting;
+this is a presence check, not pixel-level logo or link verification. Nested MIME
+alternatives use one preferred body. A metadata-only draft update fails before
+writing if the existing text body is unreadable, stored externally, or has multiple
+independent authored MIME parts that cannot be safely rebuilt. Supply
+an explicitly reviewed replacement body if replacing that content is intended.
+
+Ask for explicit user confirmation before sending email, sending a draft, deleting messages, deleting Drive files, making Drive files public, creating/updating/deleting calendar events, applying Slides batch updates, or creating/updating/completing/deleting tasks, unless the user has already authorized that action.
+
+### Editing an existing Calendar event
+
+Use `calendar_get` with `account`, `calendar_id` (defaults to `primary`), and
+`event_id` to inspect event details and its etag. `calendar_update` accepts the
+same identity plus optional `summary`, `description`, `location`, `start`, `end`,
+`time_zone`, and `etag`. It requires an explicit `send_updates` choice (`all`,
+`externalOnly`, or `none`) and at least one changed field. Use the returned etag
+to reject changes made since inspection. Notes/location can be cleared with an
+empty string; omitted fields remain unchanged.
+
+Time changes require both start and end as ISO timestamps with UTC offsets,
+with end after start. An optional IANA time zone applies to both; otherwise
+existing zones are preserved. Metadata edits support all-day events, but timed
+conversion and recurring series edits are rejected. For one recurring instance,
+pass that occurrence's ID. Attendees, conference links, attachments, reminders,
+and other fields are preserved and cannot be edited through this tool.
+
+The implementation reads the current event, uses a conditional patch with its
+etag, and reads it back to verify the requested fields. Each provider call has
+a 30-second timeout and mutations are not retried automatically. A concurrent
+edit returns `conflict`. An uncertain patch failure returns
+`update_not_verified`; an accepted patch with failed/mismatched read-back returns
+`updated_unverified`. Both are MCP error results with `verified: false`; inspect
+with `calendar_get` before retrying. Only matching read-back returns
+`status: updated` and `verified: true`.
+
+Provider contracts: [event patch semantics](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch)
+and [conditional modification](https://developers.google.com/workspace/calendar/api/guides/version-resources).
 
 If a tool reports that authentication is missing, run:
 
@@ -132,6 +176,7 @@ From this stack directory:
 npm install
 npm run build
 npm run test:gmail
+npm run test:gmail-signature
 npm run test:calendar
 npm run test:slides
 npm run test:tasks

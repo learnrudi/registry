@@ -317,7 +317,7 @@ describe("portable skill contracts", () => {
       "publish-task-changes",
     ]) {
       expect(index.packages[`skill:${skillName}`]).toMatchObject({
-        version: "1.0.1",
+        version: skillName === "rudi-code-review" ? "1.0.2" : "1.0.1",
         install: {
           source: "catalog",
           path: `catalog/skills/${skillName}`,

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 describe("registry quality workflow", () => {
-  it("enforces the mandatory quality gates for every quality-relevant change", async () => {
+  it("enforces the mandatory quality gates for every PR and main push", async () => {
     const [workflow, packageJson] = await Promise.all([
       fs.readFile(path.join(repoRoot, ".github/workflows/registry.yml"), "utf8"),
       fs.readFile(path.join(repoRoot, "package.json"), "utf8").then(JSON.parse),
@@ -29,20 +29,18 @@ describe("registry quality workflow", () => {
       );
     }
 
-    const requiredTriggerPaths = [
-      ".github/workflows/**",
-      ".debt-scan.json",
-      ".stack-debt-baseline.json",
-      "scripts/**",
-      "package.json",
-      "package-lock.json",
-      "vitest.config.ts",
-    ];
-    for (const triggerPath of requiredTriggerPaths) {
-      expect(workflow, `CI does not run when ${triggerPath} changes`).toContain(
-        `- '${triggerPath}'`
-      );
-    }
+    const triggerBlock = workflow.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1];
+    expect(triggerBlock, "CI must define its trigger events").toBeDefined();
+    expect(triggerBlock, "CI must run on main pushes").toMatch(
+      /^  push:\n    branches: \[main\]$/m
+    );
+    expect(triggerBlock, "CI must run on PRs targeting main").toMatch(
+      /^  pull_request:\n    branches: \[main\]$/m
+    );
+    expect(
+      triggerBlock,
+      "Path filters would leave the required CI gate pending for excluded changes"
+    ).not.toMatch(/^\s+paths(?:-ignore)?:/m);
 
     expect(
       workflow.match(/name: Configure deterministic source date/g),
@@ -62,7 +60,7 @@ describe("registry quality workflow", () => {
     );
 
     expect(packageJson.files).toContain(
-      "catalog/stacks/**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,py,txt}"
+      "catalog/stacks/**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,py,txt,html}"
     );
   });
 });

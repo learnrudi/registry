@@ -1,85 +1,85 @@
-# RUDI Frontend & API Integration
+# Optional RUDI Processor HTTP interface
 
-## Overview
-The RUDI system now has a complete web interface for searching and managing your AI-enhanced file system.
+The default installed MCP server uses stdio. It does not start this optional HTTP
+server. The HTTP interface provides authenticated search, metadata, download,
+upload, directory processing, and metadata deletion within configured workspace
+roots. Run it only for trusted operators: anyone holding its token can invoke
+these operations, including deletion and provider-backed processing.
 
-## Components
+## Start locally
 
-### 1. Backend API Server (`api_server.py`)
-- **Running on**: http://localhost:8001
-- **Technologies**: FastAPI, WebSockets
-- **Features**:
-  - RESTful API for file search and stats
-  - WebSocket support for real-time updates
-  - File upload and processing endpoints
-  - Category management
+Install the processor's normal requirements and the optional HTTP requirements
+in your virtual environment:
 
-### 2. Frontend Interface (`frontend/rudi_search.html`)
-- **Access**: Open the HTML file directly in your browser
-- **Features**:
-  - Real-time search across all processed files
-  - File type filtering (Documents, Images, Text, Video, Audio, Data)
-  - Drag-and-drop file upload
-  - Statistics dashboard
-  - Natural language search queries
-
-## How to Use
-
-### Starting the Backend
 ```bash
-cd /path/to/rudi-processor
-uvicorn api_server:app --host 0.0.0.0 --port 8001
+python -m pip install -r requirements.txt -r requirements-http.txt
 ```
 
-### Opening the Frontend
+Set `RUDI_PROCESSOR_API_TOKEN` to a cryptographically random token of at least
+32 ASCII characters without whitespace through your secret manager or shell
+environment. Do not put the token in a URL or source file. Startup fails if this
+configuration is missing or invalid. Rotate the token by replacing the environment
+value and restarting the optional server.
+
+`RUDI_BASE_DIR` selects the inbox (default `~/.rudi/workspaces/rudi-processor/inbox`).
+`RUDI_INDEX_DIR` selects the index (default `~/.rudi/workspaces/rudi-processor/index`).
+Keep both directories protected from untrusted local writers. The API constrains
+directory processing and original-file downloads to the inbox, and metadata
+reads/deletion to the index. A directory batch rejects symlink children that escape
+the inbox before starting. Opaque upload storage names are created exclusively;
+original filenames remain display metadata. Invalid path-like names are rejected.
+
 ```bash
-open frontend/rudi_search.html
+uvicorn api_server:app --host 127.0.0.1 --port 8001
 ```
 
-## API Endpoints
+Visit [the local frontend](http://127.0.0.1:8001/), enter the configured token, and
+select **Connect**. The frontend sends same-origin requests with an Authorization
+header. It keeps the token in page memory only; reload requires entering it again.
+Opening the HTML file directly is no longer supported. Cross-origin API access is
+not enabled. `python api_server.py` also binds only to loopback (port 8000).
 
-### Core Endpoints
-- `GET /` - API status
-- `GET /api/stats` - System statistics
-- `GET /api/search?q=query&filters=images,documents` - Search files
-- `POST /api/upload` - Upload and process file
-- `GET /api/categories` - Get all categories
-- `GET /api/file/{hash}` - Get file metadata
-- `GET /api/download/{hash}` - Download file
-- `WS /ws` - WebSocket for real-time updates
+Do not expose the listener publicly. Remote access requires a separately managed
+TLS/authentication deployment; this local single-operator interface does not
+provide individual identities, role-based authorization, or remote hosting controls.
 
-### Search Examples
-- Natural language: "contracts from 2025"
-- By content: "machine learning algorithms"
-- By entities: "Example Person"
-- Vision-based: "images with documents"
+## API contract
 
-## Processing Flow
-1. Files are uploaded or batch processed
-2. Stage 1 extracts basic metadata and text
-3. Stage 2 uses LLMs for enhancement:
-   - Google Gemini for images (vision)
-   - DeepSeek for cost-effective text
-   - Smart routing based on file type
-4. Results are searchable via the frontend
+Every `/api` request requires `Authorization: Bearer <configured-token>`.
+Missing/incorrect credentials return 401; invalid server token configuration returns
+503 if lifespan startup was bypassed. Only the fixed frontend HTML and script are
+public. Path escapes return 403, malformed upload filenames/hash identifiers return
+400, and absent files/directories return 404.
 
-## Current Status
-- API server running on port 8001
-- Frontend connected and functional
-- 33 files detected in RUDI directory
-- Ready for processing and search
+- `GET /api/stats` — statistics
+- `GET /api/search?q=query&filters=images,documents` — metadata search
+- `POST /api/upload` — multipart file upload and processing
+- `POST /api/process/directory?directory_path=...` — inbox-contained batch
+- `GET /api/categories` — indexed categories
+- `GET /api/file/{hash}` — metadata
+- `GET /api/download/{hash}` — original file inside the inbox
+- `DELETE /api/clear-metadata` — delete the existing metadata date partitions
+- `WS /ws` — programmatic clients must send the same Authorization header during
+  the handshake; unauthenticated connections close before acceptance
 
-## Next Steps
-To process all files:
-```python
-from batch_process_full import BatchProcessor
-processor = BatchProcessor(use_smart_routing=True)
-processor.process_all()
-```
+The browser UI currently uses REST search and statistics. It does not connect to
+WebSocket, and browser-native WebSocket cannot supply this Authorization header.
+No token-in-query fallback is supported. The existing drag/drop and file-click UI
+remain display prototypes; use the API for uploading/downloading. Metadata date
+partition selection remains the existing `2025-08` layout.
 
-Or use the API:
+## Security regression checks
+
+HTTP tests are separate from stdio tests because HTTP dependencies are optional:
+
 ```bash
-curl -X POST http://localhost:8001/api/process/directory \
-  -H "Content-Type: application/json" \
-  -d '{"directory_path": "~/.rudi/workspaces/rudi-processor/inbox"}'
+python -m pip install -r requirements-http-test.txt
+python -m unittest discover -s tests/http -p 'test_*.py' -v
+node --test tests/frontend-security.test.mjs
 ```
+
+ASGI tests use temporary directories and mock document/LLM processors at their
+boundary. They make no provider requests. Frontend tests execute the shipped script
+against a DOM fixture that rejects HTML sinks, verify literal hostile metadata and
+click paths, and verify same-origin bearer-header authentication without token URLs
+or persistence. Full browser and provider integration are separate checks.

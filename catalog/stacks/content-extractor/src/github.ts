@@ -1,3 +1,4 @@
+import { publicHttp } from "./public-http.js";
 import { parseHttpUrl } from "./url-policy.js";
 
 function wordCount(text: string): number {
@@ -116,13 +117,24 @@ function releaseAssetResult(url: string, title: string, owner: string, repo: str
 }
 
 async function fetchGitHubJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: githubHeaders() });
+  const parsed = parseHttpUrl(url);
+  if (parsed.origin !== "https://api.github.com") throw new Error("GitHub API origin is not permitted");
+  const response = await fetch(parsed.toString(), {
+    headers: githubHeaders(), redirect: "error", signal: AbortSignal.timeout(15000),
+  });
   if (!response.ok) await throwHttpResponseError(response, "GitHub API returned");
   return (await response.json()) as T;
 }
 
 async function fetchGitHubText(url: string): Promise<string> {
-  const response = await fetch(url, { headers: githubHeaders("text/plain, text/markdown, */*") });
+  const parsed = parseHttpUrl(url);
+  if (!["https://raw.githubusercontent.com", "https://gist.githubusercontent.com"].includes(parsed.origin)) {
+    throw new Error("GitHub raw content origin is not permitted");
+  }
+  // Raw content is a separate public origin and must never receive the API bearer.
+  const response = await publicHttp.fetch(parsed.toString(), {
+    headers: { "User-Agent": GITHUB_USER_AGENT, Accept: "text/plain, text/markdown, */*" },
+  });
   if (!response.ok) await throwHttpResponseError(response, "GitHub content returned");
   return response.text();
 }

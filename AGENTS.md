@@ -57,3 +57,34 @@ npm pack --dry-run --json
 
 The canonical index URL is
 `https://raw.githubusercontent.com/learnrudi/registry/main/index.json`.
+
+## Documentation maintenance
+
+The change author owns documentation impact; the reviewer checks it before
+acceptance. Update the current guide in the same change as observable behavior,
+commands, contracts, schema, configuration or operating procedures. A dated
+compliance record is evidence, not a replacement for current guidance.
+
+| Changed surface | Current documentation to review |
+| --- | --- |
+| Catalog/schema/contribution contract | `README.md`, `CONTRIBUTING.md`, `SCHEMA.md`, `docs/stack-catalog.md`, `docs/skill-catalog.md` |
+| Stack tools or operating behavior | The stack's README, primary operator `SKILL.md` and linked references; check against live tool schemas/source |
+| Workflow skill | Its `SKILL.md`, bundled references/examples, and owning CLI/Compute/other package contract at the inspected revision |
+| Runtime, package compatibility or release layout | Manifest and affected installation/contribution guides; regenerate indexes through the existing commands |
+
+- Record the affected guides and source/consumer revisions in the PR. If no
+  documentation change is needed, explain why using the actual behavior delta.
+- Check examples, local links, command names and compatibility claims against
+  source. Use repository-relative links within this repo and owning-repository
+  links across Git boundaries; sibling checkouts are not assumed.
+- Keep historical ledgers and archived instructions dated. Current guides must
+  identify superseded advice and link to the accepted contract instead of
+  silently replaying old rollout steps.
+- Distinguish implemented source, published packages, installed artifacts and
+  deployed services. Date live-state claims and link their observation evidence;
+  a merge or successful build does not prove deployment.
+- Keep secrets, account state and private records out of documentation. Record
+  verification limits honestly, including unverified host/consumer acceptance.
+- Use `.github/pull_request_template.md` for the review record. This checklist
+  requires review; existing CI does not establish semantic documentation
+  correctness or ongoing freshness.
