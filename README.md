@@ -275,5 +275,9 @@ MIT
 Skill category, naming, facet and dependency conventions are defined in
 [Skill catalog organization](docs/skill-catalog.md).
 
+[Organization context skills](docs/organization-context-skills.md) provide
+portable business-domain entrypoints and a local source-map template, with
+organization records and provider access kept outside the public packages.
+
 Documentation ownership and the review requirements are in
 [AGENTS.md](AGENTS.md#documentation-maintenance).

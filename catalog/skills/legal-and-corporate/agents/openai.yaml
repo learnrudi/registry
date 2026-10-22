@@ -1,0 +1,4 @@
+interface:
+  display_name: "Legal And Corporate"
+  short_description: "Review organization context and source evidence"
+  default_prompt: "Use $legal-and-corporate to review the selected organization's sources and documented next steps."

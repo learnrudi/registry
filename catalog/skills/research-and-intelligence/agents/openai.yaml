@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research And Intelligence"
+  short_description: "Review organization context and source evidence"
+  default_prompt: "Use $research-and-intelligence to review the selected organization's sources and documented next steps."
