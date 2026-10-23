@@ -11,6 +11,7 @@
  */
 
 import { google } from "googleapis";
+import { randomBytes } from "node:crypto";
 import { createServer } from "http";
 import { parse } from "url";
 import { existsSync, readdirSync } from "fs";
@@ -22,6 +23,7 @@ import {
   normalizeRequestedGoogleAccount,
 } from "./authIdentity.js";
 import { persistVerifiedGoogleToken } from "./authTokenBinding.js";
+import { assertReadOnlyAuthGrant } from "./authGrant.js";
 import { ensureIsolatedGoogleAccountDirectory } from "./accountStorage.js";
 import { loadGoogleCredentials } from "./oauthCredentials.js";
 import {
@@ -29,11 +31,20 @@ import {
   migrateLegacyStateIfNeeded,
 } from "./state.js";
 
+if (process.env.RUDI_GOOGLE_AUTH_PROFILE !== undefined && process.env.RUDI_GOOGLE_AUTH_PROFILE !== "mail-calendar-readonly") {
+  throw new Error("Unknown Google auth profile; use mail-calendar-readonly or omit RUDI_GOOGLE_AUTH_PROFILE");
+}
+
 const WORKSPACE_PATHS = getWorkspacePaths();
 migrateLegacyStateIfNeeded(WORKSPACE_PATHS);
 const ACCOUNTS_DIR = WORKSPACE_PATHS.accountsDir;
 
-const SCOPES = [
+const READ_ONLY_AUTH = process.env.RUDI_GOOGLE_AUTH_PROFILE === "mail-calendar-readonly";
+const MANUAL_AUTH = process.env.RUDI_GOOGLE_AUTH_MANUAL === "1";
+const SCOPES = READ_ONLY_AUTH ? [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/calendar.readonly",
+] : [
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.settings.basic",
@@ -143,30 +154,49 @@ async function authenticate(accountEmail?: string) {
   );
 
   // Generate auth URL
+  const authState = randomBytes(32).toString("hex");
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
     prompt: "consent", // Force consent to get refresh token
     login_hint: selectedAccount,
+    state: authState,
+    ...(READ_ONLY_AUTH ? { include_granted_scopes: false } : {}),
   });
 
   console.log("\n========================================");
   console.log("Google Workspace OAuth Setup");
   console.log("========================================\n");
   console.log(`Account: ${selectedAccount}`);
-  console.log("\nOpening browser for authentication...\n");
+  console.log(MANUAL_AUTH ? "\nManual browser authentication selected.\n" : "\nOpening browser for authentication...\n");
 
   // Start local server to receive callback
   const server = createServer(async (req, res) => {
     const urlParts = parse(req.url || "", true);
 
+    if (req.method === "GET" && urlParts.pathname === "/authorize") {
+      res.writeHead(302, { Location: authUrl, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      res.end();
+      return;
+    }
+
     if (urlParts.pathname === "/callback") {
+      if (req.method !== "GET" || urlParts.query.state !== authState) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("Invalid OAuth state; restart the sign-in from /authorize.");
+        return;
+      }
       const code = urlParts.query.code as string;
 
       if (code) {
         try {
           const { tokens } = await oauth2Client.getToken(code);
           oauth2Client.setCredentials(tokens);
+          if (READ_ONLY_AUTH) {
+            if (!tokens.access_token) throw new Error("Google returned no access token; no token saved");
+            const granted = await oauth2Client.getTokenInfo(tokens.access_token);
+            assertReadOnlyAuthGrant(granted.scopes, SCOPES);
+          }
 
           const tokenPath = join(accountDir, "token.json");
           const tokenData = {
@@ -214,12 +244,12 @@ async function authenticate(accountEmail?: string) {
         } catch (error: any) {
           const statusCode = error instanceof GoogleAccountMismatchError ? 400 : 500;
           res.writeHead(statusCode, { "Content-Type": "text/html" });
-          res.end(`<h1>Error</h1><p>${error.message}</p>`);
+          res.end("<h1>Authentication rejected</h1><p>No token saved. Check the requested account and permissions, then retry.</p>");
           console.error(
             error instanceof GoogleAccountMismatchError
               ? "Authentication rejected:"
               : "Error getting token:",
-            error.message
+            error instanceof GoogleAccountMismatchError ? error.message : "No token saved; check the requested account and OAuth permissions."
           );
           setTimeout(() => {
             server.close();
@@ -230,15 +260,22 @@ async function authenticate(accountEmail?: string) {
         res.writeHead(400, { "Content-Type": "text/html" });
         res.end("<h1>Error: No code received</h1>");
       }
+    } else {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not found");
     }
   });
 
-  server.listen(port, () => {
+  server.listen(port, "127.0.0.1", () => {
     console.log(`Waiting for authentication callback on http://localhost:${port}/callback\n`);
-    open(authUrl);
+    console.log(`Open http://localhost:${port}/authorize to sign in.`);
+    if (!MANUAL_AUTH) open(authUrl).catch(() => console.error("Browser could not open; use the local /authorize URL."));
   });
 }
 
 // Get account email from command line
 const accountEmail = process.argv[2];
-authenticate(accountEmail);
+authenticate(accountEmail).catch(() => {
+  console.error("Google authentication setup failed; check the account, OAuth credentials and callback port. No token saved.");
+  process.exitCode = 1;
+});

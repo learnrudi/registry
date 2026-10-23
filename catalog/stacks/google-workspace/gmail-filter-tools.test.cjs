@@ -7,14 +7,14 @@ const { pathToFileURL } = require('node:url');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
 
-async function fixture(run) {
+async function fixture(run, binding) {
   const dir = mkdtempSync(join(tmpdir(), 'gmail-filters-'));
   const mock = join(dir, 'mock.mjs');
   const calls = join(dir, 'calls.jsonl');
   writeFileSync(calls, '');
   const accountDir = join(dir, 'accounts', 'owner@example.com');
   mkdirSync(accountDir, { recursive: true });
-  writeFileSync(join(accountDir, 'token.json'), JSON.stringify({ token: 'fixture', client_id: 'fixture', client_secret: 'fixture' }));
+  writeFileSync(join(accountDir, 'token.json'), JSON.stringify({ token: 'fixture', account: 'owner@example.com', client_id: 'fixture', client_secret: 'fixture' }));
   writeFileSync(mock, `import { appendFileSync } from 'node:fs';
 import { google } from ${JSON.stringify(pathToFileURL(require.resolve('googleapis')).href)};
 const record = (method, args, options) => appendFileSync(${JSON.stringify(calls)}, JSON.stringify({method,args,options})+'\\n');
@@ -32,7 +32,7 @@ messages:{list:async(args,options)=>{record('messages.list',args,options);return
   try {
     await client.connect(new StdioClientTransport({
       command: process.execPath, args: ['--import', 'tsx', '--import', mock, 'src/index.ts'],
-      cwd: process.cwd(), env: { RUDI_STACK_STATE_DIR: dir }, stderr: 'pipe',
+      cwd: process.cwd(), env: { RUDI_STACK_STATE_DIR: dir, ...(binding ? { RUDI_WORKSPACE_BINDING: JSON.stringify(binding) } : {}) }, stderr: 'pipe',
     }));
     await run(client, () => readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse));
   } finally {
@@ -79,4 +79,17 @@ test('MCP advertises and routes preview, create, get and delete using only the m
     assert.equal(calls().filter(x => x.method === 'delete').length, 1);
     assert.ok(calls().every(x => x.options?.timeout === 30000 && x.options?.retry === false));
   });
+});
+
+test('workspace binding keeps filter writes unavailable unless explicitly activated', async () => {
+  const binding = { version: 1, workspaceId: 'wsp_filters', runId: 'filter-read-test', account: 'owner@example.com', tools: ['gmail_filter_list', 'gmail_filter_preview'] };
+  await fixture(async (client, calls) => {
+    assert.deepEqual((await client.listTools()).tools.map(tool => tool.name).sort(), [...binding.tools].sort());
+    const listed = await client.callTool({ name: 'gmail_filter_list', arguments: { account: binding.account } });
+    assert.notEqual(listed.isError, true, listed.content[0].text);
+    const denied = await client.callTool({ name: 'gmail_filter_create', arguments: { account: binding.account, criteria: { query: 'x' }, action: { removeLabelIds: ['INBOX'] } } });
+    assert.equal(denied.isError, true);
+    assert.match(denied.content[0].text, /not activated/);
+    assert.equal(calls().filter(call => ['create', 'delete'].includes(call.method)).length, 0);
+  }, binding);
 });

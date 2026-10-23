@@ -74,6 +74,11 @@ unavailable.
 - `gmail_message_trash`
 - `gmail_message_untrash`
 - `gmail_message_delete`
+- `gmail_filter_list`
+- `gmail_filter_get`
+- `gmail_filter_preview`
+- `gmail_filter_create`
+- `gmail_filter_delete`
 - `gmail_label_list`
 - `gmail_label_create`
 - `gmail_label_update`
@@ -126,6 +131,41 @@ Use only tools that are actually available in the active RUDI router. If the
 installed stack exposes a different tool set than this catalog version, report
 the mismatch and use the live tool schema only when doing so remains within the
 user's request.
+
+## Incoming-mail filters
+
+Use `gmail_filter_list`/`gmail_filter_get` to inspect rules and
+`gmail_label_list` to resolve existing label IDs. Every filter call requires an
+explicit `account` email and verifies its authenticated Gmail profile. Preserve
+the selected identity; do not switch the active account.
+
+Before proposing a rule, use `gmail_filter_preview` with a candidate search
+`query` and inspect representative matches. Prefer `criteria.query` when the
+same search can express the rule. Preview takes a query rather than structured
+criteria and returns a bounded sample of message/thread IDs and an estimated
+count; it excludes spam/trash, preserves unread state, and does not simulate
+future delivery or apply a rule.
+
+`gmail_filter_create` takes Gmail-native `criteria` and `action` objects;
+`gmail_filter_delete` takes the exact `filter_id`. Creation/deletion requires
+authorization for the concrete account and rule. Tool-development, testing and
+audit requests authorize no mailbox changes. Honor already-given permission.
+Use label IDs, not names; at most one user label can be added per filter.
+Removing `INBOX` skips the inbox; removing `UNREAD` marks mail read; adding
+`TRASH` moves matching mail to Trash. Forward only to an explicitly approved,
+already verified address. Never infer these actions from a sender being automated.
+
+Creation affects incoming mail; changing existing messages is separate work.
+Gmail has no filter update method: replacing a rule requires explicit
+create/delete steps and authorization for both. Verify the returned state;
+if a mutation is unverified, inspect the rule/list before retrying. Do not
+blindly repeat an uncertain create or delete.
+
+Filter settings need `gmail.settings.basic` OAuth consent. Report missing scope
+or administrator denial; do not switch accounts, copy tokens or silently start
+reauthorization. If live schemas lack filter tools, report that source/installation
+gap instead of pretending the skill itself installs the capability. Details and
+schemas are in the stack's README and live tools.
 
 ## Failure Behavior
 

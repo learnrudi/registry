@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "bindingProtocol": "rudi.workspace-binding/v1",
+  "stackId": "stack:google-workspace",
+  "capabilities": [
+    {
+      "id": "email.read",
+      "label": "Read and search email",
+      "tools": ["gmail_profile", "gmail_search", "gmail_search_headers", "gmail_history_list", "gmail_get", "gmail_get_raw", "gmail_get_thread", "gmail_list_attachments", "gmail_get_attachment", "gmail_label_list", "gmail_message_batch_get", "gmail_thread_batch_get"]
+    },
+    {
+      "id": "email.send",
+      "label": "Send, reply to, and forward email",
+      "tools": ["gmail_send", "gmail_reply", "gmail_forward", "gmail_draft_send"]
+    },
+    {
+      "id": "calendar.read",
+      "label": "View calendar events",
+      "tools": ["calendar_list", "calendar_get", "calendar_discovery_page"]
+    },
+    {
+      "id": "calendar.write",
+      "label": "Create, change, and delete calendar events",
+      "tools": ["calendar_create", "calendar_quick_add", "calendar_update", "calendar_delete"]
+    }
+  ]
+}

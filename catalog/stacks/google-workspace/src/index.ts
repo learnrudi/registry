@@ -42,6 +42,7 @@ import { assertSignature, includeSignature, loadSignature, messageBody, verifySe
 import { gmailSearchToolDefinitions, runGmailHeaderSearch, runGmailSearch } from "./gmail-search.js";
 import { gmailFilterToolDefinitions, runGmailFilterTool } from "./gmail-filters.js";
 import { resolveOAuthClientConfig } from "./oauthCredentials.js";
+import { readWorkspaceBinding, assertBoundCall, readBoundToken } from "./workspaceBinding.js";
 import {
   getWorkspacePaths,
   migrateLegacyStateIfNeeded,
@@ -61,6 +62,7 @@ import {
 } from "./tasks.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const workspaceBinding = readWorkspaceBinding(process.env.RUDI_WORKSPACE_BINDING);
 
 // Default output: ~/.rudi/outputs/
 const DEFAULT_OUTPUT_DIR = join(homedir(), ".rudi", "outputs");
@@ -77,10 +79,10 @@ function generateOutputPath(prefix: string, name: string): string {
   const slug = slugify(name);
   return join(DEFAULT_OUTPUT_DIR, `${prefix}-${slug}-${date}.md`);
 }
-config({ path: join(__dirname, "..", ".env") });
+if (!workspaceBinding) config({ path: join(__dirname, "..", ".env") });
 
 const WORKSPACE_PATHS = getWorkspacePaths({ packageRoot: join(__dirname, "..") });
-migrateLegacyStateIfNeeded(WORKSPACE_PATHS);
+if (!workspaceBinding) migrateLegacyStateIfNeeded(WORKSPACE_PATHS);
 const ACCOUNTS_DIR = WORKSPACE_PATHS.accountsDir;
 const TOKEN_FILE = WORKSPACE_PATHS.tokenFile;
 const STATE_FILE = WORKSPACE_PATHS.stateFile;
@@ -122,30 +124,37 @@ function saveCurrentAccount(account: string | null) {
   writeJsonFile(STATE_FILE, { currentAccount: account });
 }
 
-let currentAccount: string | null = loadCurrentAccount();
+let currentAccount: string | null = workspaceBinding?.account || loadCurrentAccount();
+let boundAuth: InstanceType<typeof google.auth.OAuth2> | null = null;
+let boundIdentity: Promise<void> | null = null;
 
 function getAvailableAccounts(): string[] {
   return listStoredGoogleAccounts(ACCOUNTS_DIR);
 }
 
 function loadToken(account?: string) {
+  if (workspaceBinding) return readBoundToken<TokenData>(ACCOUNTS_DIR, workspaceBinding.account);
   const selected = account || currentAccount;
   return selected ? readStoredGoogleToken<TokenData>(ACCOUNTS_DIR, selected) : readJsonFile<TokenData>(TOKEN_FILE);
 }
 
 function getAuth(account?: string | null) {
-  const requestedAccount = account || undefined;
+  if (workspaceBinding && account && account !== workspaceBinding.account) throw new Error("Account conflicts with workspace binding");
+  if (workspaceBinding && boundAuth) return boundAuth;
+  const requestedAccount = workspaceBinding?.account || account || undefined;
   const token = loadToken(requestedAccount);
   if (!token) {
     const suffix = requestedAccount ? ` for account '${requestedAccount}'` : "";
     throw new Error(`Not authenticated${suffix}. Run 'npm run auth' first.`);
   }
 
-  const credentials = resolveOAuthClientConfig(
-    WORKSPACE_PATHS,
-    token,
-    requestedAccount || currentAccount || token.account
-  );
+  let credentials;
+  try {
+    credentials = resolveOAuthClientConfig(WORKSPACE_PATHS, token, requestedAccount || currentAccount || token.account);
+  } catch (error) {
+    if (workspaceBinding) throw new Error("Invalid Google OAuth configuration; authenticate the selected account again");
+    throw error;
+  }
 
   const oauth2Client = new google.auth.OAuth2(
     credentials.client_id,
@@ -156,7 +165,25 @@ function getAuth(account?: string | null) {
     refresh_token: token.refresh_token,
     expiry_date: token.expiry ? new Date(token.expiry).getTime() : undefined,
   });
+  if (workspaceBinding) boundAuth = oauth2Client;
   return oauth2Client;
+}
+
+async function verifyBoundIdentity(): Promise<void> {
+  if (!workspaceBinding) return;
+  if (!boundIdentity) {
+    boundIdentity = (async () => {
+      const auth = getAuth();
+      const profile = await google.gmail({ version: 'v1', auth }).users.getProfile({ userId: 'me' }).catch(() => {
+        throw new Error('Unable to verify the workspace Google account; authenticate and start a new run');
+      });
+      if (profile.data.emailAddress?.toLowerCase() !== workspaceBinding.account) {
+        throw new Error('Google identity does not match the workspace account');
+      }
+    })();
+  }
+  // Keep failures sticky for this process. No tool may run with an unverified credential.
+  await boundIdentity;
 }
 
 function getAuthForArgs(args: Record<string, unknown> | undefined) {
@@ -539,8 +566,8 @@ const SLIDES_WRITE_CONTROL_INPUT = {
 };
 
 const server = new Server(
-  { name: "google-workspace", version: "1.1.2" },
-  { capabilities: { tools: {} } }
+  { name: "google-workspace", version: "1.2.2" },
+  { capabilities: { tools: {}, ...(workspaceBinding ? { experimental: { "rudi.workspaceBinding": workspaceBinding } } : {}) } }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -1432,13 +1459,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["task_id"],
       },
     },
-  ],
+  ].filter(tool => !workspaceBinding || workspaceBinding.tools.includes(tool.name)),
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    assertBoundCall(workspaceBinding, name, args);
+    await verifyBoundIdentity();
     switch (name) {
       // Account Management
       case "account_list": {
@@ -3136,8 +3165,7 @@ export async function driveUpload(options: { file_path: string; name?: string; f
   const auth = getAuth();
   const drive = google.drive({ version: "v3", auth });
   const fs = await import("fs");
-  const path = await import("path");
-  const fileName = options.name || path.basename(options.file_path);
+  const fileName = options.name || basename(options.file_path);
   const res = await drive.files.create({
     requestBody: { name: fileName, parents: options.folder_id ? [options.folder_id] : undefined },
     media: { body: fs.createReadStream(options.file_path) },

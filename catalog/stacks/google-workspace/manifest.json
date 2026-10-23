@@ -2,7 +2,7 @@
   "id": "stack:google-workspace",
   "kind": "stack",
   "name": "Google Workspace Tools",
-  "version": "1.1.2",
+  "version": "1.2.2",
   "delivery": "remote",
   "install": {
     "source": "catalog",
@@ -133,7 +133,7 @@
       "capability:manage",
       "provider:google"
     ],
-    "icon": "\ud83d\udce7"
+    "icon": "📧"
   },
   "related": {
     "operatorSkill": "skill:google-workspace",
