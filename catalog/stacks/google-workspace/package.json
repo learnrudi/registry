@@ -1,11 +1,11 @@
 {
   "name": "google-workspace-mcp",
-  "version": "1.1.2",
+  "version": "1.2.2",
   "description": "Google Workspace MCP Server for Claude Code",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test:auth": "node --import tsx auth.test.cjs",
+    "test:auth": "node --import tsx auth.test.cjs && node --import tsx --test auth-readonly.test.cjs auth-callback.test.cjs",
     "test:drive": "node drive.test.cjs",
     "test:calendar": "node --import tsx calendar.test.cjs && node --import tsx --test calendar-events.test.cjs",
     "test:gmail": "node --import tsx gmail.test.cjs",
@@ -18,7 +18,9 @@
     "auth": "tsx src/auth.ts",
     "verify": "npm run build && node ../../../scripts/verify-node-stack.mjs",
     "test:gmail-signature": "node --import tsx --test gmail-signature.test.cjs gmail-signature-tools.test.cjs",
-    "test:account-boundary": "node --import tsx --test account-boundary.test.cjs"
+    "test:account-boundary": "node --import tsx --test account-boundary.test.cjs",
+    "test:gmail-filters": "node --import tsx --test gmail-filters.test.cjs gmail-filter-tools.test.cjs",
+    "test:workspace": "node --import tsx --test workspace-binding.test.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
