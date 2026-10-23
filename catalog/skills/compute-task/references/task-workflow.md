@@ -45,6 +45,12 @@ Run `C + ['health']` and inspect the configured worker's live state (on macOS,
 and registries; it alone does not prove a running controller. Do not start or
 restart a worker as a side effect of drafting a job.
 
+If health reports an unsupported database schema, stop preparation and compare
+the shortcut's interpreter with the accepted controller/runtime configuration.
+Use [runtime-pin maintenance](shortcut-setup.md#maintain-runtime-pins) for an
+authorized repair. A release-integrity pass alone does not prove that the
+shortcut's Compute interpreter can read the worker's database.
+
 ## Prepare files and an inactive definition
 
 Use a fresh task ID matching `[a-z][a-z0-9-]{0,63}`: start with a lowercase
