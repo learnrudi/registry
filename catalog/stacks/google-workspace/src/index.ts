@@ -17,8 +17,7 @@ import { fileURLToPath } from "url";
 import { basename, dirname, extname, join } from "path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
 import { execSync } from "child_process";
-import { tmpdir } from "os";
-import { homedir } from "os";
+import { tmpdir, homedir } from "os";
 import { buildCalendarEventInsert } from "./calendar.js";
 import { calendarEventToolDefinitions, runCalendarGet, runCalendarUpdate } from "./calendar-events.js";
 import {
@@ -41,6 +40,7 @@ import {
 } from "./gmail.js";
 import { assertSignature, includeSignature, loadSignature, messageBody, verifySentSignature } from "./gmail-signature.js";
 import { gmailSearchToolDefinitions, runGmailHeaderSearch, runGmailSearch } from "./gmail-search.js";
+import { gmailFilterToolDefinitions, runGmailFilterTool } from "./gmail-filters.js";
 import { resolveOAuthClientConfig } from "./oauthCredentials.js";
 import {
   getWorkspacePaths,
@@ -569,6 +569,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     // Gmail
     ...gmailDiscoveryToolDefinitions(ACCOUNT_INPUT),
+    ...gmailFilterToolDefinitions(ACCOUNT_INPUT),
     {
       name: "gmail_send",
       description: "Send an email via Gmail with the saved sender signature and sent-message verification. Missing signatures block sending.",
@@ -1476,6 +1477,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // Gmail
+      case "gmail_filter_list":
+      case "gmail_filter_preview":
+      case "gmail_filter_create":
+      case "gmail_filter_delete":
+      case "gmail_filter_get": {
+        const auth = getAuthForArgs(args);
+        return runGmailFilterTool(name, google.gmail({ version: "v1", auth }), args);
+      }
+
       case "gmail_profile":
       case "gmail_history_list": {
         const auth = getAuthForArgs(args);
