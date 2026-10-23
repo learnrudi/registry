@@ -54,6 +54,16 @@ describe("registry quality workflow", () => {
     expect(packageJson.scripts["debt:scan"].trim()).not.toBe("");
   });
 
+  it("checks committed indexes before exercising regeneration and rejecting tracked drift", async () => {
+    const workflow = await fs.readFile(path.join(repoRoot, ".github/workflows/registry.yml"), "utf8");
+    const check = workflow.indexOf("run: npm run indexes:check");
+    const sync = workflow.indexOf("run: npm run indexes:sync");
+    const clean = workflow.indexOf("run: git diff --exit-code -- index.json");
+    expect(check).toBeGreaterThan(-1);
+    expect(sync).toBeGreaterThan(check);
+    expect(clean).toBeGreaterThan(sync);
+  });
+
   it("packages ESM stack runtime modules", async () => {
     const packageJson = JSON.parse(
       await fs.readFile(path.join(repoRoot, "package.json"), "utf8")

@@ -127,7 +127,10 @@ npm pack --dry-run --json
 ```
 
 `indexes:sync` rebuilds the single root `index.json` and generated `dist/`
-artifacts. Include generated changes in the same pull request.
+artifacts. Include generated changes in the same pull request. CI first checks
+the committed index, then runs `indexes:sync` and rejects any tracked index
+drift. This keeps missing generated changes visible while recording actual
+regeneration in the current revision’s CI evidence.
 
 `debt:scan` runs the repository's deterministic architecture checks against the
 registry kernel. Error findings block CI; warning findings must be fixed when in
