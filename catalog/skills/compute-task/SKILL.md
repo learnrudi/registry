@@ -1,7 +1,7 @@
 ---
 name: compute-task
 description: Prepare an identity-selected Codex or Claude Compute job, review its model, effort, task, schedule and file permissions, then activate only the approved revision.
-version: 1.0.0
+version: 1.0.1
 category: agents
 tags:
   - capability:schedule
@@ -90,9 +90,10 @@ On an ambiguous timeout, inspect schedule/runs before retrying. Manual retries
 reuse the same dedicated idempotency key; do not mint a new key to bypass an
 uncertain result. Pause stops future admissions, not an already running job.
 
-## Install private shortcuts
+## Install and maintain private shortcuts
 
 The public skill is generic. Personal identity shortcuts and absolute host paths
 belong in private local configuration and native skill projections. Use
-[shortcut setup](references/shortcut-setup.md) when installing them, not during
-normal job preparation. Shortcut generation starts no jobs or schedules.
+[shortcut setup](references/shortcut-setup.md) when installing them or performing
+an authorized runtime-pin repair. Normal job preparation must not silently
+change a pin. Shortcut generation and native sync start no jobs or schedules.
