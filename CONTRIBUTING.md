@@ -150,6 +150,9 @@ rudi search my-stack
 
 ## Pull Requests
 
+For scoped automated source delivery, see the
+[Registry source review and delivery guide](docs/registry-source-delivery.md).
+
 - Keep one concern per change.
 - Describe user-visible behavior, validation performed, and known gaps.
 - Review the [documentation ownership map](AGENTS.md#documentation-maintenance)
