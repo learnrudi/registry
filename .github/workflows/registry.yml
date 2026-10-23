@@ -158,6 +158,12 @@ jobs:
       - name: Verify generated index
         run: npm run indexes:check
 
+      - name: Exercise required index regeneration
+        run: npm run indexes:sync
+
+      - name: Reject regenerated tracked index drift
+        run: git diff --exit-code -- index.json
+
       - name: Verify clean catalog source
         run: npm run catalog:clean:check
 
