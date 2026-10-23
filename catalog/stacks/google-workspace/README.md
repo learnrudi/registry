@@ -4,10 +4,12 @@ RUDI MCP stack for Gmail, Google Drive, Google Docs, Google Sheets, Google Slide
 
 This stack owns Google Workspace OAuth, account selection, and direct Workspace API calls. Other stacks should call this stack for Gmail or Drive access instead of handling Google OAuth themselves.
 
+For per-client account and capability activation, see [Workspace binding](WORKSPACE-BINDING.md). Bound runs expose only their explicit tool allowlist and verify the pinned account. Installing filter support does not add tools to existing client activations.
+
 ## Tools
 
 - Account tools: `account_list`, `account_switch`, `account_current`
-- Gmail tools: profile, ordered history/cursor reads, search, header-only contact discovery, get, send, draft, reply, forward, labels, archive, trash, batch operations, and attachments
+- Gmail tools: profile, ordered history/cursor reads, search, header-only contact discovery, get, send, draft, reply, forward, incoming-mail filters, labels, archive, trash, batch operations, and attachments
 - Sheets tools: read, write, append, create
 - Docs tools: read, create, insert image
 - Slides tools: get presentation, get slide, get thumbnail, raw batch update
@@ -67,10 +69,28 @@ The account argument is an identity boundary, not just a local label. During con
 
 Each account must have its own real directory beneath the stack's `accounts` state directory. Account-directory symlinks and linked token files are rejected so one mailbox cannot redirect or share another mailbox's credentials.
 
-The requested scopes are:
+For a client that needs only email reading and calendar viewing, use:
+
+```sh
+RUDI_GOOGLE_AUTH_PROFILE=mail-calendar-readonly rudi auth google-workspace user@example.com
+```
+
+This requests only `gmail.readonly` and `calendar.readonly` (under
+`https://www.googleapis.com/auth/`). It does not combine prior grants, and checks
+the token's effective scopes before saving. A broader or incomplete grant fails
+without replacing a token. Workspace activation is still a separate required step.
+
+For a remote host, add `RUDI_GOOGLE_AUTH_MANUAL=1`, forward the selected callback
+port over SSH, and open `http://localhost:<port>/authorize` in the local browser.
+The callback listener binds only to `127.0.0.1` and validates the OAuth state.
+Credentials are issued and saved on the host running the helper; never copy them.
+The person must select the intended account and approve consent.
+
+Without the read-only profile, the requested scopes are:
 
 - `https://www.googleapis.com/auth/gmail.modify`
 - `https://www.googleapis.com/auth/gmail.send`
+- `https://www.googleapis.com/auth/gmail.settings.basic`
 - `https://www.googleapis.com/auth/drive`
 - `https://www.googleapis.com/auth/documents`
 - `https://www.googleapis.com/auth/spreadsheets`
@@ -127,6 +147,70 @@ an explicitly reviewed replacement body if replacing that content is intended.
 
 Ask for explicit user confirmation before sending email, sending a draft, deleting messages, deleting Drive files, making Drive files public, creating/updating/deleting calendar events, applying Slides batch updates, or creating/updating/completing/deleting tasks, unless the user has already authorized that action.
 
+### Managing incoming-mail filters
+
+All five filter tools require `account` as an explicit email address and verify
+the authenticated Gmail profile matches it. They do not switch the active
+account. Use the live tool schemas; installing skill instructions does not
+install tools or grant OAuth permissions.
+
+| Tool | Inputs beyond account | Behavior |
+| --- | --- | --- |
+| `gmail_filter_list` | None | Read existing rules and their IDs, criteria and actions |
+| `gmail_filter_get` | `filter_id` | Inspect one exact rule |
+| `gmail_filter_preview` | `query`, optional `max_results` (1–100, default 20), `next_page_token` | Sample a candidate Gmail search query without changing messages |
+| `gmail_filter_create` | `criteria`, `action` | Create one authorized rule and read it back |
+| `gmail_filter_delete` | `filter_id` | Inspect, permanently delete one authorized rule, and verify absence |
+
+`criteria` uses Gmail's field names: `from`, `to`, `subject`, `query`,
+`negatedQuery`, `hasAttachment`, `excludeChats`, and paired positive-byte `size`
+and `sizeComparison` (`smaller` or `larger`). At least one effective condition is
+required. `action` accepts `addLabelIds`, `removeLabelIds`, and `forward`.
+Resolve label IDs with `gmail_label_list`; names and nonexistent IDs are rejected.
+Only one user-defined label can be added per rule. A label cannot be both added
+and removed. Removing `INBOX` skips the inbox; removing `UNREAD` marks mail read;
+adding `TRASH` moves matching mail to Trash. Forwarding requires a separately
+approved destination already verified by Gmail; these tools do not set up
+forwarding addresses.
+
+Start by listing existing rules and resolving labels. Prefer `criteria.query`
+when the same query can express the rule and be sampled directly. Preview
+accepts a search query, not a structured criteria object. It returns message
+and thread IDs, `resultSizeEstimate`, and an optional `nextPageToken`, preserving
+unread status and excluding spam/trash. It is explicitly approximate: it does
+not simulate future incoming delivery or translate structured criteria. Inspect
+representative messages using read-only tools before proposing a rule.
+
+Creating or deleting a rule requires user authorization for that account and
+concrete criteria/actions or filter ID. An audit or permission to build/test
+these tools does not authorize changing filters. Gmail offers no update method;
+a replacement requires explicit create/delete steps and authorization for both.
+Creation does not apply the rule to existing messages. Backlog labeling,
+archiving, read-status changes and deletion are separate mailbox actions.
+
+Gmail API requests use a 30-second request timeout with Gaxios retries disabled.
+The Google auth SDK may refresh credentials and replay definitive 401/403
+rejections; credential refresh has its own duration outside that request timeout.
+The application never retries an uncertain write.
+Only matching create read-back returns `status: created, verified: true`; deletion
+requires a 404 on its read-back for `status: deleted, verified: true`.
+`create_not_verified`/`delete_not_verified` mean an attempted write has an uncertain
+outcome; `created_unverified`/`deleted_unverified` mean Gmail accepted the write
+but verification failed. These return MCP errors with `verified: false`. Inspect
+the rule/list before retrying; never blindly repeat a mutation. Provider errors
+are summarized without raw request objects or credentials.
+
+Filter settings require `gmail.settings.basic`, added to the OAuth helper's
+requested scopes. Existing consent is not expanded automatically. If an exact
+account lacks this scope, report the gap and use the approved
+`rudi auth google-workspace user@example.com` flow when authorized. A 403 may
+also indicate administrator policy. Do not copy tokens, switch accounts or
+silently start reauthorization to recover.
+
+Provider contracts: [filter resource](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.settings.filters),
+[create scope](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.settings.filters/create),
+and [filter criteria and actions](https://developers.google.com/workspace/gmail/api/guides/filter_settings).
+
 ### Editing an existing Calendar event
 
 Use `calendar_get` with `account`, `calendar_id` (defaults to `primary`), and
@@ -176,6 +260,9 @@ From this stack directory:
 npm install
 npm run build
 npm run test:gmail
+npm run test:gmail-filters
+npm run test:workspace
+npm run test:auth
 npm run test:gmail-signature
 npm run test:calendar
 npm run test:slides
