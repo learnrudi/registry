@@ -9,6 +9,7 @@ explicit artifacts, evidence, and authority gates.
 | Phase | Primary skill | Owns | Does not own |
 |---|---|---|---|
 | Start | `skill:set-goal-and-execute` | Durable objective, continuation, and completion posture | Engineering task decomposition or publication |
+| Route | `skill:plan-and-route` | Focused assignments, model selection, and authorized chat coordination | A second acceptance ledger or implicit dispatch approval |
 | Discover | `skill:rudi-decision-frontier` | Unresolved areas, decision evidence, promotion readiness | Durable execution DAG or dispatch |
 | Interrogate | `skill:grill-with-docs-loop` | Repo-evident domain and architecture questions with adversarial checking | Human product decisions or plan mutation |
 | Compare | `skill:rudi-decision-canvas` | Visual options, structured feedback, and task-contract input | Approval or implementation authority |
@@ -24,6 +25,7 @@ explicit artifacts, evidence, and authority gates.
 | Review coherence | `skill:horizontal-engineering-review` | Semantic duplication, seam quality, and consolidation dispositions | Ordinary single-change review or Git cleanup |
 | Red-team | `skill:repo-red-team-review` | Adversarial repository risk review | Normal implementation acceptance |
 | Curate context | `skill:rudi-context-gardener` | Durable instruction placement and progressive disclosure | Runtime tools or live operational state |
+| Hand off | `skill:handoff` | A focused continuation brief with source identity, pending work, and next owner | Starting another session or accepting unfinished work |
 | Publish | `skill:publish-task-changes` | Task-owned stage/commit and separately authorized push/PR | Merge, deploy, or cleanup without explicit authority |
 | Close worktree | `skill:rudi-worktree-closeout` | Non-mutating disposition and closeout receipt | Cleanup or deletion |
 | Steward fleet | `skill:rudi-repo-steward` | Repository identity, leases, status truth, and continuous fleet stewardship | Product or architecture decisions |
@@ -49,6 +51,34 @@ CI/review evidence → `publish-task-changes` at the explicitly requested endpoi
 
 Accepted integration → `rudi-worktree-closeout` receipt → Repo Steward lifecycle
 state. Archive eligibility and cleanup approval are not proof of cleanup.
+
+## Shared context and continuity
+
+Every team assignment, review, handoff, and restart uses the
+[shared context contract](../catalog/skills/rudi-chief-of-staff/references/shared-context.md).
+The coordinator maintains the common outcome, accepted decisions, exact source
+and dependency revisions, relevant execution sequence, and current acceptance
+state in the existing plan and its referenced artifacts. Workers receive the
+slice their role needs and briefly read back the dependencies and behavior they
+must preserve. Compaction, retries, and replacement workers reload that current
+authority and inspect active attempts before continuing.
+
+Changed interfaces or assumptions are routed to affected workers; incompatible
+dependent writes wait while unaffected work proceeds. Handoffs distinguish actual
+proof, accepted results, pending work, and next ownership. One integration owner
+checks the combined producer/consumer behavior. Independent reviewers receive
+neutral factual context while retaining the freedom to challenge the contract.
+
+The canonical contract is bundled with `skill:rudi-chief-of-staff`. Other skills
+resolve it through the host's skill catalog or the coordinator's exact supplied
+copy; repository-relative links are not proof of co-installation. The catalog
+does not currently encode skill-to-skill dependencies. Missing contract access
+must be reported before dependent delegation, without installing packages or
+inventing dependency fields. Simple independent work remains available.
+
+These are instruction-level requirements. Catalog validation and package hashes
+do not prove live agents follow them. Publishing source also does not update
+already loaded chat context, install a release, or deploy a service.
 
 ## Authority Model
 

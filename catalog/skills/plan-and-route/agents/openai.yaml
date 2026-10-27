@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan and Route"
+  short_description: "Plan chat models together, approve once, then coordinate"
+  default_prompt: "Use $plan-and-route to plan this goal across as many focused chats as needed in the proper project, recommend every chat's exact model and effort together for my approval, then create and coordinate the approved chats from this chat and verify their results; use Compute only if needed."

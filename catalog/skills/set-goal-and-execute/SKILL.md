@@ -1,7 +1,7 @@
 ---
 name: Set Goal And Execute
 description: Turn an explicitly approved brief into a durable active goal and execute it end to end through implementation and verification. Use when the user says "set the goal and execute," invokes $set-goal-and-execute, or unmistakably requests this exact goal-driven execution mode; do not use for planning-only, review-only, or ordinary task requests.
-version: 1.0.1
+version: 1.0.2
 category: agents
 tags:
   - rudi
@@ -80,6 +80,29 @@ Compose the existing RUDI Delivery Loop capabilities when the task needs them:
 
 Do not require every capability for a small task. Each composed workflow keeps
 its own authority, source of truth, and completion evidence.
+
+## Continuity across sessions and workers
+
+Before resuming after compaction, restart, or a handoff, reload the active goal,
+current task contract, accepted decisions/evidence, actual workspace state,
+pending actions, and remaining authority boundaries. Give a brief readback of
+the intended outcome, dependencies, and next verification. A summary or a goal
+marked active does not establish that required work has been accepted.
+
+When delegation is authorized, apply
+[shared context and continuity](../rudi-chief-of-staff/references/shared-context.md)
+to every assignment and handoff. Keep the existing coordinator and canonical
+plan authoritative; name an integration owner for combined outputs and propagate
+changed assumptions. Persist pending versus accepted work in the owning record
+before an intentional handoff, without inventing a second ledger.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Keep Authority Gates Separate
 

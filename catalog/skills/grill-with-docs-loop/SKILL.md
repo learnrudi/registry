@@ -1,7 +1,7 @@
 ---
 name: Grill With Docs Loop
 description: Resolve repo domain questions with isolated agents, update CONTEXT.md and ADRs, and preserve reviewable audit trails
-version: 2.2.1
+version: 2.2.2
 category: code
 tags:
   - architecture
@@ -41,10 +41,22 @@ Keep the goal open until the backlog is exhausted and verification passes. Mark 
 
 ## Runtime And Worker Protocol
 
-Before spawning any role, read [the runtime and worker protocol](references/runtime-workers.md).
+Before spawning or replacing any role, read [the runtime and worker protocol](references/runtime-workers.md)
+and [shared context and continuity](../rudi-chief-of-staff/references/shared-context.md).
+Use the common neutral source baseline and start/resume readback while retaining
+the role-specific information isolation below. Shared context must not reveal
+another role's reasoning or preselect the answer to the question being tested.
 Load the adapter for the active host and the exact role’s input/output contract.
 Preserve fresh-context isolation and the ordered questioner, answerer, skeptic,
 orchestrator, docs writer and reviewer loop.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Run Identity And Reviewability
 

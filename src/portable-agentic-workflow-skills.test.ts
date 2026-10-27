@@ -276,14 +276,14 @@ describe("portable skill contracts", () => {
       },
     });
     expect(index.packages["skill:grill-with-docs-loop"]).toMatchObject({
-      version: "2.2.1",
+      version: "2.2.2",
       install: {
         source: "catalog",
         path: "catalog/skills/grill-with-docs-loop",
       },
     });
     expect(index.packages["skill:swe-compliance-checklist"]).toMatchObject({
-      version: "1.5.1",
+      version: "1.5.2",
       install: {
         source: "catalog",
         path: "catalog/skills/swe-compliance-checklist",
@@ -300,7 +300,7 @@ describe("portable skill contracts", () => {
       },
     });
     expect(index.packages["skill:rudi-chief-of-staff"]).toMatchObject({
-      version: "1.2.2",
+      version: "1.2.3",
       install: {
         source: "catalog",
         path: "catalog/skills/rudi-chief-of-staff",
@@ -317,7 +317,9 @@ describe("portable skill contracts", () => {
       "publish-task-changes",
     ]) {
       expect(index.packages[`skill:${skillName}`]).toMatchObject({
-        version: skillName === "rudi-code-review" ? "1.0.2" : "1.0.1",
+        version: ["rudi-code-review", "rudi-decision-frontier", "publish-task-changes"].includes(skillName)
+          ? "1.0.2"
+          : "1.0.1",
         install: {
           source: "catalog",
           path: `catalog/skills/${skillName}`,
@@ -342,7 +344,7 @@ describe("portable skill contracts", () => {
       },
     });
     expect(index.packages["skill:set-goal-and-execute"]).toMatchObject({
-      version: "1.0.1",
+      version: "1.0.2",
       install: {
         source: "catalog",
         path: "catalog/skills/set-goal-and-execute",
@@ -525,11 +527,11 @@ describe("portable skill contracts", () => {
       expect(skill).toMatch(/evidence bundle/i);
     }
     expect(issueLoop).not.toContain("RUDI or Codex engineering work");
-    expect(issueLoop).toContain("version: 1.2.1");
+    expect(issueLoop).toContain("version: 1.2.2");
     expect(issueLoop).toMatch(/Standalone mode/i);
     expect(issueLoop).toMatch(/Composed mode/i);
     expect(issueLoop).toMatch(/Issue or PR state never.*plan dependency/is);
-    expect(complianceChecklist).toContain("version: 1.5.1");
+    expect(complianceChecklist).toContain("version: 1.5.2");
     expect(complianceChecklist).toMatch(/Standards, Spec, and Proof/i);
     expect(complianceChecklist).toContain("Horizontal-pattern scan:");
     expect(complianceChecklist).toContain("Horizontal-obligation disposition:");

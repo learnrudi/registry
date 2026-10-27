@@ -5,7 +5,7 @@ category: agents
 tags:
   - capability:manage
   - provider:openai
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Codex Tasks
@@ -130,9 +130,26 @@ of Staff plan remains the canonical DAG and acceptance record. `$codex-tasks`
 may serve as its Codex host adapter only when the higher-level workflow has
 already authorized and prepared the exact task operation.
 
+When acting as a team adapter for an authorized assignment, handoff, or restart,
+preserve the coordinator's packet under
+[shared context and continuity](../rudi-chief-of-staff/references/shared-context.md).
+Include the current owning contract, exact source/dependency evidence, scope,
+pending attempts, and next action; require the recipient's start/resume readback.
+A fork or accepted message does not prove rehydration or completion. Do not turn
+ordinary sidebar operations into team orchestration or rewrite a user-supplied
+verbatim prompt without authorization.
+
 Do not create schedules or automations from this skill. A later scheduled
 workflow may explicitly invoke it, but the schedule must define its own timing,
 scope, notification, and recurring authority.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Report a receipt
 

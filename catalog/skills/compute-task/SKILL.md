@@ -1,7 +1,7 @@
 ---
 name: compute-task
 description: Prepare an identity-selected Codex or Claude Compute job, review its model, effort, task, schedule and file permissions, then activate only the approved revision.
-version: 1.0.1
+version: 1.0.2
 category: agents
 tags:
   - capability:schedule
@@ -51,6 +51,27 @@ daily and UTC interval recurrence. Weekday-only, weekly, RRULE, end dates and
 future one-off runs require an explicit supported alternative or a scheduler
 extension. A local time needs an IANA timezone. Verify host paths; a workstation
 or SMB path is not automatically a valid execution-host path.
+
+## Context for fresh executions
+
+When the job continues work or supplies a team dependency, apply
+[shared context and continuity](../rudi-chief-of-staff/references/shared-context.md).
+Include the common outcome, owning plan/contract, exact source and dependency
+identities, relevant execution path, accepted decisions, unknowns, permitted
+actions, and expected proof in the reviewed instructions. Verify that the selected
+host can retrieve those sources within its approved access profile. Require a
+brief start/resume readback and a result identifying context used, actual checks,
+pending work, and next owner/action. A fresh execution inherits no chat memory.
+Source drift must be reported to the coordinator; it does not authorize changing
+the reviewed task revision or widening access. Existing activation gates apply.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Prepare and review
 

@@ -4,7 +4,7 @@ description: Resolve the exact product, architecture, workflow, or delivery deci
 category: agents
 tags:
   - capability:coordinate
-version: 1.0.1
+version: 1.0.2
 ---
 
 # RUDI Decision Frontier
@@ -55,6 +55,25 @@ durable frontier state or promotion input.
    authorization.
 9. After promotion, let ordinary dependency, readiness, resource, review, and
    dispatch gates operate. Promotion does not make a node ready or running.
+
+## Continuity across probes and promotion
+
+Apply [shared context and continuity](../rudi-chief-of-staff/references/shared-context.md)
+to delegated probes, decision handoffs, and restarts. Each probe receives the
+common objective, exact source baseline, accepted constraints and rationale,
+and the unresolved question, with a brief start/resume readback. Keep disputed
+assumptions visible and preserve independent investigation. The promotion
+handoff carries those decisions and remaining proof gaps into task contracts;
+do not make implementation workers rediscover accepted choices. On recovery,
+reload current frontier/plan revisions and pending probes before continuing.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Promotion Readiness
 

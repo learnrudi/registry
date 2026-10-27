@@ -1,7 +1,7 @@
 ---
 name: RUDI SWE Issue Loop
 description: Create and execute an evidence-backed GitHub issue and PR ledger for engineering work across supported agent hosts using the SWE checklist skill, including task contracts, risk tiers, phase-gated tests, independent review, branches, commits, pull requests, CI verification, merges, and branch cleanup.
-version: 1.2.1
+version: 1.2.2
 category: code
 icon: 🔁
 tags:
@@ -241,7 +241,22 @@ decision.
   session.
 - Use host-native subagents only when available and authorized. Give each one a
   bounded read-only or isolated task and require an evidence summary.
+- For assignments, reviews, issue/PR handoffs, and restarts, apply
+  [shared context and continuity](../rudi-chief-of-staff/references/shared-context.md).
+  Carry the overall outcome, accepted decisions, exact source and dependency
+  revisions, and real integration path into each packet; require a brief readback.
+  Resume from the current owning plan or standalone issue ledger and actual
+  PR/CI state. Preserve pending work and publication authority; an old green
+  check or closed issue does not prove the current combined behavior.
 - Keep host-specific invocation syntax outside this portable workflow.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Final Report
 

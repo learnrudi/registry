@@ -12,6 +12,15 @@ portable project-plan script only validates, computes readiness, renders,
 transitions accepted state, reconciles evidence, and reports archive
 eligibility. It never dispatches or archives.
 
+## Context transport and recovery
+
+Carry the [shared context packet](shared-context.md) in every assignment and
+handoff, and verify its sources are accessible on the destination host. A native
+fork, shared filesystem, or successful dispatch does not establish shared
+understanding. Require the start/resume readback and preserve any blind-review
+restrictions. On recovery, inspect current native attempts and reconcile them
+with the existing plan before creating or retrying work.
+
 ## Common binding contract
 
 Before dispatch, an adapter must prove all supplied target constraints

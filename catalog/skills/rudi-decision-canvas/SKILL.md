@@ -1,7 +1,7 @@
 ---
 name: RUDI Decision Canvas
 description: Turn an ambiguous product, architecture, workflow, or design question into a self-contained visual options artifact, collect structured feedback, and convert approved choices into a written task contract. Use when prose alone makes alternatives hard to compare or when stakeholders need to annotate and decide before implementation.
-version: 1.1.1
+version: 1.1.2
 category: documents
 tags:
   - capability:design
@@ -73,6 +73,24 @@ no network dependencies, and emits a self-contained HTML file.
   remaining unresolved areas to `rudi-decision-frontier`.
 - Do not create task nodes directly from a canvas. Promotion remains a guarded
   Chief-of-Staff operation after the final impact map and authority checks.
+
+## Team continuity
+
+For authorized delegated probes, reviews, handoffs, or restarts, apply
+[shared context and continuity](../rudi-chief-of-staff/references/shared-context.md).
+Carry the common objective, exact source/spec revision, accepted constraints,
+and unresolved choices into each focused packet; require a brief readback.
+Keep options and recommendations distinguishable from accepted decisions.
+Reconcile feedback against the current spec before promoting it to a task
+contract, and return changed assumptions to the owning coordinator.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Host adaptation
 
