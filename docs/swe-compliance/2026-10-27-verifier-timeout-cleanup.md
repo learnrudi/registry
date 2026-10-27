@@ -69,7 +69,10 @@
   PID; it is closed before executing verification code. Metadata is bounded and
   validated. The observer checks the host procfs identity and process owner,
   keeps one open stat descriptor (avoiding retargeting on PID reuse), and waits
-  up to five seconds for a terminal or absent process. It never signals a PID.
+  up to five seconds for a terminal or absent process. It sends no new
+  termination signals. A signal-0 existence probe of the trusted init PID
+  distinguishes process absence from hidden procfs entries; only ESRCH proves
+  absence, while live processes and denied probes fail closed.
 - Existing group signalling, namespaces, network and filesystem restrictions
   remain in place. Cleanup uncertainty fails explicitly; previous signal errors
   remain failures. Both successful and failed command exits await observation.
@@ -95,7 +98,9 @@
 - Required: focused real-boundary tests; root suite; validation; deterministic
   index sync/check; catalog hygiene; build; release verification; package dry
   run; scoped debt scan; independent Standards/Spec/Proof review; exact-head CI.
-- macOS full suite: 433 passed, 4 expected platform/browser skips.
+- Final macOS full suite: 433 passed, 10 expected platform/browser skips.
+  Final Linux focused suites: 78 passed, 2 Darwin-only skips; lifetime suite has
+  24 tests. Artifacts: `mac-full-final.log`, `linux-focused-final.log`.
 - Root validation, deterministic index sync/check, catalog hygiene, build,
   release verification, public readiness, and package dry-run all passed.
   Index regeneration produced no tracked drift. Scoped SWE debt scan: 0 findings.
@@ -109,6 +114,13 @@
   this unrelated baseline gap; prescribed build/tests remain the gates.
 - Pending independent Standards/Spec/Proof review and exact-head CI. Retain
   failing and passing artifacts; do not turn a passing retry into defect proof.
+- Review correction: independent review of `b0d330f` found that procfs ENOENT
+  can mean denied visibility (`hidepid=2`). A new real-live-process regression
+  failed because the observer resolved instead of rejecting. It passes unchanged
+  after independent absence checking (`red-hidden-process.log` and
+  `green-hidden-process.log`). Additional coverage checks denied probes, actual
+  reaped-process absence and unavailable host procfs. No delivered signal or
+  procfs permission expansion was introduced.
 
 ## Phase 6: Delivery
 

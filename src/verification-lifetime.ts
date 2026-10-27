@@ -14,6 +14,17 @@ function absent(error: unknown): boolean {
   return ["ENOENT", "ESRCH"].includes((error as NodeJS.ErrnoException)?.code ?? "");
 }
 
+function confirmAbsent(pid: number): void {
+  // hidepid can return ENOENT for a live process. Signal 0 delivers no signal;
+  // only ESRCH independently proves absence. Permission errors remain unknown.
+  try { process.kill(pid, 0); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+    throw failure(`could not confirm sandbox ${pid} absent: ${String(error)}`);
+  }
+  throw failure(`could not confirm sandbox ${pid} absent: process still exists`);
+}
+
 function processState(stat: string, pid: number): string {
   // comm can contain spaces, newlines and parentheses; state follows its last ).
   const row = /^(\d+) \([\s\S]*\) ([RSDZTWtXxKWPIN]) /.exec(stat);
@@ -26,7 +37,7 @@ async function waitForExit(pid: number): Promise<void> {
   processState(await fs.readFile("/proc/self/stat", "utf8"), process.pid);
   let handle;
   try { handle = await fs.open(`/proc/${pid}/stat`, "r"); }
-  catch (error) { if (absent(error)) return; throw error; }
+  catch (error) { if (absent(error)) return confirmAbsent(pid); throw error; }
   try {
     if ((await handle.stat()).uid !== process.getuid?.()) throw failure("process owner changed");
     const deadline = performance.now() + CLEANUP_TIMEOUT_MS;
@@ -34,7 +45,7 @@ async function waitForExit(pid: number): Promise<void> {
     for (;;) {
       let bytesRead: number;
       try { ({ bytesRead } = await handle.read(buffer, 0, buffer.length, 0)); }
-      catch (error) { if (absent(error)) return; throw error; }
+      catch (error) { if (absent(error)) return confirmAbsent(pid); throw error; }
       if (bytesRead === buffer.length) throw failure("oversized process state");
       const state = processState(buffer.toString("utf8", 0, bytesRead), pid);
       // Linux tears down and waits for the PID namespace's descendants before

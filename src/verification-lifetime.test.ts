@@ -132,3 +132,68 @@ it.runIf(process.platform === "linux")("fails within a bound when the reported s
     await closed;
   }
 }, 8_000);
+
+it.runIf(process.platform === "linux")("does not mistake a hidden live process for an absent sandbox", async () => {
+  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+  const child = actual.spawn(process.execPath, ["-e", "console.log('ready');setInterval(()=>{},1000)"], {
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const closed = new Promise(resolve => child.once("close", resolve));
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.stdout!.once("data", () => resolve());
+      child.once("error", reject);
+    });
+    const { pipe, wait } = observer();
+    // Linux hidepid=2 deliberately reports ENOENT for denied process visibility.
+    const open = vi.spyOn(fs, "open").mockRejectedValueOnce(
+      Object.assign(new Error("hidden process"), { code: "ENOENT" }),
+    );
+    try {
+      pipe.end(JSON.stringify({ "child-pid": child.pid }));
+      await expect(wait()).rejects.toThrow(/could not confirm.*absent/);
+    } finally { open.mockRestore(); }
+  } finally {
+    child.kill("SIGKILL");
+    await closed;
+  }
+});
+
+it.runIf(process.platform === "linux").each(["EPERM", "EACCES", "EINVAL"])(
+  "keeps an inconclusive existence probe (%s) as a cleanup failure", async (code) => {
+    const { pipe, wait } = observer();
+    const open = vi.spyOn(fs, "open").mockRejectedValueOnce(
+      Object.assign(new Error("hidden process"), { code: "ENOENT" }),
+    );
+    const kill = vi.spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error(code), { code });
+    });
+    try {
+      pipe.end('{"child-pid":12345}');
+      await expect(wait()).rejects.toThrow(new RegExp(`could not confirm.*absent.*${code}`));
+      expect(kill).toHaveBeenCalledExactlyOnceWith(12345, 0);
+    } finally { open.mockRestore(); kill.mockRestore(); }
+  },
+);
+
+it.runIf(process.platform === "linux")("accepts an independently absent sandbox process", async () => {
+  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+  const child = actual.spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  await new Promise<void>((resolve, reject) => {
+    child.once("close", () => resolve()); child.once("error", reject);
+  });
+  const { pipe, wait } = observer();
+  pipe.end(JSON.stringify({ "child-pid": child.pid }));
+  await expect(wait()).resolves.toBeUndefined();
+});
+
+it.runIf(process.platform === "linux")("rejects unavailable host procfs", async () => {
+  const { pipe, wait } = observer();
+  const read = vi.spyOn(fs, "readFile").mockRejectedValueOnce(
+    Object.assign(new Error("procfs unavailable"), { code: "ENOENT" }),
+  );
+  try {
+    pipe.end('{"child-pid":12345}');
+    await expect(wait()).rejects.toThrow(/cleanup failed: procfs unavailable/);
+  } finally { read.mockRestore(); }
+});

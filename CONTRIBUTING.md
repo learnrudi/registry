@@ -92,6 +92,8 @@ separate five-second bound; missing/invalid metadata, unreadable process state,
 or a still-live sandbox produces an explicit cleanup failure. Linux verification
 therefore requires readable `/proc` in the runner's PID namespace as well as
 working Bubblewrap isolation.
+An absent procfs entry is checked independently with a signal-0 existence probe
+(which delivers no signal); hidden processes and denied probes fail closed.
 
 ## Adding a Binary, Runtime, or Agent
 
