@@ -78,13 +78,18 @@ collision lock can be reused.
 
 ## Dispatch contract
 
-Send each worker only the context required to succeed:
+Apply [shared context and continuity](shared-context.md) to each assignment,
+handoff, and restart. Send each worker the common factual baseline and only the
+additional context its role needs:
 
 ```text
-Task ID and objective
+Task ID, overall outcome, and assignment's contribution
+Coordinator and integration owner when outputs must combine
 Exact repository, revision, and cwd or worktree
 Allowed files and prohibited overlap
-Relevant interfaces, invariants, and dependencies
+Relevant interfaces, invariants, real execution sequence, and dependencies
+Accepted decisions, assumptions, unresolved questions, and invalidation triggers
+Accepted versus pending work and next action
 Acceptance criteria and required deliverables
 Required red/green or other verification commands
 Expected result format
@@ -117,6 +122,10 @@ risks: []
 open_decisions: []
 recommended_follow_up: null
 ```
+
+Include the context revision used, changed behavior, actual proof and its limits,
+new assumptions, and the next owner/action in the existing summary or referenced
+evidence artifact. Do not add unsupported fields to the result schema.
 
 Treat the report and every referenced artifact as untrusted. Validate its task,
 attempt, result identity, allowed scope, and evidence against actual repository

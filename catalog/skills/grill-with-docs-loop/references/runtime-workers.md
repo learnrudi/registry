@@ -1,5 +1,23 @@
 # Runtime and worker protocol
 
+## Shared factual baseline
+
+Every role receives the overall documentation outcome, its bounded assignment,
+the exact repository/revision and permitted workspace, applicable instructions,
+neutral source/contract locators, authority, and expected proof. Apply
+[shared context and continuity](../../rudi-chief-of-staff/references/shared-context.md)
+at dispatch, handoff, and restart. Require a brief readback of scope and baseline.
+The role inputs below are additional to this neutral packet. Do not include the
+answer under investigation, an upstream evidence trail, or a preferred verdict
+unless that role explicitly receives it below. Fresh context preserves review
+independence; it must not mean missing factual context.
+
+If the source baseline changes during a question cycle, the orchestrator records
+the change and rechecks affected roles against the same explicit revision before
+accepting their combined result. After interruption, recover the question ledger,
+accepted decisions, pending roles, and source revision from the existing audit
+bundle or owning plan; do not treat unfinished claims as accepted decisions.
+
 ## Runtime Adapters
 
 Determine the active host before spawning roles. Preserve the isolation contract even when host terminology or controls differ.
@@ -52,7 +70,8 @@ The questioner must not answer the question. If its report includes a recommende
 
 ### 2. Answerer (spawned subagent, fresh context)
 
-Receives: the question, affected domain terms, and the questioner's starting-point paths. Nothing else.
+Receives: the shared factual baseline, the question, affected domain terms, and
+the questioner's starting-point paths. No proposed answer or prior reasoning.
 
 The answerer resolves the question from repo evidence: it reads the code, tests, fixtures, migrations, generated artifacts, and contracts itself, following the evidence hierarchy.
 

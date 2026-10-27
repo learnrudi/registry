@@ -1,7 +1,7 @@
 ---
 name: RUDI Chief of Staff
 description: Coordinate complex single- or multi-project objectives from the initiating agent through an acceptance-led task graph, exact provider/model routing, durable run lifecycle, resource and review limits, explicit handoffs, bounded workers, and evidence-backed integration with human oversight. Use when the user asks to delegate dependent work, run a crew, act as a chief of staff or first mate, coordinate multiple agents or desktop tasks, or keep a long-running project moving predictably across worktrees, projects, or hosts.
-version: 1.2.2
+version: 1.2.3
 category: agents
 tags:
   - capability:coordinate
@@ -49,6 +49,18 @@ at a revision newer than the run has observed. Do not hand-edit either ledger to
 repair lag. The next accepted run mutation catches up to the current plan; if a
 reconciliation was interrupted after its plan write, replay the exact same
 input so the CLI can repair only the matching run reference and revision.
+
+## Preserve shared context
+
+Read [the shared context and continuity contract](references/shared-context.md)
+before assigning work or resuming coordination. Apply it to every worker,
+review, handoff, retry, and restart. Keep the common behavioral contract and
+accepted decisions in referenced artifacts of the existing coordination record.
+Require a brief worker readback, propagate changes to affected assignments, and
+name one integration owner for outputs that must work together. Verify the real
+combined execution before accepting compatibility; matching revisions alone
+do not establish it. Recovery starts by reconciling current plan and native
+attempt state, not by redispatching from a chat summary.
 
 ## Resolve discovery before execution
 

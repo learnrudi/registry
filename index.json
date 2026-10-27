@@ -1,14 +1,14 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-23T00:58:48.000Z",
+  "generatedAt": "2026-10-23T02:47:23.000Z",
   "stats": {
-    "total": 187,
+    "total": 189,
     "byKind": {
       "agent": 4,
       "binary": 28,
       "runtime": 6,
-      "skill": 97,
+      "skill": 99,
       "stack": 52
     }
   },
@@ -1695,7 +1695,7 @@
       "id": "skill:agent-hosts",
       "kind": "skill",
       "name": "Agent Hosts Operator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -1937,7 +1937,7 @@
       "id": "skill:codex-tasks",
       "kind": "skill",
       "name": "Codex Tasks",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -1977,7 +1977,7 @@
       "id": "skill:compute-task",
       "kind": "skill",
       "name": "compute-task",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2342,7 +2342,7 @@
       "id": "skill:grill-with-docs-loop",
       "kind": "skill",
       "name": "Grill With Docs Loop",
-      "version": "2.2.1",
+      "version": "2.2.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -2408,6 +2408,24 @@
           "hamilton-county-auditor",
           "capability:extract",
           "domain:real-estate"
+        ]
+      }
+    },
+    "skill:handoff": {
+      "id": "skill:handoff",
+      "kind": "skill",
+      "name": "Handoff",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/handoff"
+      },
+      "meta": {
+        "description": "Create a focused handoff brief so another agent or a fresh session can continue from verified context. Use when the user asks to hand off work, change agents, or restart with a concise record of the current task.",
+        "category": "agents",
+        "tags": [
+          "capability:handoff"
         ]
       }
     },
@@ -2909,6 +2927,24 @@
         ]
       }
     },
+    "skill:plan-and-route": {
+      "id": "skill:plan-and-route",
+      "kind": "skill",
+      "name": "Plan and Route",
+      "version": "1.0.0",
+      "delivery": "remote",
+      "install": {
+        "source": "catalog",
+        "path": "catalog/skills/plan-and-route"
+      },
+      "meta": {
+        "description": "Plan a goal across focused chats in the proper Codex project, recommend all chat assignments, models, and efforts together for one approval, then create and coordinate them from the original chat. Also supports inline work and temporary subagents. Use for goal-to-execution planning, model routing, or requested project-chat coordination; use Compute only when its execution capabilities are needed.",
+        "category": "agents",
+        "tags": [
+          "capability:coordinate"
+        ]
+      }
+    },
     "skill:postgres": {
       "id": "skill:postgres",
       "kind": "skill",
@@ -2978,7 +3014,7 @@
       "id": "skill:publish-task-changes",
       "kind": "skill",
       "name": "Publish Task Changes",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3026,7 +3062,7 @@
       "id": "skill:repo-red-team-review",
       "kind": "skill",
       "name": "RUDI Repo Red-Team Review",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3099,7 +3135,7 @@
       "id": "skill:rudi-chief-of-staff",
       "kind": "skill",
       "name": "RUDI Chief of Staff",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3185,7 +3221,7 @@
       "id": "skill:rudi-decision-canvas",
       "kind": "skill",
       "name": "RUDI Decision Canvas",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3203,7 +3239,7 @@
       "id": "skill:rudi-decision-frontier",
       "kind": "skill",
       "name": "RUDI Decision Frontier",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3404,7 +3440,7 @@
       "id": "skill:rudi-swe-issue-loop",
       "kind": "skill",
       "name": "RUDI SWE Issue Loop",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3490,7 +3526,7 @@
       "id": "skill:set-goal-and-execute",
       "kind": "skill",
       "name": "Set Goal And Execute",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",
@@ -3861,7 +3897,7 @@
       "id": "skill:swe-compliance-checklist",
       "kind": "skill",
       "name": "RUDI SWE Compliance Checklist",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "delivery": "remote",
       "install": {
         "source": "catalog",

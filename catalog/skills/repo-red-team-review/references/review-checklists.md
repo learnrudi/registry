@@ -2,7 +2,15 @@
 
 ## Multi-Agent Roles
 
-When using subagents, use bounded roles.
+When using subagents, use bounded roles and apply
+[shared context and continuity](../../rudi-chief-of-staff/references/shared-context.md)
+to every assignment, finding handoff, retry, and restart. The lead supplies the
+same source revision, target environment, rules of engagement, relevant trust
+boundaries, and accepted facts, labeling hypotheses as unverified. Require a
+brief scope/baseline readback. Propagate changed assumptions to affected probes
+and recheck their evidence. Keep QA free to reject the proposed finding; shared
+context must not prescribe its conclusion. Resume from the current checklist
+and evidence, including pending probes and possible external side effects.
 
 ### Recon Agent
 
@@ -35,12 +43,21 @@ Task:
 - identify false positives
 - return downgrade/reject/confirm recommendation
 
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
+
 ## Subagent Output Contract
 
 Require subagents to return:
 
 ```markdown
 ## Scope
+## Context Revision and Assumptions
 ## Files Inspected
 ## Surface Reviewed
 ## Trust Boundaries
@@ -49,6 +66,7 @@ Require subagents to return:
 ## Rejected Hypotheses
 ## Open Questions
 ## Checklist Items Completed
+## Proof Gaps and Next Owner/Action
 ```
 
 ## Checklist

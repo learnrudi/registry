@@ -1,7 +1,7 @@
 ---
 name: "Agent Hosts Operator"
 description: "Governed synchronous MCP gateway for a fixed local DeepSeek, Claude Code, and Codex Agent Host fleet."
-version: 1.0.1
+version: 1.0.2
 category: "agents"
 tags:
   - rudi
@@ -35,6 +35,22 @@ Use `agent_host_list` and `agent_host_probe` to resolve a supported host before
 from the user’s scope; inspect the returned status and output. Multi-step task
 orchestration belongs to its workflow skill; managing native desktop tasks belongs
 to the native task surface. Neither is implied by gateway availability.
+
+For an invocation that is part of coordinated work, apply
+[shared context and continuity](../rudi-chief-of-staff/references/shared-context.md)
+to the task brief and returned handoff. Pass the common outcome, exact source and
+dependency evidence, relevant behavior, authority, and proof; require a brief
+readback and a result stating context used, checks, gaps, and next action. Verify
+source access on the selected host and recheck current state on retry. Keep
+acceptance with the owning coordinator; gateway success is not task acceptance.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Workflow
 

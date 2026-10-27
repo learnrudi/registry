@@ -1,7 +1,7 @@
 ---
 name: RUDI SWE Compliance Checklist
 description: Create and execute a RUDI phase-gated engineering checklist for software changes that must comply with the SWE Operating Manual, including scope, tests, proof commands, smoke checks, documentation gates, accepted debt, and Definition of Done
-version: 1.5.1
+version: 1.5.2
 category: code
 icon: ✅
 tags:
@@ -284,6 +284,26 @@ proves cleanup occurred.
 Record horizontal obligations opened, closed, deferred, or accepted by the
 change. Accepted duplication needs a rationale and reassessment trigger; a
 generic "deduplicate later" note is not a complete disposition.
+
+## Team context and recovery
+
+When work crosses agents or sessions, apply
+[shared context and continuity](../rudi-chief-of-staff/references/shared-context.md)
+to every assignment, review, handoff, and restart. Reference the accepted task
+contract, source revision, real producer/consumer sequence, decisions, and proof
+in the existing checklist or owning plan. Require a brief start/resume readback.
+Name the integration owner and check actual combined behavior; isolated tests
+do not establish interface compatibility. Propagate changed assumptions and
+revalidate affected evidence. Reviewers receive the factual baseline without a
+required verdict; recovery preserves accepted versus pending gates and actions.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Host Adaptation
 

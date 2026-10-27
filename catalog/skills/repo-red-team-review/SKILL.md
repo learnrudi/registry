@@ -1,7 +1,7 @@
 ---
 name: RUDI Repo Red-Team Review
 description: Run RUDI evidence-backed LLM-led red-team reviews of software repositories. Use when the user asks to red-team a repo, perform an adversarial security review, map attack surfaces, threat-model implementation risks, review auth/tenant isolation/webhooks/billing/LLM tools/MCP surfaces, or run a goal-driven security pass with checklist documentation and optional subagents.
-version: 1.0.1
+version: 1.0.2
 category: code
 tags:
   - rudi

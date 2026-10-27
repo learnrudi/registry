@@ -4,7 +4,7 @@ description: Safely stage and commit only the current task's verified changes, w
 category: code
 tags:
   - capability:publish
-version: 1.0.1
+version: 1.0.2
 ---
 
 # Publish Task Changes
@@ -91,10 +91,24 @@ gates.
 - Under `rudi-chief-of-staff`, publication is a downstream node or explicit
   authority gate. The plan records accepted evidence; Git remains the source of
   repository history.
+- For a team delivery or resumed publication task, apply
+  [shared context and continuity](../rudi-chief-of-staff/references/shared-context.md).
+  Reload the accepted scope, exact source and proof, current CI state, pending
+  actions, and publication authority; give a brief readback before mutation.
+  Return the actual reached endpoint and next owner/action to the coordinator.
+  A published commit does not prove CI, package readiness, or deployment.
 - Under `rudi-swe-issue-loop`, use the issue and PR links as projections of the
   same task contract. Issue state does not replace plan acceptance.
 - After accepted integration, hand the exact worktree and lineage to
   `rudi-worktree-closeout`. Publication does not authorize cleanup.
+
+
+Resolve the shared contract through the host's installed `rudi-chief-of-staff`
+skill or an exact, retrievable copy supplied by the coordinator. The repository
+link does not establish that another skill is installed. If neither source is
+accessible, report the missing context before dependent delegation; continue
+independent authorized work. Do not invent a skill-dependency schema or install
+packages implicitly.
 
 ## Authority Boundaries
 
