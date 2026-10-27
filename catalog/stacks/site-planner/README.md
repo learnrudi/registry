@@ -89,3 +89,18 @@ Site Planner commit, but never the write signature or HMAC key.
 npm ci
 npm test
 ```
+
+From the Registry root, run the required isolated verification:
+
+```bash
+npm run stacks:verify -- --stack stack:site-planner --prepare
+```
+
+The tests create real temporary Git repositories. On macOS, isolated verification
+requires standalone Homebrew Git in `/opt/homebrew/bin/git` or
+`/usr/local/bin/git`; Apple's `/usr/bin/git` launcher can require Xcode files
+outside the sandbox. The fixture prefers those Homebrew locations, resolves the
+real executable, and supplies it through the existing `gitPath` configuration.
+Direct tests fall back to `/usr/bin/git` when Homebrew Git is absent; Linux uses
+`/usr/bin/git`. This test setup does not change the production Git default or
+the verifier's filesystem permissions.

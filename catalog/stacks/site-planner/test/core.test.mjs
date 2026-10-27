@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -199,6 +200,11 @@ test("write operations require a valid request-bound Service Desk authorization"
 });
 
 function createFixture() {
+  // Apple's Git launcher may need Xcode files outside the verification sandbox.
+  const gitCandidates = process.platform === "darwin"
+    ? ["/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git"]
+    : ["/usr/bin/git"];
+  const gitPath = realpathSync(gitCandidates.find(existsSync) ?? "/usr/bin/git");
   const root = mkdtempSync(join(tmpdir(), "site-planner-stack-"));
   temporaryDirectories.push(root);
   const sitePlannerRoot = join(root, "site-planner");
@@ -245,10 +251,10 @@ function createFixture() {
     ].join("\n"),
   );
   writeFileSync(join(sitePlannerRoot, "package.json"), '{"type":"module"}\n');
-  execFileSync("/usr/bin/git", ["init", "-q"], { cwd: sitePlannerRoot });
-  execFileSync("/usr/bin/git", ["add", "."], { cwd: sitePlannerRoot });
+  execFileSync(gitPath, ["init", "-q"], { cwd: sitePlannerRoot });
+  execFileSync(gitPath, ["add", "."], { cwd: sitePlannerRoot });
   execFileSync(
-    "/usr/bin/git",
+    gitPath,
     [
       "-c",
       "user.name=Site Planner Stack Test",
@@ -260,13 +266,14 @@ function createFixture() {
     ],
     { cwd: sitePlannerRoot },
   );
-  const commit = execFileSync("/usr/bin/git", ["rev-parse", "HEAD"], {
+  const commit = execFileSync(gitPath, ["rev-parse", "HEAD"], {
     cwd: sitePlannerRoot,
     encoding: "utf8",
   }).trim();
   return {
     artifactRoot,
     commit,
+    gitPath,
     nodePath,
     root,
     sitePlannerRoot,
@@ -280,6 +287,7 @@ function loadFixtureConfiguration(fixture) {
     schemaVersion: 1,
     artifactRoot: fixture.artifactRoot,
     expectedCommit: fixture.commit,
+    gitPath: fixture.gitPath,
     nodePath: fixture.nodePath,
     sitePlannerRoot: fixture.sitePlannerRoot,
     workspaceRoot: fixture.workspaceRoot,

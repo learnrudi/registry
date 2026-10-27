@@ -1,5 +1,8 @@
 # Backlog acceptance-proof recovery — 2026-10-26
 
+The preparation and publication sections below are dated history. Current
+verification status is recorded in the 2026-10-27 follow-up at the end.
+
 ## Phase 0: Baseline and manual lookup
 
 - Baseline: `3c8f4f999901ebf4f2943748bea84089442f845d`, clean main.
@@ -113,3 +116,68 @@ draft PR, and posting the 14 reconciliation updates to the existing records.
 This supersedes the preparation-time pending-publication status above. The
 known isolated-verifier failure remains disclosed and blocks acceptance.
 No issue/PR closure, merge, Admin adoption or deployment is authorized.
+
+## Isolated-verification follow-up — 2026-10-27
+
+### Scope and diagnosis
+
+- User requested fixing PR #90's isolated-verification blocker and rerunning
+  checks; PR #90 remains draft, with no merge or closure authorized.
+- Baseline: published `fc9ef9c22d565f4e18fab7434418ab4fcc451ad6`, clean
+  feature worktree. Integration owner remains this reconciliation chat.
+- Risk: low, test-fixture portability only. Planned single commit changes
+  `catalog/stacks/site-planner/test/core.test.mjs`, its README and this record.
+- Invariants: real Git repositories and unchanged behavioral assertions;
+  identical sandbox policy; unchanged production Git configuration/default;
+  no dependency, permission, deployment or Admin-adoption change.
+- Expected: all seven package tests run inside the required verifier. Observed:
+  five core tests fail in fixture creation at `/usr/bin/git init` before their
+  assertions; two manifest/MCP tests pass.
+- Ranked hypotheses before implementation: (1) Apple's Git launcher needs
+  Xcode files outside the sandbox; (2) Git repository writes are disallowed;
+  (3) the recovered manifest assertions broke verification. The repeated
+  `file system sandbox blocked open()` error names Xcode's `libxcrun.dylib`,
+  falsifying (3). Standalone Homebrew Git `--version` succeeds inside the same
+  offline sandbox; the unchanged fixture operations will distinguish (1)/(2).
+- Smallest correction: on macOS prefer installed standalone Homebrew Git in
+  its standard Apple Silicon/Intel locations, resolve its real path, and use
+  that same absolute path for fixture setup and the existing `gitPath` config.
+  Retain system Git fallback for direct tests and the existing Linux path.
+- Bounded horizontal scan: the hardcoded setup calls occur only in this
+  package's fixture; production already accepts absolute `gitPath`. The shared
+  verifier resolves its runtime separately. No shared implementation or
+  sandbox contract change is needed; horizontal disposition: no action.
+- Manual: index, Appendix C (C1/C3/C7A) and Appendix D. This repairs a broken
+  harness, not product behavior. No artificial product-red test is added;
+  the existing isolated failure is reproduction evidence, not a behavioral
+  assertion failure. All existing assertions must pass after harness repair.
+
+### Verification and delivery gates
+
+- Reproduction: `npm run stacks:verify -- --stack stack:site-planner --prepare --json`
+  failed with five fixture setup errors on the published baseline.
+- The unchanged isolated command now passes all seven tests (zero skips),
+  including actual fixture writes. Direct package tests also pass 7/7. This
+  confirms the Apple launcher dependency was the fixture blocker. No
+  production refactor or assertion change was needed.
+- Full root suite: 418 passed, one existing opt-in browser skip. Validation,
+  index sync/check, zero tracked index drift, catalog hygiene, build, release
+  verification, public readiness, package dry run and whitespace checks pass.
+  Source-date pinning preserves the baseline index timestamp. The changed
+  package test and README are included in the generated release hash tree.
+- Scoped package debt scan: zero findings. Task-created package dependencies
+  were preserved outside the catalog after testing; final hygiene passes.
+- Evidence: `registry-pr90-isolated-fix-20261027` in the local RUDI output
+  store contains baseline/fixed isolated logs, direct/root test logs, gate
+  commands and exit codes, and the scoped debt report.
+- Fresh independent review: Standards, Spec, Proof and Overall pass for the
+  local follow-up, with no actionable findings. The reviewer reran all five
+  core tests and verified unchanged assertions and sandbox policy.
+- Pending: CI for the follow-up commit. Linux package execution will be
+  checked by PR CI; Intel macOS and system-Git-only
+  macOS were not executed locally. The README records the macOS prerequisite.
+- Current guide impact: document the test-only macOS Git prerequisite and
+  root isolated-verification command in the package README.
+- Exit: all required local checks pass, no unresolved review finding, verified
+  commit pushed to the existing draft PR. Keep the worktree for review; no
+  cleanup, merge, closure, host adoption or deployment is authorized.
