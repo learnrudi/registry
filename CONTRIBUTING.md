@@ -82,6 +82,17 @@ npm run stacks:verify -- --stack stack:my-stack --prepare
 npm run stacks:verify -- --changed-from origin/main --prepare
 ```
 
+Each command has a ten-minute deadline. The runner sends termination signals to
+its detached process group and reports cleanup errors without treating denied
+signals as success. On Linux, Bubblewrap's launcher may exit before its PID
+namespace finishes shutting down. The runner uses Bubblewrap's private metadata
+pipe and the host's `/proc` to wait for the namespace init to terminate, including
+after a timeout, before returning the command result. This observation has a
+separate five-second bound; missing/invalid metadata, unreadable process state,
+or a still-live sandbox produces an explicit cleanup failure. Linux verification
+therefore requires readable `/proc` in the runner's PID namespace as well as
+working Bubblewrap isolation.
+
 ## Adding a Binary, Runtime, or Agent
 
 Create its only manifest in the matching canonical directory:

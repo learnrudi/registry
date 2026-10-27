@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { signalVerificationProcessGroup } from "./verification-process-group.js";
+import { observeLinuxSandboxLifetime } from "./verification-lifetime.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -147,7 +148,10 @@ async function executeVerification(
     runtime: command.runtime,
   });
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(sandbox.executable, sandbox.args, {
+    const linux = process.platform === "linux";
+    // Bubblewrap closes this private pipe before executing verification code.
+    const args = linux ? ["--info-fd", "3", ...sandbox.args] : sandbox.args;
+    const child = spawn(sandbox.executable, args, {
       cwd: command.cwd,
       env: {
         ...buildVerificationEnvironment(process.env, isolatedHome),
@@ -160,8 +164,9 @@ async function executeVerification(
       },
       shell: false,
       detached: true,
-      stdio: "inherit",
+      stdio: linux ? ["inherit", "inherit", "inherit", "pipe"] : "inherit",
     });
+    const waitForSandbox = linux ? observeLinuxSandboxLifetime(child) : async () => {};
 
     const signalGroup = (signal: NodeJS.Signals): Error | undefined =>
       signalVerificationProcessGroup(child.pid, signal);
@@ -189,9 +194,11 @@ async function executeVerification(
       clearTimers();
       reject(error);
     });
-    child.once("close", (code, signal) => {
+    child.once("close", async (code, signal) => {
       const error = signalGroup("SIGKILL") ?? cleanupError;
       clearTimers();
+      try { await waitForSandbox(); }
+      catch (lifetimeError) { reject(error ?? lifetimeError); return; }
       if (error) {
         reject(error);
         return;
