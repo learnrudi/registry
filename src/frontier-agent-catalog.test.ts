@@ -50,6 +50,29 @@ describe("frontier agent catalog", () => {
     expect(claude.installHints.manual).toContain("https://claude.ai/install.sh");
   });
 
+  it("keeps Codex execution and installation owned by OpenAI", async () => {
+    const codex = await loadAgent("codex");
+    const index = JSON.parse(
+      await fs.readFile(path.resolve(import.meta.dirname, "../index.json"), "utf8")
+    );
+
+    for (const definition of [codex, index.packages["agent:codex"]]) {
+      expect(definition).toMatchObject({
+        id: "agent:codex",
+        kind: "agent",
+        version: "system",
+        delivery: "system",
+        bins: ["codex"],
+        detect: { command: "codex --version" },
+        meta: { executionOwner: "openai" },
+      });
+      expect(definition.install).toEqual({ source: "system" });
+      expect(definition.installHints.manual).toContain(
+        "https://chatgpt.com/codex/install.sh"
+      );
+    }
+  });
+
   it("catalogs Google's subscription-backed native agent host as system-installed", async () => {
     const antigravity = await loadAgent("antigravity");
 
