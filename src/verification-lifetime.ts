@@ -39,7 +39,8 @@ async function waitForExit(pid: number): Promise<void> {
   try { handle = await fs.open(`/proc/${pid}/stat`, "r"); }
   catch (error) { if (absent(error)) return confirmAbsent(pid); throw error; }
   try {
-    if ((await handle.stat()).uid !== process.getuid?.()) throw failure("process owner changed");
+    // Identity comes from the launcher's private pipe. A procfs inode's owner
+    // becomes root during exit; it is not the identity of the process itself.
     const deadline = performance.now() + CLEANUP_TIMEOUT_MS;
     const buffer = Buffer.alloc(4_096);
     for (;;) {

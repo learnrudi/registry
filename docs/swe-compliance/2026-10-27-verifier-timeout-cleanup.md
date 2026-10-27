@@ -67,7 +67,7 @@
 - Added a Linux lifetime observer and connected it to the existing runner's
   completion path. Bubblewrap's private `--info-fd` supplies the namespace init
   PID; it is closed before executing verification code. Metadata is bounded and
-  validated. The observer checks the host procfs identity and process owner,
+  validated. The observer checks the host procfs and reported process identity,
   keeps one open stat descriptor (avoiding retargeting on PID reuse), and waits
   up to five seconds for a terminal or absent process. It sends no new
   termination signals. A signal-0 existence probe of the trusted init PID
@@ -98,9 +98,10 @@
 - Required: focused real-boundary tests; root suite; validation; deterministic
   index sync/check; catalog hygiene; build; release verification; package dry
   run; scoped debt scan; independent Standards/Spec/Proof review; exact-head CI.
-- Final macOS full suite: 433 passed, 10 expected platform/browser skips.
-  Final Linux focused suites: 78 passed, 2 Darwin-only skips; lifetime suite has
-  24 tests. Artifacts: `mac-full-final.log`, `linux-focused-final.log`.
+- Final macOS full suite: 433 passed, 11 expected platform/browser skips.
+  Final unprivileged Linux focused suites: 79 passed, 2 Darwin-only skips;
+  lifetime suite has 25 tests. Artifacts: `mac-full-acceptance.log`,
+  `nonroot-green.log`.
 - Root validation, deterministic index sync/check, catalog hygiene, build,
   release verification, public readiness, and package dry-run all passed.
   Index regeneration produced no tracked drift. Scoped SWE debt scan: 0 findings.
@@ -121,6 +122,20 @@
   `green-hidden-process.log`). Additional coverage checks denied probes, actual
   reaped-process absence and unavailable host procfs. No delivered signal or
   procfs permission expansion was introduced.
+- Supported CI at `d30525c` (run 40509176748) failed one preparation-hook
+  assertion with “process owner changed” (439 passed, 1 failed, 3 skipped).
+  This was reproduced locally as UID 1000; root-only diagnostics had missed it.
+  Linux `task_dump_owner` in `fs/proc/base.c` assigns root ownership when the
+  exiting process no longer has an mm, so inode UID cannot establish identity.
+- Added an unprivileged real-zombie regression: it first failed with the same
+  owner error (`red-terminal-owner.log`), then passed unchanged after removing
+  the inode-owner assumption. The trusted private launcher pipe supplies PID
+  identity; the same open descriptor and terminal-state/independent-absence
+  checks remain mandatory. No process observation or sandbox permission is
+  relaxed. The original timeout/late-marker assertion also passes unprivileged.
+- After green, the controlled-launcher fixture was simplified to retain a real
+  ChildProcess handle for cleanup, avoiding any signal to a PID read from a
+  partially written readiness file. Its completion assertion is unchanged.
 
 ## Phase 6: Delivery
 

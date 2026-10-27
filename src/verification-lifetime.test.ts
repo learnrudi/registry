@@ -21,27 +21,35 @@ it.runIf(process.platform === "linux")("waits for sandbox termination after the 
     id: "stack:lifetime", kind: "stack", runtime: "python",
   }));
   await fs.writeFile(path.join(cwd, "verify.py"), "raise SystemExit(0)\n");
-  const ready = path.join(root, "ready");
   const release = path.join(root, "release");
   // A real, separately grouped process holds the lifetime open deterministically.
   // Only the Bubblewrap launcher is substituted; OS process observation is real.
-  const inner = `const fs=require('node:fs'); console.log('ready'); setInterval(()=>{
+  const inner = `const fs=require('node:fs'); setInterval(()=>{
     if(fs.existsSync(${JSON.stringify(release)})) process.exit(0);
   }, 5);`;
-  const outer = `const fs=require('node:fs');
-    const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(inner)}],
-      {detached:true,stdio:['ignore','pipe','ignore']});
-    child.stdout.once('data',()=>{
-      fs.writeSync(3,JSON.stringify({'child-pid':child.pid})); fs.closeSync(3);
-      fs.writeFileSync(${JSON.stringify(ready)},String(child.pid));
-    }); setInterval(()=>{},1000);`;
   const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+  // Retain the ChildProcess handle for cleanup: never signal a PID read from a
+  // partially written readiness file or a PID that might already be recycled.
+  const sandboxChild = actual.spawn(process.execPath, ["-e", inner], {
+    detached: true, stdio: "ignore",
+  });
+  const sandboxClosed = new Promise(resolve => sandboxChild.once("close", resolve));
+  const outer = `const fs=require('node:fs');
+    fs.writeSync(3,JSON.stringify({'child-pid':${sandboxChild.pid}})); fs.closeSync(3);
+    console.log('ready'); setInterval(()=>{},1000);`;
+  let launcherReady!: () => void;
+  let launcherError!: (error: Error) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    launcherReady = resolve; launcherError = reject;
+  });
   let launcherClosed!: () => void;
   const closed = new Promise<void>(resolve => { launcherClosed = resolve; });
   vi.mocked(childProcess.spawn).mockImplementationOnce(() => {
     const child = actual.spawn(process.execPath, ["-e", outer], {
-      detached: true, stdio: ["ignore", "ignore", "inherit", "pipe"],
+      detached: true, stdio: ["ignore", "pipe", "inherit", "pipe"],
     });
+    child.stdout!.once("data", launcherReady);
+    child.once("error", launcherError);
     child.once("close", launcherClosed);
     return child;
   });
@@ -49,15 +57,8 @@ it.runIf(process.platform === "linux")("waits for sandbox termination after the 
   const verification = runStackVerifications(root, ["stack:lifetime"], { timeoutMs: 1_000 });
   let settled = false;
   void verification.then(() => { settled = true; });
-  let pid: number | undefined;
   try {
-    const deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
-      try { pid = Number(await fs.readFile(ready, "utf8")); break; }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-      await delay(10);
-    }
-    expect(pid, "the controlled sandbox process must start").toBeGreaterThan(1);
+    await ready;
     await vi.advanceTimersByTimeAsync(1_000);
     await closed;
     await delay(50);
@@ -67,10 +68,8 @@ it.runIf(process.platform === "linux")("waits for sandbox termination after the 
       { status: "failed", error: "verification timed out after 1000ms" },
     ]);
   } finally {
-    if (pid !== undefined) {
-      try { process.kill(pid, "SIGKILL"); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
-    }
+    sandboxChild.kill("SIGKILL");
+    await sandboxClosed;
     await vi.runAllTimersAsync();
     vi.useRealTimers();
     await verification;
@@ -197,3 +196,38 @@ it.runIf(process.platform === "linux")("rejects unavailable host procfs", async 
     await expect(wait()).rejects.toThrow(/cleanup failed: procfs unavailable/);
   } finally { read.mockRestore(); }
 });
+
+it.runIf(process.platform === "linux" && process.getuid?.() !== 0)(
+  "accepts a real terminal process whose procfs inode becomes root-owned", async () => {
+    const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+    // Keep the exited child unreaped so terminal procfs state is deterministic.
+    const parent = actual.spawn("python3", ["-u", "-c", [
+      "import os,sys", "pid=os.fork()", "if pid == 0: os._exit(0)",
+      "print(pid,flush=True)", "sys.stdin.readline()", "os.waitpid(pid,0)",
+    ].join("\n")], { stdio: ["pipe", "pipe", "inherit"] });
+    const closed = new Promise(resolve => parent.once("close", resolve));
+    try {
+      const pid = await new Promise<number>((resolve, reject) => {
+        parent.stdout!.once("data", data => resolve(Number(data.toString().trim())));
+        parent.once("error", reject);
+      });
+      expect(Number.isSafeInteger(pid) && pid > 1).toBe(true);
+      const deadline = Date.now() + 5_000;
+      let state: string | undefined;
+      do {
+        const stat = await fs.readFile(`/proc/${pid}/stat`, "utf8");
+        state = stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3);
+        if (state === "Z") break;
+        await delay(5);
+      } while (Date.now() < deadline);
+      expect(state).toBe("Z");
+      expect((await fs.stat(`/proc/${pid}/stat`)).uid).toBe(0);
+      const { pipe, wait } = observer();
+      pipe.end(JSON.stringify({ "child-pid": pid }));
+      await expect(wait()).resolves.toBeUndefined();
+    } finally {
+      parent.stdin!.end();
+      await closed;
+    }
+  },
+);
