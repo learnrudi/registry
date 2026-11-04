@@ -30,6 +30,15 @@ unavailable.
 
 ## Workflow
 
+For an explicitly authorized signature-free direct email, `gmail_send` supports
+`signature_required: false`. Keep the default for identities requiring a saved
+signature or organizational disclosure. Existing saved signatures are still
+included; only missing signatures are optional. This setting does not authorize
+sending, change Gmail settings, or alter draft/reply/forward tool requirements.
+Verify the sent envelope and body; `signatureVerified: null` means no saved
+signature was applicable, not that verification failed. Inspect
+`sentMessageVerified` and any warning before reporting success or retrying.
+
 1. Identify the user's requested outcome, inputs, constraints, and whether the
    action changes external state.
 2. Inspect the active MCP tool schema before calling a tool. The runtime schema

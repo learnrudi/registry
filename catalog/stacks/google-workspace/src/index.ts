@@ -599,13 +599,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     ...gmailFilterToolDefinitions(ACCOUNT_INPUT),
     {
       name: "gmail_send",
-      description: "Send an email via Gmail with the saved sender signature and sent-message verification. Missing signatures block sending.",
+      description: "Send an email via Gmail with the saved sender signature and sent-message verification. A missing signature blocks sending unless signature_required is explicitly false.",
       inputSchema: {
         type: "object",
         properties: {
           to: { type: "string", description: "Recipient email. Optional for reply sends; defaults to the original sender." },
           subject: { type: "string", description: "Email subject. Optional for reply sends; defaults to Re: original subject." },
           body: { type: "string", description: "Email body" },
+          signature_required: { type: "boolean", description: "Require a saved signature (default true). Set false only when authorized to send without one. Existing saved signatures are still included." },
           cc: { type: "string", description: "Optional Cc recipient list" },
           bcc: { type: "string", description: "Optional Bcc recipient list" },
           reply_message_id: { type: "string", description: "Optional Gmail message ID to reply to so the email stays in the original thread" },
@@ -1523,10 +1524,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "gmail_send": {
+        if (args?.signature_required !== undefined && typeof args.signature_required !== "boolean") {
+          throw new Error("signature_required must be a boolean.");
+        }
         const auth = getAuthForArgs(args);
         const gmail = google.gmail({ version: "v1", auth });
-        const signing = await loadSignature(gmail);
-        const signedBody = includeSignature(requireString(args?.body, "body"), signing.signature);
+        const signing = await loadSignature(gmail, undefined, args?.signature_required !== false);
+        const body = requireString(args?.body, "body");
+        const signedBody = signing.signature ? includeSignature(body, signing.signature) : body;
         const replyMessageId = typeof args?.reply_message_id === "string"
           ? args.reply_message_id.trim()
           : "";

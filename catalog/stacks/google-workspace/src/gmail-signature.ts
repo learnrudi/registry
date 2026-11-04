@@ -35,14 +35,16 @@ function containsTextPart(payload: gmail_v1.Schema$MessagePart, mimeType: string
   return payload.mimeType === mimeType || Boolean(payload.parts?.some(part => containsTextPart(part, mimeType)));
 }
 
-export async function loadSignature(gmail: gmail_v1.Gmail, from?: string) {
+export async function loadSignature(gmail: gmail_v1.Gmail, from?: string, required = true) {
   const profile = await gmail.users.getProfile({ userId: 'me' });
   const email = from || profile.data.emailAddress;
   if (!email || !/^[^\s<>@]+@[^\s<>@]+$/.test(email)) throw new Error('Cannot resolve sending address.');
   const result = await gmail.users.settings.sendAs.get({ userId: 'me', sendAsEmail: email });
   if (result.data.sendAsEmail?.toLowerCase() !== email.toLowerCase()) throw new Error('Signature address mismatch.');
-  const signature = result.data.signature;
+  const signature = result.data.signature ?? '';
   if (typeof signature !== 'string' || signature.length > 100_000) throw new Error('No valid saved Gmail signature.');
+  // Only absence is optional. Provider errors, wrong identities, and invalid signatures still fail closed.
+  if (!required && !signature.trim()) return { from: email, signature: '' };
   signatureCount('', signature);
   return { from: email, signature };
 }
@@ -51,9 +53,18 @@ export async function verifySentSignature(gmail: gmail_v1.Gmail, id: string | nu
   try {
     if (!id) throw new Error('Missing sent message ID.');
     const sent = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+    if (signature === '') {
+      if (sent.data.id !== id || !sent.data.labelIds?.includes('SENT')) throw new Error('Sent message could not be verified.');
+      return { signatureVerified: null, sentMessageVerified: true };
+    }
     assertSignature(messageBody(sent.data.payload), signature);
     return { signatureVerified: true };
   } catch {
+    if (signature === '') return {
+      signatureVerified: null,
+      sentMessageVerified: false,
+      warning: 'Message was sent, but sent-message verification failed. Do not resend; inspect the sent message.',
+    };
     return {
       signatureVerified: false,
       warning: 'Message was sent, but signature verification failed. Do not resend; inspect the sent message.',

@@ -134,6 +134,16 @@ Gmail composition loads the saved signature for the actual sending address using
 `users.settings.sendAs.get` (existing `gmail.modify` access suffices). New drafts,
 updates, direct sends, replies, and forwards include it once before quoted content.
 Missing, unreadable, image-only, or duplicate signatures block the operation.
+For an authorized direct send without a saved signature, `gmail_send` accepts
+`signature_required: false`. The default remains `true`; other composition and
+draft-send tools retain their signature requirement. This option allows an absent
+or whitespace-only signature, still includes an existing text-bearing signature,
+and does not bypass sender validation, provider errors, or invalid signatures.
+Use it only when the selected identity's correspondence policy permits unsigned
+mail; it does not authorize removing a required organizational disclosure.
+Unsigned sends preserve the supplied body and report `signatureVerified: null`
+plus `sentMessageVerified`, based on a read-back of the sent ID and SENT label.
+Verification failure never triggers an automatic resend.
 Draft sends check the reviewed body without modifying it; update and review an
 old unsigned draft before sending. A changed saved signature also requires a
 new draft review. Sent messages are read back and report `signatureVerified`;
