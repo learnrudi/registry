@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const expectedTools = [
@@ -12,6 +13,34 @@ const expectedTools = [
   "site_planner_fork_concept",
   "site_planner_apply_concept_commands",
 ];
+
+test("catalog requires the fixed adapter tools and write authorization secret", async () => {
+  const manifest = JSON.parse(
+    await readFile(new URL("../manifest.json", import.meta.url), "utf8"),
+  );
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.equal(manifest.id, "stack:site-planner");
+  assert.equal(manifest.kind, "stack");
+  assert.equal(manifest.runtime, "node");
+  assert.deepEqual(manifest.install, {
+    source: "catalog",
+    path: "catalog/stacks/site-planner",
+  });
+  assert.deepEqual(manifest.provides.tools, expectedTools);
+  assert.deepEqual(manifest.requires.binaries, []);
+  assert.equal(manifest.requires.secrets.length, 1);
+  assert.equal(manifest.requires.secrets[0].key, "SITE_PLANNER_WRITE_HMAC_V1");
+  assert.equal(manifest.requires.secrets[0].required, true);
+  assert.deepEqual(manifest.mcp, {
+    transport: "stdio",
+    command: "node",
+    args: ["src/index.js"],
+    cwd: ".",
+  });
+  assert.equal(packageJson.engines.node, ">=20.10");
+});
 
 test("MCP server exposes only the registered Site Planner tools", async () => {
   const child = spawn(process.execPath, ["src/index.js"], {
