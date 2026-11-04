@@ -1,5 +1,34 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+test('an explicitly optional missing signature preserves sender validation', async () => {
+  const { loadSignature } = await import('./src/gmail-signature.ts');
+  const gmail = { users: {
+    getProfile: async () => ({ data: { emailAddress: 'personal@example.com' } }),
+    settings: { sendAs: { get: async () => ({ data: { sendAsEmail: 'personal@example.com', signature: '' } }) } },
+  } };
+  assert.deepEqual(await loadSignature(gmail, undefined, false), { from: 'personal@example.com', signature: '' });
+  await assert.rejects(loadSignature(gmail), /signature is required/);
+  for (const signature of [undefined, null, '   ']) {
+    gmail.users.settings.sendAs.get = async () => ({ data: { sendAsEmail: 'personal@example.com', signature } });
+    assert.equal((await loadSignature(gmail, undefined, false)).signature, '');
+  }
+  for (const signature of ['<img src="logo.png">', 42, 'x'.repeat(100_001)]) {
+    gmail.users.settings.sendAs.get = async () => ({ data: { sendAsEmail: 'personal@example.com', signature } });
+    await assert.rejects(loadSignature(gmail, undefined, false), /signature/);
+  }
+  gmail.users.settings.sendAs.get = async () => { throw new Error('provider unavailable'); };
+  await assert.rejects(loadSignature(gmail, undefined, false), /provider unavailable/);
+  gmail.users.settings.sendAs.get = async () => ({ data: { sendAsEmail: 'other@example.com', signature: '' } });
+  await assert.rejects(loadSignature(gmail, undefined, false), /address mismatch/);
+});
+test('unsigned sent-message read-back reports failures without claiming signature verification', async () => {
+  const { verifySentSignature } = await import('./src/gmail-signature.ts');
+  const gmail = { users: { messages: { get: async () => ({ data: { id: 'sent', labelIds: [] } }) } } };
+  const result = await verifySentSignature(gmail, 'sent', '');
+  assert.equal(result.signatureVerified, null);
+  assert.equal(result.sentMessageVerified, false);
+  assert.match(result.warning, /Do not resend/);
+});
 test('includes the approved HTML signature once and preserves plain text', async () => {
   const { includeSignature } = await import('./src/gmail-signature.ts');
   const signature = '<div>Sender Name<br>Company</div>';

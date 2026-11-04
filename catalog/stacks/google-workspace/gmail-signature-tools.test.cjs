@@ -6,6 +6,39 @@ const {join} = require('node:path');
 const {pathToFileURL} = require('node:url');
 const {Client} = require('@modelcontextprotocol/sdk/client/index.js');
 const {StdioClientTransport} = require('@modelcontextprotocol/sdk/client/stdio.js');
+test('direct send can explicitly allow no saved signature without changing the body', async () => {
+ const dir = mkdtempSync(join(tmpdir(), 'optional-signature-'));
+ const mock = join(dir, 'mock.mjs');
+ const sentLog = join(dir, 'sent.log');
+ writeFileSync(join(dir, 'token.json'), JSON.stringify({token:'fixture',client_id:'fixture',client_secret:'fixture'}));
+ writeFileSync(mock, `import {writeFileSync} from 'node:fs';
+ import {google} from ${JSON.stringify(pathToFileURL(require.resolve('googleapis')).href)};
+ let body = '';
+ google.gmail = () => ({users:{
+   getProfile:async()=>({data:{emailAddress:'personal@example.com'}}),
+   settings:{sendAs:{get:async()=>({data:{sendAsEmail:'personal@example.com',signature:''}})}},
+   messages:{send:async({requestBody})=>{
+     const raw=Buffer.from(requestBody.raw,'base64url').toString();
+     body=Buffer.from(raw.split('\\r\\n\\r\\n')[1].replace(/\\r\\n/g,''),'base64').toString();
+     writeFileSync(${JSON.stringify(sentLog)},JSON.stringify({raw,body}));
+     return {data:{id:'sent',threadId:'thread',labelIds:['SENT']}};
+   },get:async()=>({data:{id:'sent',labelIds:['SENT'],payload:{mimeType:'text/plain',body:{data:Buffer.from(body).toString('base64url')}}}})}
+ }});`);
+ const client = new Client({name:'optional-signature-test',version:'1'},{capabilities:{}});
+ try {
+   await client.connect(new StdioClientTransport({command:process.execPath,args:['--import','tsx','--import',mock,'src/index.ts'],cwd:process.cwd(),env:{RUDI_STACK_STATE_DIR:dir},stderr:'pipe'}));
+   const args = {to:'recipient@example.com',subject:'Test',body:'Hello without a signature.'};
+   const call = extra => client.callTool({name:'gmail_send',arguments:{...args,...extra}});
+   assert.equal((await call({})).isError,true);
+   assert.equal((await call({signature_required:'false'})).isError,true);
+   const sent = await call({signature_required:false});
+   assert.notEqual(sent.isError,true,JSON.stringify(sent));
+   assert.deepEqual(JSON.parse(sent.content[0].text),{sent:true,signatureVerified:null,sentMessageVerified:true,messageId:'sent',threadId:'thread',labelIds:['SENT']});
+   const captured = JSON.parse(readFileSync(sentLog,'utf8'));
+   assert.equal(captured.body,args.body);
+   assert.match(captured.raw,/From: personal@example.com/);
+ } finally { await client.close(); rmSync(dir,{recursive:true,force:true}); }
+});
 test('MCP draft create/update signs once; unsigned send is blocked; signed sends verify', async () => {
  const dir=mkdtempSync(join(tmpdir(),'signature-tools-'));
  const mock=join(dir,'mock.mjs');
@@ -44,5 +77,7 @@ test('MCP draft create/update signs once; unsigned send is blocked; signed sends
  assert.equal(JSON.parse(sent.content[0].text).signatureVerified,true);
  const direct=await call('gmail_send',{to:'to@example.com',subject:'Test',body:'Hello'});
  assert.equal(JSON.parse(direct.content[0].text).signatureVerified,true);
+ const optional=await call('gmail_send',{to:'to@example.com',subject:'Test',body:'Hello',signature_required:false});
+ assert.equal(JSON.parse(optional.content[0].text).signatureVerified,true,'Optional mode still includes and verifies an existing signature');
  } finally {await client.close();rmSync(dir,{recursive:true,force:true});}
 });
