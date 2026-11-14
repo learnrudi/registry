@@ -1,7 +1,7 @@
 {
   "$schema": "https://learn-rudi.dev/schemas/registry/v2/index.schema.json",
   "schemaVersion": "2",
-  "generatedAt": "2026-10-23T02:47:23.000Z",
+  "generatedAt": "2026-10-27T13:20:56.000Z",
   "stats": {
     "total": 189,
     "byKind": {
@@ -1121,36 +1121,36 @@
       "id": "binary:yt-dlp",
       "kind": "binary",
       "name": "yt-dlp",
-      "version": "2024.12.23",
+      "version": "2026.10.26",
       "delivery": "remote",
       "install": {
         "source": "download",
         "platforms": {
           "darwin-arm64": {
-            "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2024.12.23/yt-dlp_macos",
+            "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_macos",
             "checksum": {
               "algo": "sha256",
-              "value": "f23a251d04eac4e4b35c0697b709ce220a52f659f1eec43e7ad520a40477bbdc"
+              "value": "0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa"
             },
             "extract": {
               "type": "raw"
             }
           },
           "darwin-x64": {
-            "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2024.12.23/yt-dlp_macos",
+            "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_macos",
             "checksum": {
               "algo": "sha256",
-              "value": "f23a251d04eac4e4b35c0697b709ce220a52f659f1eec43e7ad520a40477bbdc"
+              "value": "0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa"
             },
             "extract": {
               "type": "raw"
             }
           },
           "linux-x64": {
-            "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2024.12.23/yt-dlp_linux",
+            "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_linux",
             "checksum": {
               "algo": "sha256",
-              "value": "50a1799719fc69baf387e5bce8e38bd9aef2d177e0569d666151a4f9e40a461d"
+              "value": "767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795"
             },
             "extract": {
               "type": "raw"
